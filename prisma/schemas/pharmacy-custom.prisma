@@ -1,0 +1,191 @@
+// prisma/schemas/pharmacy-custom.prisma
+// User's Custom Drugs and Modifications
+
+// User's custom drugs (extends/modifies default drugs)
+model CustomDrug {
+  id                String              @id @default(uuid())
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  baseDrugId        String?             // null if completely new drug
+  baseDrug          Drug?               @relation(fields: [baseDrugId], references: [id], onDelete: SetNull)
+  
+  // Custom drug information
+  customName        String              // เช่น "Paracetamol (Hospital Protocol)"
+  customLabel       String?             // short label for UI
+  category          DrugCategory        @default(CUSTOM)
+  description       String?
+  
+  // Overridden properties
+  customDosingRules CustomDosingRule[]
+  customConcentrations CustomConcentration[]
+  modificationLogs DrugModificationLog[]
+  
+  // Metadata
+  reason            String?             // reason for customization
+  evidenceLevel     EvidenceLevel       @default(LOCAL_PRACTICE)
+  notes             String?
+  source            String?             // reference/citation
+  
+  // Sharing settings
+  isShared          Boolean             @default(false)
+  shareWithTeam     Boolean             @default(false)
+  isPublic          Boolean             @default(false)
+  
+  // Version control
+  version           Int                 @default(1)
+  parentVersion     String?             // for tracking changes
+  
+  // Safety flags
+  requiresApproval  Boolean             @default(false)
+  approvedBy        String?             // userId of approver
+  approvedAt        DateTime?
+  
+  // Usage tracking
+  usageCount        Int                 @default(0)
+  lastUsed          DateTime?
+  
+  // Status
+  isActive          Boolean             @default(true)
+  isDeleted         Boolean             @default(false)
+  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([baseDrugId])
+  @@index([isShared])
+  @@index([isActive])
+  @@index([category])
+  @@map("custom_drug")
+}
+
+// Custom dosing rules for user drugs
+model CustomDosingRule {
+  id                   String              @id @default(uuid())
+  customDrugId         String
+  customDrug           CustomDrug          @relation(fields: [customDrugId], references: [id], onDelete: Cascade)
+  
+  // Age constraints (in years, decimal)
+  ageMinYears          Float               // เช่น 0.5 (6 months)
+  ageMaxYears          Float               // เช่น 1.999 (just under 2 years)
+  ageDisplay           String              // เช่น "0.5-2 ปี (ไม่รวม 2 ปี)"
+  ageDisplayShort      String?             // เช่น "0.5-<2y"
+  
+  // Weight constraints (optional)
+  weightMinKg          Float?
+  weightMaxKg          Float?
+  
+  // Dose calculation
+  calculationType      DoseCalculationType
+  doseMin              Float               // minimum dose value
+  doseMax              Float               // maximum dose value
+  doseUnit             String              // "mg/kg/dose", "mg/kg/day", "mg/dose"
+  
+  // Frequency and timing
+  defaultFrequency     FrequencyType
+  alternativeFreqs     FrequencyType[]     // เช่น [BID, TID]
+  
+  // Maximum limits
+  maxDailyDoseMg       Float?              // maximum total daily dose
+  maxSingleDoseMg      Float?              // maximum single dose
+  
+  // Rule priority (higher = more specific/preferred)
+  priority             Int                 @default(1)
+  
+  // Clinical context
+  indication           String?             // เช่น "fever", "pain", "cough"
+  duration             String?             // เช่น "3-5 days", "until fever subsides"
+  notes                String?
+  
+  // Evidence and validation
+  evidenceLevel        EvidenceLevel       @default(LOCAL_PRACTICE)
+  lastReviewed         DateTime?
+  reviewedBy           String?             // userId who reviewed
+  
+  // Override flags
+  overridesSystemRule  Boolean             @default(false)
+  systemRuleId         String?             // original DosingRule id if overriding
+  
+  // System metadata
+  isActive             Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([customDrugId])
+  @@index([ageMinYears, ageMaxYears])
+  @@index([priority])
+  @@index([isActive])
+  @@map("custom_dosing_rule")
+}
+
+// Custom concentrations for user drugs
+model CustomConcentration {
+  id              String          @id @default(uuid())
+  customDrugId    String
+  customDrug      CustomDrug      @relation(fields: [customDrugId], references: [id], onDelete: Cascade)
+  
+  // Concentration details
+  strength        Float           // เช่น 125, 250, 500
+  strengthUnit    String          // เช่น "mg/mL", "mg/tablet", "mg/5mL"
+  formulation     DrugFormulation
+  
+  // Product information
+  brandName       String?         // เช่น "Hospital Preparation"
+  manufacturer    String?         // เช่น "Hospital Pharmacy"
+  packageSize     String?         // เช่น "60 mL", "100 tablets"
+  batchNumber     String?
+  
+  // Availability
+  isCommonlyUsed  Boolean         @default(true)
+  availability    String?         // "always", "limited", "special_order", "compounded"
+  
+  // Pricing (optional)
+  costPerUnit     Float?
+  currency        String?         @default("THB")
+  
+  // Custom preparation notes
+  preparationNotes String?        // วิธีการเตรียม
+  storageConditions String?       // เงื่อนไขการเก็บ
+  shelfLife       String?         // อายุการเก็บ
+  
+  // Quality control
+  isValidated     Boolean         @default(false)
+  validatedBy     String?         // userId
+  validatedAt     DateTime?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([customDrugId])
+  @@index([isCommonlyUsed])
+  @@index([isValidated])
+  @@map("custom_concentration")
+}
+
+// Modification history/audit trail
+model DrugModificationLog {
+  id              String          @id @default(uuid())
+  customDrugId    String
+  customDrug      CustomDrug      @relation(fields: [customDrugId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action          String          // "created", "updated", "deleted", "approved", "rejected"
+  fieldChanged    String?         // which field was modified
+  oldValue        String?         // JSON of old values
+  newValue        String?         // JSON of new values
+  reason          String?
+  
+  ipAddress       String?
+  userAgent       String?
+  
+  createdAt       DateTime        @default(now())
+
+  @@index([customDrugId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("drug_modification_log")
+}

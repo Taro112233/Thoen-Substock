@@ -1,0 +1,948 @@
+// This file is auto-generated. Do not edit manually.
+// Edit files in prisma/schemas/ directory instead.
+// Last generated: 2025-07-31T15:48:57.433Z
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// ==========================================
+// AUTH
+// ==========================================
+
+// Authentication and User Management
+
+enum Role {
+  Unapproved
+  Guest
+  User
+  Admin
+  Superadmin
+  Developer
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
+  sessions      Session[]
+  accounts      Account[]
+  role          Role      @default(Unapproved)
+
+  // Relations to pharmacy modules
+  customDrugs         CustomDrug[]
+  formularies         Formulary[]
+  calculations        DoseCalculation[]
+  sharedFormularies   FormularyShare[]
+  calculationTemplates CalculationTemplate[]
+  calculationSessions  CalculationSession[]
+  drugModificationLogs DrugModificationLog[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+// ==========================================
+// PHARMACY CORE
+// ==========================================
+
+// prisma/schemas/pharmacy-core.prisma
+// Core Drug Database and Dosing Rules
+
+enum DrugCategory {
+  ANALGESIC_ANTIPYRETIC    // ยาแก้ปวดลดไข้
+  COUGH_EXPECTORANT       // ยาแก้ไอขับเสมหะ
+  ANTIHISTAMINE          // ยาแก้แพ้แก้คันลดน้ำมูก
+  ANTIBIOTIC            // ยาปฏิชีวนะ
+  GASTROINTESTINAL      // ยาระบบทางเดิน
+  RESPIRATORY           // ยาระบบทางเดินหายใจ
+  CARDIOVASCULAR        // ยาระบบหัวใจและหลอดเลือด
+  CNS                   // ยาระบบประสาท
+  DERMATOLOGICAL        // ยาผิวหนัง
+  CUSTOM                // ยาที่ user เพิ่มเอง
+}
+
+enum DoseCalculationType {
+  WEIGHT_BASED_DOSE      // mg/kg/dose
+  WEIGHT_BASED_DAILY     // mg/kg/day
+  AGE_BASED_FIXED        // fixed mg/dose based on age
+  SURFACE_AREA_BASED     // mg/m2 (สำหรับอนาคต)
+}
+
+enum FrequencyType {
+  OD     // Once daily
+  BID    // Twice daily  
+  TID    // Three times daily
+  QID    // Four times daily
+  Q4H    // Every 4 hours
+  Q6H    // Every 6 hours
+  Q8H    // Every 8 hours
+  Q12H   // Every 12 hours
+  PRN    // As needed
+  STAT   // Immediately
+}
+
+enum DrugFormulation {
+  SYRUP
+  SUSPENSION
+  TABLET
+  CAPSULE
+  INJECTION
+  DROPS
+  POWDER
+  CREAM
+  OINTMENT
+}
+
+enum EvidenceLevel {
+  GUIDELINE          // จากแนวทางปฏิบัติ
+  EXPERT_OPINION     // ความเห็นผู้เชี่ยวชาญ
+  LOCAL_PRACTICE     // การปฏิบัติท้องถิ่น
+  HOSPITAL_PROTOCOL  // โปรโตคอลโรงพยาบาล
+  PERSONAL_EXPERIENCE // ประสบการณ์ส่วนตัว
+}
+
+// Core drug database (system default)
+model Drug {
+  id                String        @id @default(uuid())
+  genericName       String        
+  brandNames        String[]      
+  category          DrugCategory
+  description       String?
+  
+  // Basic drug info
+  activeIngredient  String?
+  therapeuticClass  String?
+  
+  // Safety information
+  isControlled      Boolean       @default(false)
+  isNarcotics       Boolean       @default(false)
+  pregnancyCategory String?       
+  
+  // System metadata
+  isActive          Boolean       @default(true)
+  isSystemDefault   Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  // Relations
+  dosingRules       DosingRule[]
+  concentrations    DrugConcentration[]
+  contraindications Contraindication[]
+  interactions      DrugInteraction[]
+  customVersions    CustomDrug[]
+
+  @@unique([genericName])
+  @@index([category])
+  @@index([isActive])
+  @@map("drug")
+}
+
+// Dosing rules for each drug
+model DosingRule {
+  id                   String              @id @default(uuid())
+  drugId               String
+  drug                 Drug                @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // Age constraints (in years, decimal)
+  ageMinYears          Float               
+  ageMaxYears          Float               
+  ageDisplay           String              
+  ageDisplayShort      String?             
+  
+  // Weight constraints (optional)
+  weightMinKg          Float?
+  weightMaxKg          Float?
+  
+  // Dose calculation
+  calculationType      DoseCalculationType
+  doseMin              Float               
+  doseMax              Float               
+  doseUnit             String              
+  
+  // Frequency and timing
+  defaultFrequency     FrequencyType
+  alternativeFreqs     FrequencyType[]     
+  
+  // Maximum limits
+  maxDailyDoseMg       Float?              
+  maxSingleDoseMg      Float?              
+  
+  // Rule priority (higher = more specific/preferred)
+  priority             Int                 @default(1)
+  
+  // Clinical context
+  indication           String?             
+  duration             String?             
+  notes                String?
+  
+  // Evidence and validation
+  evidenceLevel        EvidenceLevel       @default(GUIDELINE)
+  lastReviewed         DateTime?
+  
+  // System metadata
+  isActive             Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([drugId])
+  @@index([ageMinYears, ageMaxYears])
+  @@index([priority])
+  @@index([isActive])
+  @@map("dosing_rule")
+}
+
+// Available drug concentrations/formulations
+model DrugConcentration {
+  id              String          @id @default(uuid())
+  drugId          String
+  drug            Drug            @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // Concentration details
+  strength        Float           
+  strengthUnit    String          
+  formulation     DrugFormulation
+  
+  // Product information
+  brandName       String?         
+  manufacturer    String?
+  packageSize     String?         
+  
+  // Availability
+  isCommonlyUsed  Boolean         @default(true)
+  availability    String?         
+  
+  // Pricing (optional)
+  costPerUnit     Float?
+  currency        String?         @default("THB")
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([drugId])
+  @@index([isCommonlyUsed])
+  @@map("drug_concentration")
+}
+
+// Contraindications and warnings
+model Contraindication {
+  id            String    @id @default(uuid())
+  drugId        String
+  drug          Drug      @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  type          String    // "absolute", "relative", "warning"
+  condition     String    
+  ageSpecific   Boolean   @default(false)
+  ageMinYears   Float?
+  ageMaxYears   Float?
+  
+  severity      String    // "high", "medium", "low"
+  description   String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([drugId])
+  @@index([type])
+  @@map("contraindication")
+}
+
+// Drug interactions
+model DrugInteraction {
+  id              String   @id @default(uuid())
+  drugId          String
+  drug            Drug     @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  interactsWith   String   
+  severity        String   
+  description     String
+  clinicalEffect  String?
+  management      String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([drugId])
+  @@index([severity])
+  @@map("drug_interaction")
+}
+
+// ==========================================
+// PHARMACY CUSTOM
+// ==========================================
+
+// prisma/schemas/pharmacy-custom.prisma
+// User's Custom Drugs and Modifications
+
+// User's custom drugs (extends/modifies default drugs)
+model CustomDrug {
+  id                String              @id @default(uuid())
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  baseDrugId        String?             // null if completely new drug
+  baseDrug          Drug?               @relation(fields: [baseDrugId], references: [id], onDelete: SetNull)
+  
+  // Custom drug information
+  customName        String              // เช่น "Paracetamol (Hospital Protocol)"
+  customLabel       String?             // short label for UI
+  category          DrugCategory        @default(CUSTOM)
+  description       String?
+  
+  // Overridden properties
+  customDosingRules CustomDosingRule[]
+  customConcentrations CustomConcentration[]
+  modificationLogs DrugModificationLog[]
+  
+  // Metadata
+  reason            String?             // reason for customization
+  evidenceLevel     EvidenceLevel       @default(LOCAL_PRACTICE)
+  notes             String?
+  source            String?             // reference/citation
+  
+  // Sharing settings
+  isShared          Boolean             @default(false)
+  shareWithTeam     Boolean             @default(false)
+  isPublic          Boolean             @default(false)
+  
+  // Version control
+  version           Int                 @default(1)
+  parentVersion     String?             // for tracking changes
+  
+  // Safety flags
+  requiresApproval  Boolean             @default(false)
+  approvedBy        String?             // userId of approver
+  approvedAt        DateTime?
+  
+  // Usage tracking
+  usageCount        Int                 @default(0)
+  lastUsed          DateTime?
+  
+  // Status
+  isActive          Boolean             @default(true)
+  isDeleted         Boolean             @default(false)
+  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([baseDrugId])
+  @@index([isShared])
+  @@index([isActive])
+  @@index([category])
+  @@map("custom_drug")
+}
+
+// Custom dosing rules for user drugs
+model CustomDosingRule {
+  id                   String              @id @default(uuid())
+  customDrugId         String
+  customDrug           CustomDrug          @relation(fields: [customDrugId], references: [id], onDelete: Cascade)
+  
+  // Age constraints (in years, decimal)
+  ageMinYears          Float               // เช่น 0.5 (6 months)
+  ageMaxYears          Float               // เช่น 1.999 (just under 2 years)
+  ageDisplay           String              // เช่น "0.5-2 ปี (ไม่รวม 2 ปี)"
+  ageDisplayShort      String?             // เช่น "0.5-<2y"
+  
+  // Weight constraints (optional)
+  weightMinKg          Float?
+  weightMaxKg          Float?
+  
+  // Dose calculation
+  calculationType      DoseCalculationType
+  doseMin              Float               // minimum dose value
+  doseMax              Float               // maximum dose value
+  doseUnit             String              // "mg/kg/dose", "mg/kg/day", "mg/dose"
+  
+  // Frequency and timing
+  defaultFrequency     FrequencyType
+  alternativeFreqs     FrequencyType[]     // เช่น [BID, TID]
+  
+  // Maximum limits
+  maxDailyDoseMg       Float?              // maximum total daily dose
+  maxSingleDoseMg      Float?              // maximum single dose
+  
+  // Rule priority (higher = more specific/preferred)
+  priority             Int                 @default(1)
+  
+  // Clinical context
+  indication           String?             // เช่น "fever", "pain", "cough"
+  duration             String?             // เช่น "3-5 days", "until fever subsides"
+  notes                String?
+  
+  // Evidence and validation
+  evidenceLevel        EvidenceLevel       @default(LOCAL_PRACTICE)
+  lastReviewed         DateTime?
+  reviewedBy           String?             // userId who reviewed
+  
+  // Override flags
+  overridesSystemRule  Boolean             @default(false)
+  systemRuleId         String?             // original DosingRule id if overriding
+  
+  // System metadata
+  isActive             Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([customDrugId])
+  @@index([ageMinYears, ageMaxYears])
+  @@index([priority])
+  @@index([isActive])
+  @@map("custom_dosing_rule")
+}
+
+// Custom concentrations for user drugs
+model CustomConcentration {
+  id              String          @id @default(uuid())
+  customDrugId    String
+  customDrug      CustomDrug      @relation(fields: [customDrugId], references: [id], onDelete: Cascade)
+  
+  // Concentration details
+  strength        Float           // เช่น 125, 250, 500
+  strengthUnit    String          // เช่น "mg/mL", "mg/tablet", "mg/5mL"
+  formulation     DrugFormulation
+  
+  // Product information
+  brandName       String?         // เช่น "Hospital Preparation"
+  manufacturer    String?         // เช่น "Hospital Pharmacy"
+  packageSize     String?         // เช่น "60 mL", "100 tablets"
+  batchNumber     String?
+  
+  // Availability
+  isCommonlyUsed  Boolean         @default(true)
+  availability    String?         // "always", "limited", "special_order", "compounded"
+  
+  // Pricing (optional)
+  costPerUnit     Float?
+  currency        String?         @default("THB")
+  
+  // Custom preparation notes
+  preparationNotes String?        // วิธีการเตรียม
+  storageConditions String?       // เงื่อนไขการเก็บ
+  shelfLife       String?         // อายุการเก็บ
+  
+  // Quality control
+  isValidated     Boolean         @default(false)
+  validatedBy     String?         // userId
+  validatedAt     DateTime?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([customDrugId])
+  @@index([isCommonlyUsed])
+  @@index([isValidated])
+  @@map("custom_concentration")
+}
+
+// Modification history/audit trail
+model DrugModificationLog {
+  id              String          @id @default(uuid())
+  customDrugId    String
+  customDrug      CustomDrug      @relation(fields: [customDrugId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action          String          // "created", "updated", "deleted", "approved", "rejected"
+  fieldChanged    String?         // which field was modified
+  oldValue        String?         // JSON of old values
+  newValue        String?         // JSON of new values
+  reason          String?
+  
+  ipAddress       String?
+  userAgent       String?
+  
+  createdAt       DateTime        @default(now())
+
+  @@index([customDrugId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("drug_modification_log")
+}
+
+// ==========================================
+// FORMULARY
+// ==========================================
+
+// prisma/schemas/formulary.prisma
+// Formulary Management and Drug Collections
+
+// User formularies (collections of drugs)
+model Formulary {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Basic information
+  name        String           // เช่น "ICU Protocol", "Pediatric Ward", "OPD Standard"
+  description String?
+  category    String?          // เช่น "hospital", "clinic", "personal"
+  
+  // Settings
+  isDefault   Boolean          @default(false)
+  isActive    Boolean          @default(true)
+  isTemplate  Boolean          @default(false)  // can be used as template by others
+  
+  // Sharing settings
+  isPublic    Boolean          @default(false)
+  shareCode   String?          @unique // for sharing with others
+  sharePassword String?        // optional password protection
+  
+  // Version control
+  version     String           @default("1.0")
+  basedOnId   String?          // if cloned from another formulary
+  basedOn     Formulary?       @relation("FormularyClones", fields: [basedOnId], references: [id], onDelete: SetNull)
+  clones      Formulary[]      @relation("FormularyClones")
+  
+  // Metadata
+  tags        String[]         // for categorization
+  specialty   String?          // เช่น "pediatrics", "internal_medicine"
+  institution String?          // hospital/clinic name
+  
+  // Usage statistics
+  usageCount  Int              @default(0)
+  lastUsed    DateTime?
+  
+  // Relations
+  drugs       FormularyDrug[]
+  shares      FormularyShare[]
+  exports     FormularyExport[]
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([isPublic])
+  @@index([shareCode])
+  @@index([category])
+  @@index([specialty])
+  @@map("formulary")
+}
+
+// Junction table for formulary drugs
+model FormularyDrug {
+  id            String      @id @default(uuid())
+  formularyId   String
+  formulary     Formulary   @relation(fields: [formularyId], references: [id], onDelete: Cascade)
+  
+  // Drug reference (either system or custom)
+  drugId        String?     // system drug
+  customDrugId  String?     // custom drug
+  
+  // Formulary-specific settings
+  isPreferred   Boolean     @default(false)
+  isRestricted  Boolean     @default(false)
+  restrictionNote String?   // why restricted
+  
+  // Display and organization
+  displayOrder  Int?
+  section       String?     // เช่น "analgesics", "antibiotics"
+  notes         String?     // formulary-specific notes
+  
+  // Override dosing for this formulary
+  customDosing  String?     // JSON of custom dosing rules
+  
+  // Usage in this formulary
+  usageCount    Int         @default(0)
+  lastUsed      DateTime?
+  
+  // Approval status (for controlled formularies)
+  isApproved    Boolean     @default(true)
+  approvedBy    String?     // userId
+  approvedAt    DateTime?
+  
+  addedBy       String      // userId who added this drug
+  addedAt       DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([formularyId, drugId])
+  @@unique([formularyId, customDrugId])
+  @@index([formularyId])
+  @@index([isPreferred])
+  @@index([section])
+  @@map("formulary_drug")
+}
+
+// Formulary sharing permissions
+model FormularyShare {
+  id           String     @id @default(uuid())
+  formularyId  String
+  formulary    Formulary  @relation(fields: [formularyId], references: [id], onDelete: Cascade)
+  
+  sharedWithId String
+  sharedWith   User       @relation(fields: [sharedWithId], references: [id], onDelete: Cascade)
+  
+  // Permission levels
+  permission   String     @default("view") // "view", "edit", "admin"
+  canShare     Boolean    @default(false)  // can share with others
+  canExport    Boolean    @default(false)  // can export formulary
+  
+  // Access control
+  expiresAt    DateTime?  // optional expiration
+  isActive     Boolean    @default(true)
+  
+  // Invitation details
+  invitedBy    String     // userId who shared
+  invitationNote String?
+  acceptedAt   DateTime?  // when invitation was accepted
+  
+  sharedAt     DateTime   @default(now())
+  lastAccessed DateTime?
+
+  @@unique([formularyId, sharedWithId])
+  @@index([sharedWithId])
+  @@index([permission])
+  @@index([isActive])
+  @@map("formulary_share")
+}
+
+// Export/import history
+model FormularyExport {
+  id           String     @id @default(uuid())
+  formularyId  String
+  formulary    Formulary  @relation(fields: [formularyId], references: [id], onDelete: Cascade)
+  
+  exportedBy   String     // userId
+  exportType   String     // "json", "csv", "pdf", "excel"
+  exportFormat String?    // detailed format specification
+  
+  // Export settings
+  includeCustomDrugs Boolean @default(true)
+  includeNotes      Boolean @default(true)
+  includePricing    Boolean @default(false)
+  
+  // File information
+  fileName     String?
+  fileSize     Int?       // bytes
+  downloadUrl  String?    // temporary URL for download
+  
+  // Usage tracking
+  downloadCount Int       @default(0)
+  lastDownload DateTime?
+  
+  createdAt    DateTime   @default(now())
+  expiresAt    DateTime?  // when download expires
+
+  @@index([formularyId])
+  @@index([exportedBy])
+  @@index([exportType])
+  @@index([createdAt])
+  @@map("formulary_export")
+}
+
+// Formulary templates (shared community templates)
+model FormularyTemplate {
+  id            String    @id @default(uuid())
+  
+  // Template information
+  name          String
+  description   String?
+  category      String    // "pediatric", "emergency", "general"
+  specialty     String?
+  institution   String?   // contributing institution
+  
+  // Template data (JSON)
+  templateData  String    // JSON structure of the formulary
+  version       String    @default("1.0")
+  
+  // Sharing and approval
+  isPublic      Boolean   @default(false)
+  isApproved    Boolean   @default(false)
+  approvedBy    String?   // admin userId
+  approvedAt    DateTime?
+  
+  // Usage statistics
+  usageCount    Int       @default(0)
+  rating        Float?    // average user rating
+  ratingCount   Int       @default(0)
+  
+  // Metadata
+  tags          String[]
+  country       String?   @default("TH")
+  language      String?   @default("th")
+  
+  createdBy     String    // userId
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([category])
+  @@index([specialty])
+  @@index([isPublic])
+  @@index([isApproved])
+  @@index([usageCount])
+  @@map("formulary_template")
+}
+
+// ==========================================
+// CALCULATIONS
+// ==========================================
+
+// prisma/schemas/calculations.prisma
+// Dose Calculations and History
+
+// Calculation history/logging
+model DoseCalculation {
+  id              String    @id @default(uuid())
+  userId          String?   // null for anonymous calculations
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Patient data
+  patientAgeYears Float
+  patientAgeMonths Float?   // for more precise tracking
+  patientWeight   Float
+  patientGender   String?
+  
+  // Additional patient context
+  patientHeight   Float?    // for future BMI/BSA calculations
+  patientBSA      Float?    // body surface area
+  gestationalAge  Float?    // for neonates
+  
+  // Selected drug and rule
+  drugId          String?
+  customDrugId    String?
+  drugName        String    // store name for history
+  selectedRule    String    // JSON of the dosing rule used
+  ruleSource      String    // "system", "custom", "manual"
+  
+  // Calculation inputs
+  indication      String?   // reason for drug
+  selectedDose    Float     // mg that pharmacist selected
+  concentration   Float     // mg/mL
+  frequency       String    // FrequencyType as string
+  duration        String?   // treatment duration
+  
+  // Calculation results
+  volumePerDose   Float     // mL per dose
+  totalDailyDose  Float     // mg per day
+  totalDailyVolume Float    // mL per day
+  dosesPerDay     Int       // number of doses per day
+  
+  // Practical adjustments
+  roundedVolume   Float?    // rounded to practical measurement
+  roundingReason  String?   // why volume was rounded
+  
+  // Safety checks
+  warnings        String[]  // JSON array of warnings
+  contraindications String[] // JSON array of contraindications
+  maxDoseExceeded Boolean   @default(false)
+  ageAppropriate  Boolean   @default(true)
+  
+  // Clinical context
+  prescriber      String?   // doctor name/id
+  pharmacyLocation String?  // ward, OPD, etc.
+  urgency         String?   // "routine", "urgent", "emergency"
+  
+  // Verification
+  verifiedBy      String?   // pharmacist who verified
+  verifiedAt      DateTime?
+  doubleChecked   Boolean   @default(false)
+  
+  // Notes and modifications
+  notes           String?
+  modifications   String?   // JSON of any manual adjustments
+  
+  // Session tracking
+  sessionId       String?   // for grouping related calculations
+  calculationStep Int       @default(1) // step in multi-drug calculations
+  
+  calculatedAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([calculatedAt])
+  @@index([drugName])
+  @@index([sessionId])
+  @@index([verifiedBy])
+  @@map("dose_calculation")
+}
+
+// Calculation templates (saved common calculations)
+model CalculationTemplate {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Template information
+  name            String    // เช่น "Fever Protocol 2-5y", "Pneumonia Treatment"
+  description     String?
+  category        String?   // "fever", "infection", "pain"
+  
+  // Template data
+  templateData    String    // JSON of calculation parameters
+  
+  // Usage settings
+  isDefault       Boolean   @default(false)
+  isShared        Boolean   @default(false)
+  usageCount      Int       @default(0)
+  lastUsed        DateTime?
+  
+  // Version control
+  version         String    @default("1.0")
+  parentTemplate  String?   // if based on another template
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([category])
+  @@index([isShared])
+  @@map("calculation_template")
+}
+
+// Calculation sessions (for complex multi-drug calculations)
+model CalculationSession {
+  id              String    @id @default(uuid())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Session information
+  sessionName     String?   // optional name for session
+  patientId       String?   // internal patient identifier
+  
+  // Patient context (copied to calculations for history)
+  patientAge      Float
+  patientWeight   Float
+  patientGender   String?
+  
+  // Session metadata
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  isActive        Boolean   @default(true)
+  
+  // Clinical context
+  indication      String?   // overall treatment indication
+  prescriber      String?
+  location        String?
+  
+  // Session statistics
+  calculationCount Int      @default(0)
+  lastActivity    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([startedAt])
+  @@map("calculation_session")
+}
+
+// Quick calculation presets (for common scenarios)
+model CalculationPreset {
+  id              String    @id @default(uuid())
+  
+  // Preset information
+  name            String    // เช่น "Paracetamol 2-6y Fever"
+  drugName        String
+  ageRange        String    // display string
+  indication      String
+  
+  // Preset parameters
+  ageMinYears     Float
+  ageMaxYears     Float
+  weightRange     String?   // "10-20 kg"
+  
+  // Default calculation
+  dosePerKg       Float
+  doseUnit        String
+  frequency       String
+  concentration   Float     // most common concentration
+  
+  // Usage and popularity
+  usageCount      Int       @default(0)
+  isPopular       Boolean   @default(false)
+  isVerified      Boolean   @default(false)
+  
+  // Metadata
+  category        String
+  evidenceLevel   String    @default("guideline")
+  lastReviewed    DateTime?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([drugName])
+  @@index([category])
+  @@index([isPopular])
+  @@index([usageCount])
+  @@map("calculation_preset")
+}
+
+// Error logging for calculation failures
+model CalculationError {
+  id              String    @id @default(uuid())
+  userId          String?
+  
+  // Error context
+  errorType       String    // "validation", "calculation", "database"
+  errorMessage    String
+  errorDetails    String?   // JSON of error details
+  
+  // Input data that caused error
+  inputData       String    // JSON of inputs
+  
+  // System context
+  userAgent       String?
+  ipAddress       String?
+  
+  occurredAt      DateTime  @default(now())
+
+  @@index([errorType])
+  @@index([occurredAt])
+  @@map("calculation_error")
+}

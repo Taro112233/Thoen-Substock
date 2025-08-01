@@ -1,0 +1,220 @@
+// prisma/schemas/pharmacy-core.prisma
+// Core Drug Database and Dosing Rules
+
+enum DrugCategory {
+  ANALGESIC_ANTIPYRETIC    // ยาแก้ปวดลดไข้
+  COUGH_EXPECTORANT       // ยาแก้ไอขับเสมหะ
+  ANTIHISTAMINE          // ยาแก้แพ้แก้คันลดน้ำมูก
+  ANTIBIOTIC            // ยาปฏิชีวนะ
+  GASTROINTESTINAL      // ยาระบบทางเดิน
+  RESPIRATORY           // ยาระบบทางเดินหายใจ
+  CARDIOVASCULAR        // ยาระบบหัวใจและหลอดเลือด
+  CNS                   // ยาระบบประสาท
+  DERMATOLOGICAL        // ยาผิวหนัง
+  CUSTOM                // ยาที่ user เพิ่มเอง
+}
+
+enum DoseCalculationType {
+  WEIGHT_BASED_DOSE      // mg/kg/dose
+  WEIGHT_BASED_DAILY     // mg/kg/day
+  AGE_BASED_FIXED        // fixed mg/dose based on age
+  SURFACE_AREA_BASED     // mg/m2 (สำหรับอนาคต)
+}
+
+enum FrequencyType {
+  OD     // Once daily
+  BID    // Twice daily  
+  TID    // Three times daily
+  QID    // Four times daily
+  Q4H    // Every 4 hours
+  Q6H    // Every 6 hours
+  Q8H    // Every 8 hours
+  Q12H   // Every 12 hours
+  PRN    // As needed
+  STAT   // Immediately
+}
+
+enum DrugFormulation {
+  SYRUP
+  SUSPENSION
+  TABLET
+  CAPSULE
+  INJECTION
+  DROPS
+  POWDER
+  CREAM
+  OINTMENT
+}
+
+enum EvidenceLevel {
+  GUIDELINE          // จากแนวทางปฏิบัติ
+  EXPERT_OPINION     // ความเห็นผู้เชี่ยวชาญ
+  LOCAL_PRACTICE     // การปฏิบัติท้องถิ่น
+  HOSPITAL_PROTOCOL  // โปรโตคอลโรงพยาบาล
+  PERSONAL_EXPERIENCE // ประสบการณ์ส่วนตัว
+}
+
+// Core drug database (system default)
+model Drug {
+  id                String        @id @default(uuid())
+  genericName       String        
+  brandNames        String[]      
+  category          DrugCategory
+  description       String?
+  
+  // Basic drug info
+  activeIngredient  String?
+  therapeuticClass  String?
+  
+  // Safety information
+  isControlled      Boolean       @default(false)
+  isNarcotics       Boolean       @default(false)
+  pregnancyCategory String?       
+  
+  // System metadata
+  isActive          Boolean       @default(true)
+  isSystemDefault   Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  // Relations
+  dosingRules       DosingRule[]
+  concentrations    DrugConcentration[]
+  contraindications Contraindication[]
+  interactions      DrugInteraction[]
+  customVersions    CustomDrug[]
+
+  @@unique([genericName])
+  @@index([category])
+  @@index([isActive])
+  @@map("drug")
+}
+
+// Dosing rules for each drug
+model DosingRule {
+  id                   String              @id @default(uuid())
+  drugId               String
+  drug                 Drug                @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // Age constraints (in years, decimal)
+  ageMinYears          Float               
+  ageMaxYears          Float               
+  ageDisplay           String              
+  ageDisplayShort      String?             
+  
+  // Weight constraints (optional)
+  weightMinKg          Float?
+  weightMaxKg          Float?
+  
+  // Dose calculation
+  calculationType      DoseCalculationType
+  doseMin              Float               
+  doseMax              Float               
+  doseUnit             String              
+  
+  // Frequency and timing
+  defaultFrequency     FrequencyType
+  alternativeFreqs     FrequencyType[]     
+  
+  // Maximum limits
+  maxDailyDoseMg       Float?              
+  maxSingleDoseMg      Float?              
+  
+  // Rule priority (higher = more specific/preferred)
+  priority             Int                 @default(1)
+  
+  // Clinical context
+  indication           String?             
+  duration             String?             
+  notes                String?
+  
+  // Evidence and validation
+  evidenceLevel        EvidenceLevel       @default(GUIDELINE)
+  lastReviewed         DateTime?
+  
+  // System metadata
+  isActive             Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([drugId])
+  @@index([ageMinYears, ageMaxYears])
+  @@index([priority])
+  @@index([isActive])
+  @@map("dosing_rule")
+}
+
+// Available drug concentrations/formulations
+model DrugConcentration {
+  id              String          @id @default(uuid())
+  drugId          String
+  drug            Drug            @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // Concentration details
+  strength        Float           
+  strengthUnit    String          
+  formulation     DrugFormulation
+  
+  // Product information
+  brandName       String?         
+  manufacturer    String?
+  packageSize     String?         
+  
+  // Availability
+  isCommonlyUsed  Boolean         @default(true)
+  availability    String?         
+  
+  // Pricing (optional)
+  costPerUnit     Float?
+  currency        String?         @default("THB")
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([drugId])
+  @@index([isCommonlyUsed])
+  @@map("drug_concentration")
+}
+
+// Contraindications and warnings
+model Contraindication {
+  id            String    @id @default(uuid())
+  drugId        String
+  drug          Drug      @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  type          String    // "absolute", "relative", "warning"
+  condition     String    
+  ageSpecific   Boolean   @default(false)
+  ageMinYears   Float?
+  ageMaxYears   Float?
+  
+  severity      String    // "high", "medium", "low"
+  description   String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([drugId])
+  @@index([type])
+  @@map("contraindication")
+}
+
+// Drug interactions
+model DrugInteraction {
+  id              String   @id @default(uuid())
+  drugId          String
+  drug            Drug     @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  interactsWith   String   
+  severity        String   
+  description     String
+  clinicalEffect  String?
+  management      String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([drugId])
+  @@index([severity])
+  @@map("drug_interaction")
+}
