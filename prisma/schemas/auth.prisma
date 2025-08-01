@@ -1,3 +1,4 @@
+// prisma/schemas/auth.prisma
 // Authentication and User Management
 
 enum Role {
