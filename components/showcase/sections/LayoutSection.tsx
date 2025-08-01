@@ -1,4 +1,4 @@
-// components/sections/LayoutSection.tsx - แก้ไข nested button issue
+// components/showcase/sections/LayoutSection.tsx - แก้ไข nested button issue
 'use client'
 
 import React, { useState } from 'react'

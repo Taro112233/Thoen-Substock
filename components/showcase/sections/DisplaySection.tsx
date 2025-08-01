@@ -1,4 +1,4 @@
-// components/sections/DisplaySection.tsx
+// components/showcase/sections/DisplaySection.tsx
 'use client'
 
 import React, { useState } from 'react'

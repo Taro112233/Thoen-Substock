@@ -1,5 +1,4 @@
-
-// components/ShowcaseNavigation.tsx - แก้ไข asChild issue
+// components/showcase/ShowcaseNavigation.tsx - แก้ไข asChild issue
 'use client'
 
 import { motion } from 'motion/react'

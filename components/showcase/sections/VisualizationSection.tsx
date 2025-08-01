@@ -1,4 +1,4 @@
-// components/sections/VisualizationSection.tsx
+// components/showcase/sections/VisualizationSection.tsx
 'use client'
 
 import React from 'react'

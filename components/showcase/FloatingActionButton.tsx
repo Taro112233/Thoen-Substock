@@ -1,4 +1,4 @@
-// components/FloatingActionButton.tsx
+// components/showcase/FloatingActionButton.tsx
 'use client'
 
 import { motion } from 'motion/react'

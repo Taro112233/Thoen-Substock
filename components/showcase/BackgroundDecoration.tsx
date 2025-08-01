@@ -1,4 +1,4 @@
-// components/BackgroundDecoration.tsx
+// components/showcase/BackgroundDecoration.tsx
 'use client'
 
 import { motion } from 'motion/react'

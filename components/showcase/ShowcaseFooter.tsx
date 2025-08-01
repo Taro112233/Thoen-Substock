@@ -1,4 +1,4 @@
-// components/ShowcaseFooter.tsx
+// components/showcase/ShowcaseFooter.tsx
 'use client'
 
 import { motion } from 'motion/react'

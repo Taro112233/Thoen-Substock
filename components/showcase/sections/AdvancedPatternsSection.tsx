@@ -1,4 +1,4 @@
-// components/sections/AdvancedPatternsSection.tsx
+// components/showcase/sections/AdvancedPatternsSection.tsx
 'use client'
 
 import React from 'react'
@@ -11,7 +11,7 @@ import {
   FormValidationDemo, 
   AccessibilityDemo, 
   DataFetchingDemo 
-} from '../DemoComponents'
+} from '@/components/showcase/DemoComponents'
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },

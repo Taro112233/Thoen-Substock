@@ -1,4 +1,4 @@
-// components/DemoComponents.tsx
+// components/showcase/DemoComponents.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
