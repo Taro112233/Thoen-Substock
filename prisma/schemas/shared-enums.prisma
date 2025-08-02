@@ -1,0 +1,59 @@
+// prisma/schemas/shared-enums.prisma
+// Shared Enums Schema
+// Enums ที่ใช้ร่วมกันในหลายโมดูล - ต้อง load ก่อนไฟล์อื่นทั้งหมด
+
+// ระดับความสำคัญ - ใช้ในทุกระบบ
+enum Priority {
+  LOW             // ความสำคัญต่ำ
+  NORMAL          // ความสำคัญปกติ
+  HIGH            // ความสำคัญสูง
+  URGENT          // เร่งด่วน
+  CRITICAL        // วิกฤต
+}
+
+// สถานะการอนุมัติ - ใช้ในหลายระบบ
+enum ApprovalStatus {
+  PENDING         // รอการอนุมัติ
+  APPROVED        // อนุมัติแล้ว
+  REJECTED        // ปฏิเสธ
+  CANCELLED       // ยกเลิก
+  EXPIRED         // หมดเวลา
+}
+
+// สถานะการใช้งานทั่วไป
+enum ActiveStatus {
+  ACTIVE          // ใช้งานปกติ
+  INACTIVE        // ไม่ใช้งานชั่วคราว
+  SUSPENDED       // ระงับการใช้งาน
+  DELETED         // ลบแล้ว (soft delete)
+}
+
+// สกุลเงิน
+enum Currency {
+  THB             // บาทไทย
+  USD             // ดอลลาร์สหรัฐ
+  EUR             // ยูโร
+  JPY             // เยนญี่ปุ่น
+}
+
+// ช่วงเวลา - ใช้ในการรายงานและวิเคราะห์
+enum TimePeriod {
+  HOURLY          // รายชั่วโมง
+  DAILY           // รายวัน
+  WEEKLY          // รายสัปดาห์
+  MONTHLY         // รายเดือน
+  QUARTERLY       // รายไตรมาส
+  YEARLY          // รายปี
+}
+
+// ประเภทเอกสาร
+enum DocumentType {
+  PDF             // ไฟล์ PDF
+  EXCEL           // ไฟล์ Excel
+  WORD            // ไฟล์ Word
+  IMAGE           // รูปภาพ
+  CSV             // ไฟล์ CSV
+  JSON            // ไฟล์ JSON
+  XML             // ไฟล์ XML
+  OTHER           // อื่นๆ
+}

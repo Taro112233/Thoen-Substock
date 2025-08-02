@@ -15,14 +15,6 @@ enum NotificationType {
   MAINTENANCE_ALERT   // แจ้งเตือนบำรุงรักษา
 }
 
-enum Priority {
-  LOW             // ความสำคัญต่ำ
-  NORMAL          // ความสำคัญปกติ
-  HIGH            // ความสำคัญสูง
-  URGENT          // เร่งด่วน
-  CRITICAL        // วิกฤต
-}
-
 enum NotificationStatus {
   PENDING         // รอส่ง
   SENT            // ส่งแล้ว

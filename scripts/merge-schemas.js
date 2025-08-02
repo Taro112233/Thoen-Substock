@@ -26,6 +26,7 @@ datasource db {
 
 // Schema file order for proper dependency resolution
 const SCHEMA_ORDER = {
+  'shared-enums.prisma': 0,      // ต้อง load ก่อนทุกไฟล์
   'auth.prisma': 1,
   'hospital-core.prisma': 2,
   'inventory.prisma': 3,
