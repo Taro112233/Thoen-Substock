@@ -1,40 +1,42 @@
 // prisma/schemas/notifications.prisma
-// Notification and Alert System Schema
-// ระบบแจ้งเตือนและการสื่อสาร
+// Notification and Alert Management Schema
+// ระบบจัดการการแจ้งเตือนและการแจ้งเตือนอัตโนมัติ
 
 enum NotificationType {
-  STOCK_ALERT         // แจ้งเตือนสต็อก
-  EXPIRY_ALERT        // แจ้งเตือนหมดอายุ
-  REQUISITION_ALERT   // แจ้งเตือนใบเบิก
-  SYSTEM_ALERT        // แจ้งเตือนระบบ
-  COMPLIANCE_ALERT    // แจ้งเตือนการปฏิบัติตาม
-  SECURITY_ALERT      // แจ้งเตือนความปลอดภัย
-  FINANCIAL_ALERT     // แจ้งเตือนการเงิน
-  PERFORMANCE_ALERT   // แจ้งเตือนประสิทธิภาพ
-  USER_NOTIFICATION   // การแจ้งเตือนทั่วไป
-  MAINTENANCE_ALERT   // แจ้งเตือนบำรุงรักษา
-}
-
-enum NotificationStatus {
-  PENDING         // รอส่ง
-  SENT            // ส่งแล้ว
-  DELIVERED       // ส่งถึงแล้ว
-  READ            // อ่านแล้ว
-  ACKNOWLEDGED    // รับทราบแล้ว
-  FAILED          // ส่งไม่สำเร็จ
-  EXPIRED         // หมดอายุ
+  STOCK_LOW       // สต็อกต่ำ
+  STOCK_OUT       // สต็อกหมด
+  STOCK_EXPIRY    // ยาใกล้หมดอายุ
+  REQUISITION     // เกี่ยวกับใบเบิก
+  APPROVAL        // การอนุมัติ
+  SYSTEM          // ระบบ
+  SECURITY        // ความปลอดภัย
+  MAINTENANCE     // การบำรุงรักษา
+  AUDIT           // การตรวจสอบ
+  QUALITY         // คุณภาพ
+  URGENT          // เร่งด่วน
 }
 
 enum ChannelType {
-  IN_APP          // ในแอป
-  EMAIL           // อีเมล
-  SMS             // SMS
-  PUSH            // Push notification
-  LINE            // LINE notification
-  SLACK           // Slack
-  WEBHOOK         // Webhook
+  EMAIL     // อีเมล
+  SMS       // ข้อความ
+  LINE      // LINE
+  SLACK     // Slack
+  PUSH      // Push notification
+  IN_APP    // ในแอปพลิเคชัน
+  WEBHOOK   // Webhook
 }
 
+enum NotificationStatus {
+  PENDING     // รอการส่ง
+  SENT        // ส่งแล้ว
+  DELIVERED   // ส่งถึงแล้ว
+  READ        // อ่านแล้ว
+  FAILED      // ล้มเหลว
+  EXPIRED     // หมดอายุ
+  CANCELLED   // ยกเลิก
+}
+
+// การแจ้งเตือนหลัก
 model Notification {
   id              String            @id @default(uuid())
   
@@ -44,21 +46,22 @@ model Notification {
   
   // ข้อมูลการแจ้งเตือน
   type            NotificationType
-  priority        Priority          @default(NORMAL)
-  title           String            // หัวข้อ
-  message         String            // ข้อความ
-  
-  // ข้อมูลเพิ่มเติม
+  title           String
+  message         String
   data            Json?             // ข้อมูลเพิ่มเติม (JSON)
-  actionUrl       String?           // URL สำหรับการดำเนินการ
-  actionLabel     String?           // ป้ายกำกับปุ่มดำเนินการ
   
-  // การจำแนกเป้าหมาย
-  targetType      String            // "USER", "ROLE", "DEPARTMENT", "ALL"
-  targetIds       String[]          // IDs ของเป้าหมาย
+  // ความสำคัญ
+  priority        Priority          @default(NORMAL)
   
-  // การตั้งค่าการส่ง
-  channels        ChannelType[]     // ช่องทางการส่ง
+  // ช่องทางการส่ง
+  channels        ChannelType[]
+  
+  // เป้าหมาย
+  targetRoles     String[]          // บทบาทเป้าหมาย
+  targetUsers     String[]          // ผู้ใช้เป้าหมายเฉพาะ
+  targetDepartments String[]        // แผนกเป้าหมาย
+  
+  // การกำหนดเวลาส่ง
   scheduleAt      DateTime?         // กำหนดเวลาส่ง
   retryCount      Int               @default(0) // จำนวนครั้งที่พยายามส่งใหม่
   maxRetries      Int               @default(3) // จำนวนครั้งสูงสุดที่ลองส่งใหม่
@@ -76,8 +79,9 @@ model Notification {
   errorMessage    String?           // ข้อความข้อผิดพลาด
   lastAttemptAt   DateTime?         // ครั้งสุดท้ายที่พยายามส่ง
   
-  // Relations
+  // Relations - เพิ่ม inverse relations
   recipients      NotificationUser[]
+  deliveries      NotificationDelivery[]
   
   @@index([hospitalId, type])
   @@index([status])
@@ -151,6 +155,9 @@ model NotificationTemplate {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   createdBy       String?
+  
+  // Relations - เพิ่ม inverse relations
+  alertRules      AlertRule[]
   
   @@unique([hospitalId, code])
   @@index([type])
@@ -242,6 +249,9 @@ model AlertRule {
   updatedAt       DateTime          @updatedAt
   createdBy       String?
   
+  // Relations - เพิ่ม inverse relations
+  alertLogs       AlertLog[]
+  
   @@index([hospitalId, type])
   @@index([isActive])
   @@map("alert_rules")
@@ -320,6 +330,9 @@ model NotificationChannel {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   createdBy       String?
+  
+  // Relations - เพิ่ม inverse relations
+  deliveries      NotificationDelivery[]
   
   @@unique([hospitalId, type, name])
   @@index([type])

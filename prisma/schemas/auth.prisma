@@ -56,14 +56,62 @@ model User {
   createdBy     String?     // ผู้สร้างบัญชี
   lastModifiedBy String?    // ผู้แก้ไขล่าสุด
   
-  // Relations
-  sessions            Session[]
-  stockTransactions   StockTransaction[]
-  requisitionsCreated Requisition[]       @relation("RequesterRelation")
-  requisitionsApproved Requisition[]      @relation("ApproverRelation")
-  workflowActions     RequisitionWorkflow[]
-  auditLogs           AuditLog[]
-  notifications       NotificationUser[]
+  // ================================
+  // RELATIONS (All opposite fields)
+  // ================================
+  
+  // Authentication Relations
+  sessions                  Session[]
+  refreshTokens            RefreshToken[]
+  passwordResetTokens      PasswordResetToken[]
+  emailVerificationTokens  EmailVerificationToken[]
+  loginAttempts            LoginAttempt[]
+  
+  // Department & Warehouse Management
+  departmentsManaged       Department[]     @relation("DepartmentHead")
+  warehousesManaged        Warehouse[]      @relation("WarehouseManager")
+  
+  // Stock Management
+  stockTransactions        StockTransaction[]
+  stockCountsAsCounter     StockCount[]     @relation("StockCounter")
+  stockCountsAsVerifier    StockCount[]     @relation("StockCountVerifier")
+  
+  // Requisition System
+  requisitionsCreated      Requisition[]    @relation("RequesterRelation")
+  requisitionsApproved     Requisition[]    @relation("ApproverRelation")
+  requisitionsFulfilled    Requisition[]    @relation("FulfillerRelation")
+  workflowActions          RequisitionWorkflow[]
+  requisitionAttachments   RequisitionAttachment[]
+  requisitionTemplatesCreated RequisitionTemplate[]
+  
+  // Supplier Management
+  purchaseOrdersCreated    PurchaseOrder[]  @relation("POOrderer")
+  purchaseOrdersApproved   PurchaseOrder[]  @relation("POApprover")
+  goodsReceiptsReceived    GoodsReceipt[]   @relation("GRReceiver")
+  goodsReceiptsVerified    GoodsReceipt[]   @relation("GRVerifier")
+  supplierEvaluations      SupplierEvaluation[]
+  
+  // Analytics & Reporting
+  reportsRequested         Report[]
+  dashboards               Dashboard[]
+  systemUsageLogs          SystemUsage[]
+  
+  // Audit & Compliance
+  auditLogs                AuditLog[]
+  dataAccessLogs           DataAccessLog[]
+  complianceChecksPerformed ComplianceCheck[] @relation("ComplianceChecker")
+  complianceChecksReviewed ComplianceCheck[] @relation("ComplianceReviewer")
+  controlledSubstanceLogsHandled ControlledSubstanceLog[] @relation("CSLHandler")
+  controlledSubstanceLogsWitnessed ControlledSubstanceLog[] @relation("CSLWitness")
+  controlledSubstanceLogsAuthorized ControlledSubstanceLog[] @relation("CSLAuthorizer")
+  internalAudits           InternalAudit[]
+  securityIncidentsReported SecurityIncident[] @relation("SecurityReporter")
+  securityIncidentsSuspected SecurityIncident[] @relation("SuspectedUser")
+  securityIncidentsInvestigated SecurityIncident[] @relation("Investigator")
+  
+  // Notifications
+  notificationPreferences  NotificationPreference[]
+  notifications            NotificationUser[]
   
   @@map("users")
 }

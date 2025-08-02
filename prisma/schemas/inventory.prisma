@@ -1,38 +1,24 @@
 // prisma/schemas/inventory.prisma
 // Inventory Management Schema
-// ระบบจัดการสต็อกและคลังยาสำหรับโรงพยาบาล
-
-enum DosageForm {
-  TABLET          // เม็ด
-  CAPSULE         // แคปซูล
-  SYRUP           // น้ำเชื่อม
-  SUSPENSION      // ยาแขวนตะกอน
-  INJECTION       // ยาฉีด
-  DROPS           // ยาหยด
-  POWDER          // ผง
-  CREAM           // ครีม
-  OINTMENT        // ยาทา
-  PATCH           // แผ่นแปะ
-  SUPPOSITORY     // ยาเหน็บ
-  SPRAY           // สเปรย์
-  INHALER         // ยาสูดดม
-  LOTION          // โลชั่น
-  SOLUTION        // สารละลาย
-}
-
-enum ControlledStatus {
-  NONE                // ยาทั่วไป
-  NARCOTIC            // ยาเสพติด
-  PSYCHOTROPIC        // ยาทางจิต
-  CONTROLLED_SUBSTANCE // ยาควบคุมพิเศษ
-  DANGEROUS_DRUG      // ยาอันตราย
-}
+// ระบบจัดการสต็อกยา การนับสต็อก และการติดตาม batch
 
 enum DrugStatus {
   ACTIVE      // ใช้งานปกติ
   INACTIVE    // ไม่ใช้งานชั่วคราว
-  DISCONTINUED // เลิกใช้แล้ว
   PENDING     // รอการอนุมัติ
+  DISCONTINUED // เลิกใช้แล้ว
+  RESTRICTED  // จำกัดการใช้งาน
+}
+
+enum ControlledStatus {
+  NON_CONTROLLED // ยาทั่วไป
+  CONTROLLED_1   // ยาเสพติดประเภท 1
+  CONTROLLED_2   // ยาเสพติดประเภท 2
+  CONTROLLED_3   // ยาเสพติดประเภท 3
+  CONTROLLED_4   // ยาเสพติดประเภท 4
+  CONTROLLED_5   // ยาเสพติดประเภท 5
+  DANGEROUS      // ยาอันตราย
+  PSYCHOTROPIC   // ยาที่มีผลต่อจิต
 }
 
 model Drug {
@@ -42,38 +28,29 @@ model Drug {
   hospitalId       String
   hospital         Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
-  // การระบุยา
+  // ข้อมูลพื้นฐาน
   drugCode         String          // รหัสยาเฉพาะโรงพยาบาล
-  hospitalItemCode String?         // รหัสสินค้าในระบบโรงพยาบาล
-  barcode          String?         // บาร์โค้ด
-  
-  // ชื่อยา
   genericName      String          // ชื่อสามัญ
-  tradeNames       String[]        // ชื่อการค้า (array)
-  brandName        String?         // ชื่อแบรนด์หลัก
+  brandName        String?         // ชื่อการค้า
+  description      String?
   
-  // รายละเอียดยา
-  dosageForm       DosageForm
-  strength         String          // ความแรง เช่น "500mg", "10mg/ml"
-  unitSize         String          // ขนาดหน่วย เช่น "per tablet", "per vial"
-  activeIngredient String?         // สารออกฤทธิ์
+  // รูปแบบและความแรง
+  dosageForm       String          // รูปแบบยา: tablet, capsule, injection, etc.
+  strength         String          // ความแรง: 10mg, 250mg/5ml, etc.
+  unitOfMeasure    String          // หน่วยนับ: tablet, vial, bottle, etc.
+  packSize         Int             @default(1) // ขนาดแพ็ค
   
-  // การจำแนกประเภท
-  therapeuticCategory String       // หมวดการรักษา
-  pharmacologicalClass String?     // จำแนกทางเภสัชวิทยา
+  // การจำแนกยา
+  therapeuticCategory String?      // หมวดยารักษาโรค
+  pharmacologicalClass String?    // กลุ่มยาทางเภสัชวิทยา
   atcCode          String?         // รหัส ATC
+  controlledStatus ControlledStatus @default(NON_CONTROLLED)
   
-  // สถานะการควบคุม
-  controlledStatus ControlledStatus @default(NONE)
-  prescriptionRequired Boolean     @default(false)
+  // การจัดเก็บ
+  storageRequirement String?       // ความต้องการการจัดเก็บ
+  specialHandling  String?         // การจัดการพิเศษ
   
-  // การเก็บรักษา
-  storageRequirements String?      // เงื่อนไขการเก็บ
-  storageTemp      String?         // อุณหภูมิเก็บ
-  shelfLife        String?         // อายุการเก็บ
-  
-  // ข้อมูลเพิ่มเติม
-  description      String?         // รายละเอียดเพิ่มเติม
+  // รายละเอียดเพิ่มเติม
   indications      String?         // ข้อบ่งใช้
   contraindications String?        // ข้อห้ามใช้
   sideEffects      String?         // ผลข้างเคียง
@@ -97,12 +74,18 @@ model Drug {
   createdBy        String?
   lastModifiedBy   String?
   
-  // Relations
+  // Relations - เพิ่ม inverse relations ทั้งหมด
   stockCards       StockCard[]
   transactions     StockTransaction[]
   requisitionItems RequisitionItem[]
+  suggestedForItems RequisitionItem[] @relation("SuggestedDrug")
   drugInteractions DrugInteraction[] @relation("DrugA")
   interactionsWith DrugInteraction[] @relation("DrugB")
+  supplierProducts SupplierProduct[]
+  purchaseOrderItems PurchaseOrderItem[]
+  goodsReceiptItems GoodsReceiptItem[]
+  templateItems    RequisitionTemplateItem[]
+  controlledSubstanceLogs ControlledSubstanceLog[]
   
   @@unique([hospitalId, drugCode])
   @@index([hospitalId, genericName])
@@ -191,10 +174,11 @@ model StockCard {
   createdBy        String?
   lastModifiedBy   String?
   
-  // Relations
+  // Relations - เพิ่ม inverse relations ทั้งหมด
   batches          StockBatch[]
   transactions     StockTransaction[]
   requisitionItems RequisitionItem[]
+  stockCountItems  StockCountItem[]
   
   @@unique([hospitalId, warehouseId, drugId])
   @@index([hospitalId, currentStock])
@@ -259,8 +243,9 @@ model StockBatch {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
-  // Relations
+  // Relations - เพิ่ม inverse relations
   transactions    StockTransaction[]
+  stockCountItems StockCountItem[]
   
   @@unique([hospitalId, stockCardId, batchNumber])
   @@index([hospitalId, expiryDate])
@@ -320,64 +305,68 @@ model StockTransaction {
   toWarehouseId    String?         // คลังปลายทาง
   toWarehouse      Warehouse?      @relation("TransferTo", fields: [toWarehouseId], references: [id], onDelete: SetNull)
   
-  // ผู้ทำรายการ
-  userId           String
-  user             User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  approvedBy       String?         // ผู้อนุมัติ (สำหรับรายการพิเศษ)
+  // ผู้ดำเนินการ
+  performedBy      String
+  performedByUser  User            @relation(fields: [performedBy], references: [id], onDelete: Restrict)
   
-  // การติดตามการทำรายการ
-  timestamp        DateTime        @default(now())
-  processedAt      DateTime?       // วันที่ประมวลผลเสร็จ
+  // การอนุมัติ (สำหรับรายการที่ต้องอนุมัติ)
+  approvalRequired Boolean         @default(false)
+  approvedBy       String?
+  approvedAt       DateTime?
   
-  // สถานะ
-  isReversed       Boolean         @default(false) // ถูกกลับรายการหรือไม่
-  reversedBy       String?         // ผู้กลับรายการ
-  reversedAt       DateTime?       // วันที่กลับรายการ
-  reversalReason   String?         // เหตุผลการกลับรายการ
+  // การติดตาม
+  transactionDate  DateTime        @default(now())
+  createdAt        DateTime        @default(now())
   
-  // การเชื่อมโยง
-  requisitionId    String?         // เชื่อมโยงกับใบเบิก
-  requisition      Requisition?    @relation(fields: [requisitionId], references: [id], onDelete: SetNull)
-  
-  @@index([hospitalId, warehouseId, timestamp])
-  @@index([drugId, timestamp])
+  @@index([hospitalId, transactionDate])
+  @@index([stockCardId, transactionDate])
   @@index([transactionType])
-  @@index([userId])
-  @@index([timestamp])
   @@map("stock_transactions")
 }
 
-// การติดตามการนับสต็อก
+// การนับสต็อก
+enum StockCountStatus {
+  PLANNED     // วางแผนแล้ว
+  IN_PROGRESS // กำลังดำเนินการ
+  COMPLETED   // เสร็จสิ้น
+  VERIFIED    // ตรวจสอบแล้ว
+  ADJUSTED    // ปรับปรุงแล้ว
+  CANCELLED   // ยกเลิก
+}
+
 model StockCount {
-  id              String      @id @default(uuid())
+  id              String          @id @default(uuid())
   
   // ความสัมพันธ์
   hospitalId      String
   warehouseId     String
-  warehouse       Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   
   // ข้อมูลการนับ
-  countDate       DateTime    @default(now())
-  countType       String      // "PHYSICAL", "CYCLE", "SPOT"
-  status          String      // "IN_PROGRESS", "COMPLETED", "CANCELLED"
+  countNumber     String          // หมายเลขการนับ
+  countDate       DateTime        // วันที่นับ
+  countType       String          // ประเภทการนับ: "FULL", "CYCLE", "SPOT"
   
-  // ผลการนับ
-  totalItems      Int?        // จำนวนรายการทั้งหมด
-  countedItems    Int?        // จำนวนรายการที่นับแล้ว
-  discrepancies   Int?        // จำนวนรายการที่มีความผิดปกติ
+  // สถานะ
+  status          StockCountStatus @default(PLANNED)
+  
+  // ผลลัพธ์
+  totalItems      Int?            // จำนวนรายการทั้งหมด
+  countedItems    Int?            // จำนวนรายการที่นับแล้ว
+  discrepancies   Int?            // จำนวนรายการที่มีความผิดปกติ
   
   // ผู้รับผิดชอบ
-  countedBy       String      // ผู้นับ
-  counter         User        @relation(fields: [countedBy], references: [id], onDelete: Restrict)
-  verifiedBy      String?     // ผู้ตรวจสอบ
-  verifier        User?       @relation("StockCountVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  countedBy       String          // ผู้นับ
+  counter         User            @relation("StockCounter", fields: [countedBy], references: [id], onDelete: Restrict)
+  verifiedBy      String?         // ผู้ตรวจสอบ
+  verifier        User?           @relation("StockCountVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
   
   // หมายเหตุ
   notes           String?
   
   // Audit fields
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   
   // Relations
   items           StockCountItem[]

@@ -12,14 +12,6 @@ enum RequisitionType {
   STAT            // เบิกด่วนฉุกเฉิน
 }
 
-enum Priority {
-  LOW             // ความสำคัญต่ำ
-  NORMAL          // ความสำคัญปกติ
-  HIGH            // ความสำคัญสูง
-  URGENT          // เร่งด่วน
-  CRITICAL        // วิกฤต
-}
-
 enum RequisitionStatus {
   DRAFT           // แผนกเตรียมใบเบิก
   SUBMITTED       // ส่งใบเบิกให้ pharmacy
