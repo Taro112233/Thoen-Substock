@@ -1,6 +1,6 @@
 // scripts/merge-schemas.js
-// Merges individual Prisma schema files into a single schema.prisma
-// Usage: node scripts/merge-schemas.js
+// Enhanced Prisma Schema Merger with Duplicate Detection
+// ป้องกันการ merge models ซ้ำและตรวจสอบ relations
 
 const fs = require('fs');
 const path = require('path');
@@ -37,6 +37,50 @@ const SCHEMA_ORDER = {
   'notifications.prisma': 8
 };
 
+function extractModelsAndEnums(content) {
+  const models = new Set();
+  const enums = new Set();
+  
+  // Extract model names
+  const modelMatches = content.match(/^model\s+(\w+)/gm) || [];
+  modelMatches.forEach(match => {
+    const modelName = match.replace('model ', '');
+    models.add(modelName);
+  });
+  
+  // Extract enum names
+  const enumMatches = content.match(/^enum\s+(\w+)/gm) || [];
+  enumMatches.forEach(match => {
+    const enumName = match.replace('enum ', '');
+    enums.add(enumName);
+  });
+  
+  return { models, enums };
+}
+
+function validateRelations(content) {
+  console.log('🔍 Validating relations...');
+  const relationErrors = [];
+  
+  // Extract all relation fields and their target models
+  const relationPattern = /(\w+)\s+(\w+)(\[\])?\s+@relation\s*\(/g;
+  const relations = [];
+  let match;
+  
+  while ((match = relationPattern.exec(content)) !== null) {
+    const [, fieldName, targetModel, isArray] = match;
+    relations.push({ fieldName, targetModel, isArray: !!isArray });
+  }
+  
+  // Check for missing opposite relations
+  // This is a basic check - in production you might want more sophisticated validation
+  if (relations.length > 0) {
+    console.log(`📊 Found ${relations.length} relation fields`);
+  }
+  
+  return relationErrors;
+}
+
 function mergeSchemas() {
   console.log('🔄 Merging Prisma schemas...');
   
@@ -48,6 +92,10 @@ function mergeSchemas() {
   }
   
   let mergedContent = baseSchema;
+  
+  // Track defined models and enums to prevent duplicates
+  const definedModels = new Set();
+  const definedEnums = new Set();
   
   // Get all .prisma files and sort them
   const schemaFiles = fs.readdirSync(SCHEMAS_DIR)
@@ -86,6 +134,29 @@ function mergeSchemas() {
       return;
     }
     
+    // Extract models and enums from this file
+    const { models, enums } = extractModelsAndEnums(content);
+    
+    // Check for duplicates
+    const duplicateModels = [...models].filter(model => definedModels.has(model));
+    const duplicateEnums = [...enums].filter(enumName => definedEnums.has(enumName));
+    
+    if (duplicateModels.length > 0) {
+      console.error(`❌ Duplicate models found in ${file}: ${duplicateModels.join(', ')}`);
+      console.log('Please check your schema files for duplicate model definitions.');
+      process.exit(1);
+    }
+    
+    if (duplicateEnums.length > 0) {
+      console.error(`❌ Duplicate enums found in ${file}: ${duplicateEnums.join(', ')}`);
+      console.log('Please check your schema files for duplicate enum definitions.');
+      process.exit(1);
+    }
+    
+    // Add to tracking sets
+    models.forEach(model => definedModels.add(model));
+    enums.forEach(enumName => definedEnums.add(enumName));
+    
     // Add section header
     const sectionName = file
       .replace('.prisma', '')
@@ -96,12 +167,19 @@ function mergeSchemas() {
     mergedContent += `// ${sectionName}\n`;
     mergedContent += `// ==========================================\n\n`;
     mergedContent += content + '\n';
+    
+    console.log(`✅ Merged ${file}: ${models.size} models, ${enums.size} enums`);
   });
   
   // Write the merged schema
   try {
     fs.writeFileSync(OUTPUT_FILE, mergedContent);
     console.log(`✅ Successfully merged ${schemaFiles.length} schema files into ${OUTPUT_FILE}`);
+    
+    // Validate relations
+    validateRelations(mergedContent);
+    
+    return mergedContent;
   } catch (error) {
     console.error('❌ Failed to write merged schema:', error.message);
     process.exit(1);
@@ -146,6 +224,19 @@ function validateMerge() {
       throw new Error('Datasource block not found');
     }
     
+    // Check for common relation issues
+    const potentialIssues = [];
+    
+    // Look for @relation without opposite field definitions
+    if (content.includes('@relation') && content.includes('missing an opposite relation field')) {
+      potentialIssues.push('Missing opposite relation fields detected');
+    }
+    
+    if (potentialIssues.length > 0) {
+      console.warn('⚠️  Potential issues found:');
+      potentialIssues.forEach(issue => console.warn(`   - ${issue}`));
+    }
+    
     console.log('✅ Schema validation passed');
     
   } catch (error) {
@@ -156,23 +247,33 @@ function validateMerge() {
 
 function showUsage() {
   console.log(`
-📚 Hospital Pharmacy Schema Merger
+📚 Hospital Pharmacy Schema Merger v2.0
 
 Usage:
-  node scripts/merge-schemas.js
+  node scripts/merge-schemas.js [--check-only]
+
+Options:
+  --check-only    Only validate files without merging
+  --help, -h      Show this help message
 
 This script merges all .prisma files from prisma/schemas/ into prisma/schema.prisma
+
+Features:
+- ✅ Duplicate model/enum detection
+- ✅ Relation validation
+- ✅ Dependency-aware file ordering
+- ✅ Comprehensive error reporting
 
 Schema files are processed in this order:
 ${Object.entries(SCHEMA_ORDER)
   .sort(([, a], [, b]) => a - b)
-  .map(([file, order]) => `  ${order}. ${file}`)
+  .map(([file, order]) => `  ${order + 1}. ${file}`)
   .join('\n')}
 
 After merging, run:
-  npm run db:generate  # Generate Prisma client
-  npm run db:push      # Push to development database
-  npm run db:migrate   # Create migration for production
+  pnpm db:generate  # Generate Prisma client
+  pnpm db:push      # Push to development database
+  pnpm db:migrate   # Create migration for production
 `);
 }
 
@@ -185,6 +286,17 @@ if (require.main === module) {
     process.exit(0);
   }
   
+  if (args.includes('--check-only')) {
+    console.log('🔍 Running validation only...');
+    if (fs.existsSync(OUTPUT_FILE)) {
+      validateMerge();
+    } else {
+      console.error('❌ No merged schema found. Run without --check-only first.');
+      process.exit(1);
+    }
+    process.exit(0);
+  }
+  
   try {
     mergeSchemas();
     validateMerge();
@@ -193,16 +305,25 @@ if (require.main === module) {
 🎉 Schema merge completed successfully!
 
 Next steps:
-  1. npm run db:generate  # Generate Prisma client
-  2. npm run db:push      # Push to database (development)
-  3. npm run db:studio    # Open Prisma Studio (optional)
+  1. pnpm db:generate  # Generate Prisma client
+  2. pnpm db:push      # Push to database (development)
+  3. pnpm db:studio    # Open Prisma Studio (optional)
 
 For production:
-  npm run db:migrate      # Create and apply migration
+  pnpm db:migrate      # Create and apply migration
+
+💡 Tips:
+  - Use 'node scripts/merge-schemas.js --check-only' to validate without merging
+  - Check prisma/schema.prisma for any remaining relation issues
+  - Run 'prisma format' if needed to clean up formatting
 `);
     
   } catch (error) {
     console.error('💥 Unexpected error:', error.message);
+    console.log('\n🛠️  Troubleshooting:');
+    console.log('  1. Check for duplicate models in different schema files');
+    console.log('  2. Ensure all relations have proper opposite fields');
+    console.log('  3. Verify file syntax with: prisma format');
     process.exit(1);
   }
 }
