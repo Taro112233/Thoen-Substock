@@ -1,0 +1,415 @@
+// prisma/schemas/inventory.prisma
+// Inventory Management Schema
+// ระบบจัดการสต็อกและคลังยาสำหรับโรงพยาบาล
+
+enum DosageForm {
+  TABLET          // เม็ด
+  CAPSULE         // แคปซูล
+  SYRUP           // น้ำเชื่อม
+  SUSPENSION      // ยาแขวนตะกอน
+  INJECTION       // ยาฉีด
+  DROPS           // ยาหยด
+  POWDER          // ผง
+  CREAM           // ครีม
+  OINTMENT        // ยาทา
+  PATCH           // แผ่นแปะ
+  SUPPOSITORY     // ยาเหน็บ
+  SPRAY           // สเปรย์
+  INHALER         // ยาสูดดม
+  LOTION          // โลชั่น
+  SOLUTION        // สารละลาย
+}
+
+enum ControlledStatus {
+  NONE                // ยาทั่วไป
+  NARCOTIC            // ยาเสพติด
+  PSYCHOTROPIC        // ยาทางจิต
+  CONTROLLED_SUBSTANCE // ยาควบคุมพิเศษ
+  DANGEROUS_DRUG      // ยาอันตราย
+}
+
+enum DrugStatus {
+  ACTIVE      // ใช้งานปกติ
+  INACTIVE    // ไม่ใช้งานชั่วคราว
+  DISCONTINUED // เลิกใช้แล้ว
+  PENDING     // รอการอนุมัติ
+}
+
+model Drug {
+  id               String          @id @default(uuid())
+  
+  // ความสัมพันธ์กับโรงพยาบาล
+  hospitalId       String
+  hospital         Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // การระบุยา
+  drugCode         String          // รหัสยาเฉพาะโรงพยาบาล
+  hospitalItemCode String?         // รหัสสินค้าในระบบโรงพยาบาล
+  barcode          String?         // บาร์โค้ด
+  
+  // ชื่อยา
+  genericName      String          // ชื่อสามัญ
+  tradeNames       String[]        // ชื่อการค้า (array)
+  brandName        String?         // ชื่อแบรนด์หลัก
+  
+  // รายละเอียดยา
+  dosageForm       DosageForm
+  strength         String          // ความแรง เช่น "500mg", "10mg/ml"
+  unitSize         String          // ขนาดหน่วย เช่น "per tablet", "per vial"
+  activeIngredient String?         // สารออกฤทธิ์
+  
+  // การจำแนกประเภท
+  therapeuticCategory String       // หมวดการรักษา
+  pharmacologicalClass String?     // จำแนกทางเภสัชวิทยา
+  atcCode          String?         // รหัส ATC
+  
+  // สถานะการควบคุม
+  controlledStatus ControlledStatus @default(NONE)
+  prescriptionRequired Boolean     @default(false)
+  
+  // การเก็บรักษา
+  storageRequirements String?      // เงื่อนไขการเก็บ
+  storageTemp      String?         // อุณหภูมิเก็บ
+  shelfLife        String?         // อายุการเก็บ
+  
+  // ข้อมูลเพิ่มเติม
+  description      String?         // รายละเอียดเพิ่มเติม
+  indications      String?         // ข้อบ่งใช้
+  contraindications String?        // ข้อห้ามใช้
+  sideEffects      String?         // ผลข้างเคียง
+  
+  // การจัดซื้อ
+  standardUnitCost Decimal?        // ราคาต่อหน่วยมาตรฐาน
+  averageUnitCost  Decimal?        // ราคาเฉลี่ยต่อหน่วย
+  lastPurchasePrice Decimal?       // ราคาซื้อครั้งล่าสุด
+  
+  // สถานะ
+  status           DrugStatus      @default(ACTIVE)
+  isActive         Boolean         @default(true)
+  
+  // การอนุมัติ
+  approvedBy       String?         // ผู้อนุมัติ
+  approvedAt       DateTime?       // วันที่อนุมัติ
+  
+  // Audit fields
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  createdBy        String?
+  lastModifiedBy   String?
+  
+  // Relations
+  stockCards       StockCard[]
+  transactions     StockTransaction[]
+  requisitionItems RequisitionItem[]
+  drugInteractions DrugInteraction[] @relation("DrugA")
+  interactionsWith DrugInteraction[] @relation("DrugB")
+  
+  @@unique([hospitalId, drugCode])
+  @@index([hospitalId, genericName])
+  @@index([hospitalId, therapeuticCategory])
+  @@index([controlledStatus])
+  @@map("drugs")
+}
+
+// การติดต่อระหว่างยา
+model DrugInteraction {
+  id          String @id @default(uuid())
+  
+  // ยาที่มีปฏิกิริยา
+  drugAId     String
+  drugA       Drug   @relation("DrugA", fields: [drugAId], references: [id], onDelete: Cascade)
+  drugBId     String
+  drugB       Drug   @relation("DrugB", fields: [drugBId], references: [id], onDelete: Cascade)
+  
+  // ประเภทปฏิกิริยา
+  severity    String // "MINOR", "MODERATE", "MAJOR", "CONTRAINDICATED"
+  effect      String // ผลที่เกิดขึ้น
+  mechanism   String? // กลไกการเกิดปฏิกิริยา
+  management  String? // การจัดการ
+  
+  // การติดตาม
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([drugAId, drugBId])
+  @@map("drug_interactions")
+}
+
+enum StockCardStatus {
+  ACTIVE      // ใช้งานปกติ
+  INACTIVE    // ไม่ใช้งานชั่วคราว
+  DISCONTINUED // เลิกใช้แล้ว
+  FROZEN      // หยุดการเคลื่อนไหวชั่วคราว
+}
+
+model StockCard {
+  id           String          @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId   String
+  hospital     Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  warehouseId  String
+  warehouse    Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  drugId       String
+  drug         Drug            @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // ระดับสต็อก
+  currentStock  Int            @default(0)    // สต็อกปัจจุบัน
+  reservedStock Int            @default(0)    // สต็อกที่จองไว้
+  availableStock Int           @default(0)    // สต็อกที่ใช้ได้ (current - reserved)
+  minimumStock  Int                           // สต็อกต่ำสุด
+  maximumStock  Int                           // สต็อกสูงสุด
+  reorderPoint  Int                           // จุดสั่งซื้อใหม่
+  reorderQuantity Int?                        // จำนวนที่ควรสั่งซื้อ
+  
+  // ข้อมูลต้นทุน
+  unitCost     Decimal                        // ต้นทุนต่อหน่วย
+  totalValue   Decimal         @default(0)    // มูลค่ารวม (computed)
+  
+  // การคำนวณอัตโนมัติ
+  averageDailyUsage Decimal?                  // การใช้เฉลี่ยต่อวัน
+  daysOfStock      Int?                       // จำนวนวันที่สต็อกเพียงพอ
+  turnoverRate     Decimal?                   // อัตราการหมุนเวียน
+  
+  // การแจ้งเตือน
+  lowStockAlert    Boolean      @default(false)
+  expiryAlert      Boolean      @default(false)
+  overStockAlert   Boolean      @default(false)
+  
+  // สถานะ
+  status           StockCardStatus @default(ACTIVE)
+  isActive         Boolean         @default(true)
+  
+  // การติดตามล่าสุด
+  lastReceivedAt   DateTime?      // วันที่รับล่าสุด
+  lastDispensedAt  DateTime?      // วันที่จ่ายล่าสุด
+  lastCountedAt    DateTime?      // วันที่นับล่าสุด
+  
+  // Audit fields
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  createdBy        String?
+  lastModifiedBy   String?
+  
+  // Relations
+  batches          StockBatch[]
+  transactions     StockTransaction[]
+  requisitionItems RequisitionItem[]
+  
+  @@unique([hospitalId, warehouseId, drugId])
+  @@index([hospitalId, currentStock])
+  @@index([lowStockAlert])
+  @@index([expiryAlert])
+  @@map("stock_cards")
+}
+
+enum BatchStatus {
+  ACTIVE          // ใช้งานปกติ
+  QUARANTINE      // กักกัน รอตรวจสอบ
+  EXPIRED         // หมดอายุ
+  RECALLED        // เรียกคืน
+  DAMAGED         // เสียหาย
+  DISPOSED        // ทำลายแล้ว
+  RESERVED        // จองไว้
+}
+
+model StockBatch {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  stockCardId     String
+  stockCard       StockCard     @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูล batch
+  batchNumber     String        // หมายเลข batch/lot
+  manufacturingDate DateTime?   // วันที่ผลิต
+  expiryDate      DateTime      // วันหมดอายุ
+  
+  // จำนวนและต้นทุน
+  quantityReceived Int          // จำนวนที่รับเข้า
+  quantityAvailable Int         // จำนวนที่เหลือ
+  quantityReserved Int          @default(0) // จำนวนที่จอง
+  unitCost        Decimal       // ต้นทุนต่อหน่วย
+  totalCost       Decimal       // ต้นทุนรวม
+  
+  // ข้อมูลซัพพลายเออร์
+  supplierId      String?
+  supplier        Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseOrderNo String?       // หมายเลข PO
+  invoiceNo       String?       // หมายเลขใบแจ้งหนี้
+  
+  // วันที่สำคัญ
+  receivedDate    DateTime      // วันที่รับเข้า
+  firstUsedDate   DateTime?     // วันที่ใช้ครั้งแรก
+  
+  // สถานะ
+  status          BatchStatus   @default(ACTIVE)
+  
+  // การตรวจสอบคุณภาพ
+  qcStatus        String?       // สถานะ QC: "PENDING", "PASSED", "FAILED"
+  qcDate          DateTime?     // วันที่ตรวจสอบ QC
+  qcNotes         String?       // หมายเหตุ QC
+  
+  // การจัดเก็บ
+  storageLocation String?       // ตำแหน่งเก็บ
+  storageCondition String?      // เงื่อนไขการเก็บ
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  transactions    StockTransaction[]
+  
+  @@unique([hospitalId, stockCardId, batchNumber])
+  @@index([hospitalId, expiryDate])
+  @@index([status])
+  @@map("stock_batches")
+}
+
+enum TransactionType {
+  RECEIVE         // รับยาจากซัพพลายเออร์
+  DISPENSE        // จ่ายยาให้แผนก
+  TRANSFER_OUT    // โอนออกไปคลังอื่น
+  TRANSFER_IN     // รับโอนจากคลังอื่น
+  ADJUST_INCREASE // ปรับเพิ่ม (การนับพบเพิ่ม)
+  ADJUST_DECREASE // ปรับลด (การนับพบลด, เสียหาย)
+  RETURN          // รับคืนยาจากแผนก
+  DISPOSE         // ทำลายยาหมดอายุ/เสียหาย
+  RESERVE         // จองยาสำหรับใบเบิก
+  UNRESERVE       // ยกเลิกการจอง
+  QUARANTINE      // เข้าห้องกักกัน
+  RELEASE_QUARANTINE // ออกจากห้องกักกัน
+  THEFT           // สูญหาย/ถูกขโมย
+  DAMAGE          // เสียหายจากการเก็บรักษา
+}
+
+model StockTransaction {
+  id               String          @id @default(uuid())
+  
+  // ความสัมพันธ์หลัก
+  hospitalId       String
+  warehouseId      String
+  warehouse        Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  drugId           String
+  drug             Drug            @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  stockCardId      String
+  stockCard        StockCard       @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+  batchId          String?
+  batch            StockBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  
+  // รายละเอียดการทำรายการ
+  transactionType  TransactionType
+  quantity         Int             // จำนวน (+/-)
+  unitCost         Decimal         // ต้นทุนต่อหน่วย
+  totalCost        Decimal         // ต้นทุนรวม
+  
+  // จำนวนก่อนและหลัง
+  stockBefore      Int             // สต็อกก่อนทำรายการ
+  stockAfter       Int             // สต็อกหลังทำรายการ
+  
+  // การอ้างอิง
+  referenceDocument String?        // เลขที่เอกสารอ้างอิง (PO, REQ, etc.)
+  referenceId      String?         // ID ของเอกสารอ้างอิง
+  notes            String?         // หมายเหตุ
+  
+  // การโอน (สำหรับ TRANSFER)
+  fromWarehouseId  String?         // คลังต้นทาง
+  fromWarehouse    Warehouse?      @relation("TransferFrom", fields: [fromWarehouseId], references: [id], onDelete: SetNull)
+  toWarehouseId    String?         // คลังปลายทาง
+  toWarehouse      Warehouse?      @relation("TransferTo", fields: [toWarehouseId], references: [id], onDelete: SetNull)
+  
+  // ผู้ทำรายการ
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  approvedBy       String?         // ผู้อนุมัติ (สำหรับรายการพิเศษ)
+  
+  // การติดตามการทำรายการ
+  timestamp        DateTime        @default(now())
+  processedAt      DateTime?       // วันที่ประมวลผลเสร็จ
+  
+  // สถานะ
+  isReversed       Boolean         @default(false) // ถูกกลับรายการหรือไม่
+  reversedBy       String?         // ผู้กลับรายการ
+  reversedAt       DateTime?       // วันที่กลับรายการ
+  reversalReason   String?         // เหตุผลการกลับรายการ
+  
+  // การเชื่อมโยง
+  requisitionId    String?         // เชื่อมโยงกับใบเบิก
+  requisition      Requisition?    @relation(fields: [requisitionId], references: [id], onDelete: SetNull)
+  
+  @@index([hospitalId, warehouseId, timestamp])
+  @@index([drugId, timestamp])
+  @@index([transactionType])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("stock_transactions")
+}
+
+// การติดตามการนับสต็อก
+model StockCount {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  warehouseId     String
+  warehouse       Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการนับ
+  countDate       DateTime    @default(now())
+  countType       String      // "PHYSICAL", "CYCLE", "SPOT"
+  status          String      // "IN_PROGRESS", "COMPLETED", "CANCELLED"
+  
+  // ผลการนับ
+  totalItems      Int?        // จำนวนรายการทั้งหมด
+  countedItems    Int?        // จำนวนรายการที่นับแล้ว
+  discrepancies   Int?        // จำนวนรายการที่มีความผิดปกติ
+  
+  // ผู้รับผิดชอบ
+  countedBy       String      // ผู้นับ
+  counter         User        @relation(fields: [countedBy], references: [id], onDelete: Restrict)
+  verifiedBy      String?     // ผู้ตรวจสอบ
+  verifier        User?       @relation("StockCountVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  
+  // หมายเหตุ
+  notes           String?
+  
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  items           StockCountItem[]
+  
+  @@index([hospitalId, countDate])
+  @@index([status])
+  @@map("stock_counts")
+}
+
+model StockCountItem {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  stockCountId    String
+  stockCount      StockCount  @relation(fields: [stockCountId], references: [id], onDelete: Cascade)
+  stockCardId     String
+  stockCard       StockCard   @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+  batchId         String?
+  batch           StockBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  
+  // ข้อมูลการนับ
+  systemQuantity  Int         // จำนวนในระบบ
+  countedQuantity Int?        // จำนวนที่นับได้
+  variance        Int?        // ส่วนต่าง (counted - system)
+  
+  // สถานะ
+  status          String      @default("PENDING") // "PENDING", "COUNTED", "VERIFIED", "ADJUSTED"
+  
+  // หมายเหตุ
+  notes           String?
+  countedAt       DateTime?
+  
+  @@index([stockCountId])
+  @@map("stock_count_items")
+}

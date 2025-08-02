@@ -1,0 +1,250 @@
+// prisma/schemas/hospital-core.prisma
+// Hospital Core Management Schema
+// ระบบจัดการข้อมูลหลักของโรงพยาบาล แผนก และคลังยา
+
+enum HospitalType {
+  GENERAL         // โรงพยาบาลทั่วไป
+  SPECIALTY       // โรงพยาบาลเฉพาะทาง
+  UNIVERSITY      // โรงพยาบาลมหาวิทยาลัย
+  PRIVATE         // โรงพยาบาลเอกชน
+  COMMUNITY       // โรงพยาบาลชุมชน
+  DISTRICT        // โรงพยาบาลระดับอำเภอ
+}
+
+enum HospitalStatus {
+  ACTIVE      // ใช้งานปกติ
+  INACTIVE    // ปิดชั่วคราว
+  SUSPENDED   // ระงับการใช้งาน
+  PENDING     // รอการอนุมัติ
+}
+
+model Hospital {
+  id          String        @id @default(uuid())
+  
+  // ข้อมูลพื้นฐาน
+  name        String
+  nameEn      String?       // ชื่อภาษาอังกฤษ
+  shortName   String?       // ชื่อย่อ
+  code        String        @unique // รหัสโรงพยาบาล
+  
+  // ใบอนุญาต
+  licenseNo   String        @unique
+  licenseType String?       // ประเภทใบอนุญาต
+  issuedDate  DateTime?     // วันที่ออกใบอนุญาต
+  expiryDate  DateTime?     // วันหมดอายุใบอนุญาต
+  
+  // ประเภทและสถานะ
+  type        HospitalType
+  status      HospitalStatus @default(PENDING)
+  bedCount    Int?          // จำนวนเตียง
+  
+  // ที่อยู่
+  address     Json          // { street, district, province, postal, country }
+  coordinates Json?         // { latitude, longitude }
+  
+  // ข้อมูลติดต่อ
+  contactInfo Json          // { phone, fax, email, website }
+  emergencyContact Json?    // ข้อมูลติดต่อฉุกเฉิน
+  
+  // การตั้งค่าระบบ
+  settings    Json          // การตั้งค่าเฉพาะโรงพยาบาล
+  timezone    String        @default("Asia/Bangkok")
+  currency    String        @default("THB")
+  locale      String        @default("th-TH")
+  
+  // แผนการใช้งาน
+  planType    String        @default("basic") // basic, pro, enterprise
+  planStartDate DateTime?
+  planEndDate   DateTime?
+  maxUsers      Int?        // จำนวนผู้ใช้สูงสุด
+  maxDepartments Int?       // จำนวนแผนกสูงสุด
+  
+  // การเงิน
+  billingAddress Json?      // ที่อยู่สำหรับเรียกเก็บเงิน
+  taxId         String?     // เลขประจำตัวผู้เสียภาษี
+  
+  // Audit fields
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  createdBy   String?
+  isActive    Boolean       @default(true)
+  
+  // Relations
+  users       User[]
+  departments Department[]
+  warehouses  Warehouse[]
+  drugs       Drug[]
+  stockCards  StockCard[]
+  suppliers   Supplier[]
+  requisitions Requisition[]
+  auditLogs   AuditLog[]
+  notifications Notification[]
+  
+  @@map("hospitals")
+}
+
+enum DepartmentType {
+  CLINICAL        // แผนกคลินิก - Internal Medicine, Surgery, Pediatrics
+  SUPPORT         // แผนกสนับสนุน - Laboratory, Radiology, Pharmacy
+  CRITICAL_CARE   // แผนกวิกฤต - ICU, CCU, ER
+  OUTPATIENT      // แผนกผู้ป่วยนอก - OPD clinics, Specialty clinics
+  ADMINISTRATIVE  // แผนกบริหาร - HR, Finance, IT
+}
+
+enum DepartmentStatus {
+  ACTIVE      // ใช้งานปกติ
+  INACTIVE    // ปิดชั่วคราว
+  PLANNED     // อยู่ระหว่างการวางแผน
+  CLOSED      // ปิดถาวร
+}
+
+model Department {
+  id             String          @id @default(uuid())
+  
+  // ความสัมพันธ์กับโรงพยาบาล
+  hospitalId     String
+  hospital       Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลพื้นฐาน
+  name           String
+  nameEn         String?
+  shortName      String?
+  code           String          // รหัสแผนก
+  description    String?
+  
+  // ประเภทและสถานะ
+  type           DepartmentType
+  status         DepartmentStatus @default(ACTIVE)
+  
+  // การจัดการทางการเงิน
+  budgetAllocation Decimal?      // งบประมาณที่ได้รับ
+  costCenter     String?         // รหัสศูนย์ต้นทุน
+  
+  // การติดต่อ
+  location       String?         // ตำแหน่งในโรงพยาบาล
+  phoneExtension String?         // หมายเลขต่อใน
+  
+  // การจัดการ
+  headUserId     String?         // หัวหน้าแผนก
+  headUser       User?           @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
+  
+  // การตั้งค่า
+  settings       Json?           // การตั้งค่าเฉพาะแผนก
+  operatingHours Json?           // เวลาทำการ
+  
+  // Audit fields
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  isActive       Boolean         @default(true)
+  
+  // Relations
+  users          User[]
+  warehouses     Warehouse[]
+  requisitions   Requisition[]
+  
+  @@unique([hospitalId, code])
+  @@map("departments")
+}
+
+enum WarehouseType {
+  CENTRAL_PHARMACY    // เภสัชกรรมกลาง - คลังหลักของโรงพยาบาล
+  DEPARTMENT_SATELLITE // คลังย่อยประจำแผนก - สำหรับแผนกต่างๆ
+  EMERGENCY_STOCK     // สต็อกฉุกเฉิน - ICU, ER สำหรับการเข้าถึงทันที
+  CONTROLLED_VAULT    // ห้องเก็บยาควบคุม - สำหรับยาเสพติด
+  COLD_CHAIN         // ห้องเย็น - สำหรับยาที่ต้องควบคุมอุณหภูมิ
+  QUARANTINE         // ห้องกักกัน - สำหรับยาที่รอตรวจสอบ
+  EXPIRED_STORAGE    // ห้องเก็บยาหมดอายุ - รอการทำลาย
+}
+
+enum WarehouseStatus {
+  ACTIVE      // ใช้งานปกติ
+  MAINTENANCE // อยู่ระหว่างบำรุงรักษา
+  INACTIVE    // ปิดชั่วคราว
+  CLOSED      // ปิดถาวร
+}
+
+model Warehouse {
+  id           String         @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId   String
+  hospital     Hospital       @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  departmentId String?
+  department   Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  
+  // ข้อมูลพื้นฐาน
+  name         String
+  code         String         // รหัสคลัง
+  description  String?
+  
+  // ประเภทและสถานะ
+  type         WarehouseType
+  status       WarehouseStatus @default(ACTIVE)
+  
+  // ตำแหน่งและพื้นที่
+  location     String         // ตำแหน่งในโรงพยาบาล
+  floor        String?        // ชั้น
+  room         String?        // ห้อง
+  area         Decimal?       // พื้นที่ (ตร.ม.)
+  capacity     Int?           // ความจุ (จำนวนรายการยา)
+  
+  // เงื่อนไขการเก็บรักษา
+  tempMin      Decimal?       // อุณหภูมิต่ำสุด (°C)
+  tempMax      Decimal?       // อุณหภูมิสูงสุด (°C)
+  humidityMin  Decimal?       // ความชื้นต่ำสุด (%)
+  humidityMax  Decimal?       // ความชื้นสูงสุด (%)
+  hasTemperatureControl Boolean @default(false)
+  hasHumidityControl Boolean @default(false)
+  
+  // ความปลอดภัย
+  securityLevel String?       // ระดับความปลอดภัย
+  accessControl Json?         // การควบคุมการเข้าถึง
+  requiresApproval Boolean    @default(false)
+  
+  // การจัดการ
+  managerUserId String?       // ผู้จัดการคลัง
+  managerUser   User?         @relation("WarehouseManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  
+  // การตั้งค่า
+  settings      Json?         // การตั้งค่าเฉพาะคลัง
+  
+  // Audit fields
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  isActive      Boolean       @default(true)
+  
+  // Relations
+  stockCards    StockCard[]
+  transactions  StockTransaction[]
+  monitoringLogs TemperatureLog[]
+  
+  @@unique([hospitalId, code])
+  @@map("warehouses")
+}
+
+// การติดตามอุณหภูมิและความชื้น
+model TemperatureLog {
+  id          String    @id @default(uuid())
+  
+  // ความสัมพันธ์
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการวัด
+  temperature Decimal   // อุณหภูมิ (°C)
+  humidity    Decimal?  // ความชื้น (%)
+  
+  // สถานะ
+  isWithinRange Boolean  // อยู่ในช่วงที่กำหนดหรือไม่
+  alertTriggered Boolean @default(false) // มีการแจ้งเตือนหรือไม่
+  
+  // อุปกรณ์วัด
+  deviceId    String?   // รหัสอุปกรณ์วัด
+  deviceType  String?   // ประเภทอุปกรณ์
+  
+  // การติดตาม
+  recordedAt  DateTime  @default(now())
+  
+  @@index([warehouseId, recordedAt])
+  @@map("temperature_logs")
+}

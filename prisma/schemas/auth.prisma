@@ -1,81 +1,180 @@
 // prisma/schemas/auth.prisma
-// Authentication and User Management
+// Authentication and User Management Schema
+// ระบบจัดการผู้ใช้และการยืนยันตัวตนสำหรับ Hospital Pharmacy System
 
 enum Role {
-  Unapproved
-  Guest
-  User
-  Admin
-  Superadmin
-  Developer
+  HOSPITAL_ADMIN      // ผู้ดูแลระบบโรงพยาบาล - สิทธิ์เต็ม
+  PHARMACY_MANAGER    // ผู้จัดการเภสัชกรรม - จัดการสต็อกและอนุมัติ
+  SENIOR_PHARMACIST   // เภสัชกรอาวุโส - จัดการสต็อกและจ่ายยา
+  STAFF_PHARMACIST    // เภสัชกรประจำ - จ่ายยาและรับสต็อก
+  DEPARTMENT_HEAD     // หัวหน้าแผนก - เบิกยาและจัดการงบประมาณ
+  STAFF_NURSE         // พยาบาลประจำ - เบิกยาพื้นฐาน
+  PHARMACY_TECHNICIAN // เทคนิคเภสัชกรรม - รับสต็อกและจัดระเบียบ
+}
+
+enum UserStatus {
+  PENDING   // รอการอนุมัติ
+  ACTIVE    // ใช้งานได้
+  INACTIVE  // ปิดการใช้งานชั่วคราว
+  SUSPENDED // ระงับการใช้งาน
+  DELETED   // ลบแล้ว (soft delete)
 }
 
 model User {
-  id            String    @id @default(uuid())
+  id            String      @id @default(uuid())
+  
+  // ข้อมูลพื้นฐาน
+  email         String      @unique
   name          String
-  email         String
-  emailVerified Boolean
-  image         String?
-  createdAt     DateTime
-  updatedAt     DateTime
-  sessions      Session[]
-  accounts      Account[]
-  role          Role      @default(Unapproved)
-
-  // Relations to pharmacy modules
-  customDrugs         CustomDrug[]
-  formularies         Formulary[]
-  calculations        DoseCalculation[]
-  sharedFormularies   FormularyShare[]
-  calculationTemplates CalculationTemplate[]
-  calculationSessions  CalculationSession[]
-  drugModificationLogs DrugModificationLog[]
-
-  @@unique([email])
-  @@map("user")
+  phoneNumber   String?
+  employeeId    String?     // รหัสพนักงาน
+  
+  // การยืนยันตัวตน
+  emailVerified Boolean     @default(false)
+  password      String?     // hashed password
+  
+  // บทบาทและสิทธิ์
+  role          Role
+  status        UserStatus  @default(PENDING)
+  
+  // ความสัมพันธ์กับโรงพยาบาล
+  hospitalId    String
+  hospital      Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ความสัมพันธ์กับแผนก (optional สำหรับ pharmacy staff)
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  
+  // การติดตามการเข้าสู่ระบบ
+  lastLoginAt   DateTime?
+  lastLoginIP   String?
+  loginCount    Int         @default(0)
+  
+  // Audit fields
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  createdBy     String?     // ผู้สร้างบัญชี
+  lastModifiedBy String?    // ผู้แก้ไขล่าสุด
+  
+  // Relations
+  sessions            Session[]
+  stockTransactions   StockTransaction[]
+  requisitionsCreated Requisition[]       @relation("RequesterRelation")
+  requisitionsApproved Requisition[]      @relation("ApproverRelation")
+  workflowActions     RequisitionWorkflow[]
+  auditLogs           AuditLog[]
+  notifications       NotificationUser[]
+  
+  @@map("users")
 }
 
 model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String
-  createdAt DateTime
-  updatedAt DateTime
-  ipAddress String?
-  userAgent String?
+  id        String   @id @default(uuid())
+  
+  // ความสัมพันธ์กับผู้ใช้
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([token])
-  @@map("session")
+  
+  // ข้อมูลเซสชั่น
+  token     String   @unique
+  expiresAt DateTime
+  
+  // ข้อมูลการเชื่อมต่อ
+  ipAddress String?
+  userAgent String?
+  deviceInfo String? // JSON string สำหรับข้อมูลอุปกรณ์
+  
+  // การติดตาม
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+  
+  @@map("sessions")
 }
 
-model Account {
-  id                    String    @id @default(uuid())
-  accountId             String
-  providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime
-  updatedAt             DateTime
-
-  @@map("account")
+model RefreshToken {
+  id        String   @id @default(uuid())
+  
+  // ความสัมพันธ์กับผู้ใช้
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูล token
+  token     String   @unique
+  expiresAt DateTime
+  
+  // การติดตาม
+  createdAt DateTime @default(now())
+  isRevoked Boolean  @default(false)
+  revokedAt DateTime?
+  
+  @@map("refresh_tokens")
 }
 
-model Verification {
-  id         String    @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime?
-  updatedAt  DateTime?
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  
+  // ความสัมพันธ์กับผู้ใช้
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูล token
+  token     String   @unique
+  expiresAt DateTime
+  
+  // การใช้งาน
+  isUsed    Boolean  @default(false)
+  usedAt    DateTime?
+  
+  // การติดตาม
+  createdAt DateTime @default(now())
+  
+  @@map("password_reset_tokens")
+}
 
-  @@map("verification")
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  
+  // ความสัมพันธ์กับผู้ใช้
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูล token
+  token     String   @unique
+  expiresAt DateTime
+  
+  // การใช้งาน
+  isVerified Boolean @default(false)
+  verifiedAt DateTime?
+  
+  // การติดตาม
+  createdAt DateTime @default(now())
+  
+  @@map("email_verification_tokens")
+}
+
+// การติดตามการเข้าสู่ระบบ
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  
+  // ข้อมูลการเข้าสู่ระบบ
+  email     String
+  ipAddress String
+  userAgent String?
+  
+  // ผลลัพธ์
+  isSuccessful Boolean
+  failureReason String? // "invalid_credentials", "account_locked", "email_not_verified"
+  
+  // ข้อมูลผู้ใช้ (ถ้าสำเร็จ)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // การติดตาม
+  attemptedAt DateTime @default(now())
+  
+  @@index([email])
+  @@index([ipAddress])
+  @@index([attemptedAt])
+  @@map("login_attempts")
 }

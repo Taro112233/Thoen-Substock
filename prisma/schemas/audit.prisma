@@ -1,0 +1,371 @@
+// prisma/schemas/audit.prisma
+// Audit and Compliance Schema
+// ระบบตรวจสอบและการปฏิบัติตามกฎระเบียบ
+
+enum AuditAction {
+  CREATE          // สร้าง
+  READ            // อ่าน/ดู
+  UPDATE          // แก้ไข
+  DELETE          // ลบ
+  LOGIN           // เข้าสู่ระบบ
+  LOGOUT          // ออกจากระบบ
+  APPROVE         // อนุมัติ
+  REJECT          // ปฏิเสธ
+  SUBMIT          // ส่ง
+  CANCEL          // ยกเลิก
+  TRANSFER        // โอน
+  RECEIVE         // รับ
+  DISPENSE        // จ่าย
+  ADJUST          // ปรับปรุง
+  COUNT           // นับสต็อก
+  EXPORT          // ส่งออกข้อมูล
+  IMPORT          // นำเข้าข้อมูล
+  BACKUP          // สำรองข้อมูล
+  RESTORE         // คืนค่าข้อมูล
+}
+
+enum AuditLevel {
+  LOW             // ความสำคัญต่ำ
+  MEDIUM          // ความสำคัญปานกลาง
+  HIGH            // ความสำคัญสูง
+  CRITICAL        // ความสำคัญวิกฤต
+}
+
+enum AuditCategory {
+  SECURITY        // ความปลอดภัย
+  DATA_ACCESS     // การเข้าถึงข้อมูล
+  FINANCIAL       // การเงิน
+  INVENTORY       // สต็อก
+  USER_MANAGEMENT // การจัดการผู้ใช้
+  SYSTEM_CONFIG   // การตั้งค่าระบบ
+  COMPLIANCE      // การปฏิบัติตามกฎ
+  PERFORMANCE     // ประสิทธิภาพ
+}
+
+model AuditLog {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // ข้อมูลการตรวจสอบ
+  action          AuditAction
+  category        AuditCategory
+  level           AuditLevel    @default(MEDIUM)
+  
+  // เป้าหมายของการกระทำ
+  tableName       String?       // ชื่อตาราง
+  recordId        String?       // ID ของเรคอร์ด
+  resourceType    String?       // ประเภทข้อมูล
+  resourceName    String?       // ชื่อข้อมูล
+  
+  // รายละเอียดการเปลี่ยนแปลง
+  oldValues       Json?         // ค่าเดิม (ก่อนการเปลี่ยนแปลง)
+  newValues       Json?         // ค่าใหม่ (หลังการเปลี่ยนแปลง)
+  changedFields   String[]      // ฟิลด์ที่มีการเปลี่ยนแปลง
+  
+  // บริบทการกระทำ
+  description     String        // คำอธิบายการกระทำ
+  reason          String?       // เหตุผล
+  notes           String?       // หมายเหตุเพิ่มเติม
+  
+  // ข้อมูลเทคนิค
+  ipAddress       String?       // IP Address
+  userAgent       String?       // User Agent
+  sessionId       String?       // Session ID
+  requestId       String?       // Request ID
+  
+  // ข้อมูลระบบ
+  systemVersion   String?       // เวอร์ชั่นระบบ
+  moduleVersion   String?       // เวอร์ชั่นโมดูล
+  
+  // ผลลัพธ์
+  success         Boolean       @default(true)
+  errorMessage    String?       // ข้อความข้อผิดพลาด
+  duration        Int?          // ระยะเวลาดำเนินการ (ms)
+  
+  // การติดตาม
+  timestamp       DateTime      @default(now())
+  
+  @@index([hospitalId, timestamp])
+  @@index([userId, timestamp])
+  @@index([action])
+  @@index([category, level])
+  @@index([tableName, recordId])
+  @@map("audit_logs")
+}
+
+// การติดตามการเข้าถึงข้อมูลที่สำคัญ
+model DataAccessLog {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการเข้าถึง
+  dataType        String        // ประเภทข้อมูล
+  dataId          String        // ID ของข้อมูล
+  dataCategory    String        // หมวดหมู่ข้อมูล
+  
+  // วิธีการเข้าถึง
+  accessMethod    String        // "API", "WEB", "EXPORT", "REPORT"
+  accessLevel     String        // "READ", "WRITE", "DELETE", "ADMIN"
+  
+  // ข้อมูลที่เข้าถึง
+  fieldsAccessed  String[]      // ฟิลด์ที่เข้าถึง
+  recordCount     Int?          // จำนวนเรคอร์ดที่เข้าถึง
+  
+  // บริบท
+  purpose         String?       // วัตถุประสงค์การเข้าถึง
+  justification   String?       // เหตุผลความจำเป็น
+  
+  // การควบคุม
+  approvedBy      String?       // ผู้อนุมัติ (สำหรับข้อมูลที่ต้องขออนุมัติ)
+  approvalRef     String?       // เลขที่อนุมัติ
+  
+  // ข้อมูลเทคนิค
+  ipAddress       String
+  userAgent       String?
+  
+  // การติดตาม
+  accessedAt      DateTime      @default(now())
+  duration        Int?          // ระยะเวลาการเข้าถึง (วินาที)
+  
+  @@index([hospitalId, userId])
+  @@index([dataType, dataId])
+  @@index([accessedAt])
+  @@map("data_access_logs")
+}
+
+enum ComplianceType {
+  FDA_THAILAND    // กฎหมายอย.ไทย
+  PHARMACY_ACT    // พระราชบัญญัติเภสัชกรรม
+  NARCOTIC_ACT    // พระราชบัญญัติยาเสพติด
+  HOSPITAL_ACCREDITATION // การรับรองโรงพยาบาล
+  INTERNAL_POLICY // นโยบายภายใน
+  QUALITY_STANDARD // มาตรฐานคุณภาพ
+  GDPR            // GDPR (สำหรับข้อมูลส่วนบุคคล)
+  HIPAA           // HIPAA (สำหรับโรงพยาบาลในอเมริกา)
+}
+
+enum ComplianceStatus {
+  COMPLIANT       // ปฏิบัติตามครบถ้วน
+  PARTIAL_COMPLIANT // ปฏิบัติตามบางส่วน
+  NON_COMPLIANT   // ไม่ปฏิบัติตาม
+  UNDER_REVIEW    // อยู่ระหว่างการตรวจสอบ
+  PENDING_ACTION  // รอการดำเนินการ
+  EXEMPTED        // ได้รับการยกเว้น
+}
+
+model ComplianceCheck {
+  id              String          @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการตรวจสอบ
+  checkName       String          // ชื่อการตรวจสอบ
+  complianceType  ComplianceType
+  regulationRef   String?         // อ้างอิงกฎหมาย/ระเบียบ
+  
+  // ช่วงเวลา
+  checkPeriod     String          // ช่วงเวลาการตรวจสอบ
+  fromDate        DateTime
+  toDate          DateTime
+  
+  // ผลการตรวจสอบ
+  status          ComplianceStatus
+  score           Decimal?        // คะแนนการปฏิบัติตาม (0-100)
+  
+  // รายละเอียด
+  criteria        Json            // เกณฑ์การตรวจสอบ
+  findings        Json            // ผลการตรวจพบ
+  violations      Json?           // การละเมิดที่พบ
+  recommendations Json?           // ข้อเสนะแนะ
+  
+  // การดำเนินการ
+  actionPlan      Json?           // แผนการแก้ไข
+  actionDeadline  DateTime?       // กำหนดเวลาการแก้ไข
+  actionTaken     Json?           // การดำเนินการที่ทำแล้ว
+  
+  // ผู้รับผิดชอบ
+  checkedBy       String
+  checker         User            @relation(fields: [checkedBy], references: [id], onDelete: Restrict)
+  reviewedBy      String?
+  reviewer        User?           @relation("ComplianceReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  
+  // การติดตาม
+  checkDate       DateTime        @default(now())
+  dueDate         DateTime?       // วันที่ต้องตรวจสอบครั้งต่อไป
+  isRecurring     Boolean         @default(false)
+  frequency       String?         // ความถี่การตรวจสอบ
+  
+  @@index([hospitalId, complianceType])
+  @@index([status])
+  @@index([checkDate])
+  @@map("compliance_checks")
+}
+
+// การติดตามยาเสพติดและยาควบคุม
+model ControlledSubstanceLog {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  drugId          String
+  drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการเคลื่อนไหว
+  transactionType String        // "RECEIVE", "DISPENSE", "TRANSFER", "DISPOSE", "ADJUST"
+  quantity        Int
+  unit            String
+  
+  // ข้อมูล batch
+  batchNumber     String
+  expiryDate      DateTime
+  
+  // ผู้เกี่ยวข้อง
+  handledBy       String
+  handler         User          @relation(fields: [handledBy], references: [id], onDelete: Restrict)
+  witnessedBy     String?
+  witness         User?         @relation("CSLWitness", fields: [witnessedBy], references: [id], onDelete: SetNull)
+  authorizedBy    String?       // ผู้มีอำนาจอนุมัติ
+  authorizer      User?         @relation("CSLAuthorizer", fields: [authorizedBy], references: [id], onDelete: SetNull)
+  
+  // เอกสารอ้างอิง
+  referenceDoc    String?       // เลขที่เอกสารอ้างอิง
+  prescription    String?       // ใบสั่งแพทย์ (สำหรับการจ่าย)
+  patientId       String?       // รหัสผู้ป่วย (ถ้ามี)
+  
+  // ข้อมูลเพิ่มเติม
+  purpose         String?       // วัตถุประสงค์
+  notes           String?       // หมายเหตุ
+  
+  // การรักษาความปลอดภัย
+  vaultLocation   String?       // ตำแหน่งเก็บในตู้นิรภัย
+  lockSerial      String?       // เลขล็อค/ซีล
+  
+  // การติดตาม
+  transactionDate DateTime      @default(now())
+  reportedToAuthority Boolean   @default(false) // รายงานหน่วยงานแล้วหรือไม่
+  reportDate      DateTime?     // วันที่รายงาน
+  
+  @@index([hospitalId, drugId])
+  @@index([handledBy])
+  @@index([transactionDate])
+  @@map("controlled_substance_logs")
+}
+
+// การตรวจสอบภายใน
+model InternalAudit {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการตรวจสอบ
+  auditName       String        // ชื่อการตรวจสอบ
+  auditType       String        // "SCHEDULED", "SURPRISE", "FOLLOW_UP", "COMPLAINT_BASED"
+  scope           String        // ขอบเขตการตรวจสอบ
+  objectives      Json          // วัตถุประสงค์
+  
+  // ช่วงเวลา
+  plannedDate     DateTime      // วันที่วางแผน
+  startDate       DateTime?     // วันที่เริ่มตรวจสอบ
+  endDate         DateTime?     // วันที่สิ้นสุด
+  
+  // ผู้ตรวจสอบ
+  auditorId       String
+  auditor         User          @relation(fields: [auditorId], references: [id], onDelete: Restrict)
+  auditTeam       String[]      // ทีมตรวจสอบ (User IDs)
+  
+  // ผลการตรวจสอบ
+  status          String        @default("PLANNED") // "PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"
+  findings        Json?         // ผลการตรวจพบ
+  recommendations Json?         // ข้อเสนะแนะ
+  riskAssessment  Json?         // การประเมินความเสี่ยง
+  
+  // การติดตามผล
+  actionItems     Json?         // รายการการดำเนินการ
+  followUpDate    DateTime?     // วันที่ติดตามผล
+  managementResponse Json?      // การตอบสนองของฝ่ายบริหาร
+  
+  // เอกสาร
+  reportUrl       String?       // URL ของรายงาน
+  evidenceUrls    String[]      // URLs ของหลักฐาน
+  
+  // การติดตาม
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([hospitalId, status])
+  @@index([auditorId])
+  @@index([plannedDate])
+  @@map("internal_audits")
+}
+
+// การติดตามข้อผิดพลาดและเหตุการณ์
+model SecurityIncident {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลเหตุการณ์
+  incidentType    String        // "UNAUTHORIZED_ACCESS", "DATA_BREACH", "SYSTEM_ABUSE", "POLICY_VIOLATION"
+  severity        String        // "LOW", "MEDIUM", "HIGH", "CRITICAL"
+  title           String        // หัวข้อเหตุการณ์
+  description     String        // รายละเอียด
+  
+  // ผู้เกี่ยวข้อง
+  reportedBy      String
+  reporter        User          @relation(fields: [reportedBy], references: [id], onDelete: Restrict)
+  suspectedUserId String?       // ผู้ต้องสงสัย
+  suspectedUser   User?         @relation("SuspectedUser", fields: [suspectedUserId], references: [id], onDelete: SetNull)
+  
+  // เวลาและสถานที่
+  occurredAt      DateTime      // เวลาที่เกิดเหตุ
+  detectedAt      DateTime      @default(now()) // เวลาที่ตรวจพบ
+  location        String?       // สถานที่
+  ipAddress       String?       // IP Address
+  
+  // ผลกระทบ
+  affectedSystems String[]      // ระบบที่ได้รับผลกระทบ
+  affectedData    String[]      // ข้อมูลที่ได้รับผลกระทบ
+  impactLevel     String        // ระดับผลกระทบ
+  
+  // การดำเนินการ
+  status          String        @default("REPORTED") // "REPORTED", "INVESTIGATING", "RESOLVED", "CLOSED"
+  investigatedBy  String?       // ผู้สอบสวน
+  investigator    User?         @relation("Investigator", fields: [investigatedBy], references: [id], onDelete: SetNull)
+  actionsTaken    Json?         // การดำเนินการที่ทำ
+  resolution      String?       // การแก้ไข
+  
+  // การป้องกัน
+  preventiveMeasures Json?      // มาตรการป้องกัน
+  lessonsLearned  String?       // บทเรียนที่ได้
+  
+  // การติดตาม
+  resolvedAt      DateTime?     // เวลาที่แก้ไขเสร็จ
+  closedAt        DateTime?     // เวลาที่ปิดเรื่อง
+  
+  // การรายงาน
+  reportedToAuthority Boolean   @default(false) // รายงานหน่วยงานแล้วหรือไม่
+  authorityReportDate DateTime? // วันที่รายงานหน่วยงาน
+  
+  @@index([hospitalId, incidentType])
+  @@index([severity])
+  @@index([status])
+  @@index([occurredAt])
+  @@map("security_incidents")
+}
