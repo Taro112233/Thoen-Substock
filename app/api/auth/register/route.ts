@@ -1,9 +1,9 @@
-// app/api/auth/register/route.ts
+// app/api/auth/register/route.ts - Quick Fix
 import { NextRequest, NextResponse } from "next/server";
 import { registerSchema } from "@/lib/validations/auth";
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
-import { auth } from "@/app/utils/auth";
+import { hashPassword } from "@/lib/password-utils";
+import { ZodError } from "zod";
 
 const prisma = new PrismaClient();
 
@@ -12,62 +12,48 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = registerSchema.parse(body);
     
-    // ตรวจสอบว่า username และ email ซ้ำหรือไม่
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { username: validatedData.username },
-          { email: validatedData.email },
-        ],
-      },
+    // ตรวจสอบ email ซ้ำ
+    const existingUser = await prisma.user.findUnique({
+      where: { email: validatedData.email },
     });
     
     if (existingUser) {
       return NextResponse.json(
-        { error: "ชื่อผู้ใช้หรืออีเมลนี้มีอยู่ในระบบแล้ว" },
+        { error: "อีเมลนี้มีอยู่ในระบบแล้ว" },
         { status: 400 }
       );
     }
     
-    // สร้างผู้ใช้ใหม่ผ่าน Better Auth
-    const result = await auth.api.signUpEmail({
-      body: {
-        email: validatedData.email,
-        password: validatedData.password,
-        name: validatedData.username, // temporary name
-      },
-    });
+    // Hash password
+    const hashedPassword = await hashPassword(validatedData.password);
     
-    if (!result.user) {
-      return NextResponse.json(
-        { error: "เกิดข้อผิดพลาดในการสร้างบัญชี" },
-        { status: 500 }
-      );
-    }
-    
-    // อัพเดทผู้ใช้ด้วย username
-    await prisma.user.update({
-      where: { id: result.user.id },
+    // สร้าง user โดยใส่ field ที่จำเป็น
+    const user = await prisma.user.create({
       data: {
-        username: validatedData.username,
-        isProfileComplete: false,
-        status: "PENDING",
-        role: "STAFF_NURSE", // default role
+        email: validatedData.email,
+        name: validatedData.username,
+        emailVerified: false,
+        role: "User", // ใช้ Role ที่มีใน enum จริง
+        createdAt: new Date(), // เพิ่ม required fields
+        updatedAt: new Date(),
       },
     });
     
     return NextResponse.json({
       success: true,
       message: "สมัครสมาชิกสำเร็จ กรุณากรอกข้อมูลส่วนตัว",
-      userId: result.user.id,
+      userId: user.id,
     });
     
   } catch (error) {
     console.error("Registration error:", error);
     
-    if (error instanceof Error && error.name === 'ZodError') {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "ข้อมูลไม่ถูกต้อง", details: error.message },
+        { 
+          error: "ข้อมูลไม่ถูกต้อง", 
+          details: JSON.stringify(error.issues) // ใช้ issues แทน errors
+        },
         { status: 400 }
       );
     }

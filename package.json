@@ -82,12 +82,10 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "@types/bcryptjs": "^3.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "bcryptjs": "^2.4.3",
     "eslint": "^9",
     "eslint-config-next": "15.4.2",
     "prisma": "^6.12.0",

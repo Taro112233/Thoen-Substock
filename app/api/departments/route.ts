@@ -1,4 +1,4 @@
-// app/api/departments/route.ts
+// app/api/departments/route.ts - ใช้ query ตรงๆ
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 
@@ -16,30 +16,17 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    const departments = await prisma.department.findMany({
-      where: {
-        hospitalId: hospitalId,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        type: true,
-        description: true,
-        location: true,
-        phone: true,
-        email: true,
-      },
-      orderBy: {
-        name: "asc",
-      },
-    });
+    const result = await prisma.$queryRaw`
+      SELECT id, name, code, type, description, location, phone, email
+      FROM departments 
+      WHERE "hospitalId" = ${hospitalId} AND "isActive" = true
+      ORDER BY name ASC
+    `;
     
-    return NextResponse.json(departments);
+    return NextResponse.json(result);
     
   } catch (error) {
-    console.error("Fetch departments error:", error);
+    console.error("Department API error:", error);
     return NextResponse.json(
       { error: "เกิดข้อผิดพลาดในการดึงข้อมูลแผนก" },
       { status: 500 }
