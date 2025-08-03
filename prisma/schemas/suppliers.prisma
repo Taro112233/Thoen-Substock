@@ -106,6 +106,7 @@ model Supplier {
   batches         StockBatch[]
   purchaseOrders  PurchaseOrder[]
   evaluations     SupplierEvaluation[]
+  goodsReceipts   GoodsReceipt[]
   
   @@unique([hospitalId, code])
   @@index([hospitalId, status])
@@ -249,9 +250,9 @@ model PurchaseOrder {
   
   // ผู้รับผิดชอบ
   orderedBy       String
-  orderer         User                @relation(fields: [orderedBy], references: [id], onDelete: Restrict)
+  orderer         User      @relation("POOrderer", fields: [orderedBy], references: [id], onDelete: Restrict)
   approvedBy      String?
-  approver        User?               @relation("POApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  approver        User?     @relation("POApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
   
   // หมายเหตุ
   notes           String?
@@ -305,6 +306,8 @@ model PurchaseOrderItem {
   // Audit fields
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  goodsReceiptItems GoodsReceiptItem[]
   
   @@index([purchaseOrderId])
   @@index([drugId])
@@ -326,7 +329,7 @@ model GoodsReceipt {
   hospitalId      String
   hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   supplierId      String
-  supplier        Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier        Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   purchaseOrderId String?
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
   
@@ -348,9 +351,9 @@ model GoodsReceipt {
   
   // ผู้รับผิดชอบ
   receivedBy      String
-  receiver        User          @relation(fields: [receivedBy], references: [id], onDelete: Restrict)
+  receiver        User      @relation("GRReceiver", fields: [receivedBy], references: [id], onDelete: Restrict)
   verifiedBy      String?
-  verifier        User?         @relation("GRVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  verifier        User?     @relation("GRVerifier", fields: [verifiedBy], references: [id], onDelete: Restrict)
   
   // หมายเหตุ
   notes           String?
@@ -361,7 +364,7 @@ model GoodsReceipt {
   updatedAt       DateTime      @updatedAt
   
   // Relations
-  items           GoodsReceiptItem[]
+  goodsReceiptItems   GoodsReceiptItem[]
   
   @@index([hospitalId, supplierId])
   @@index([receivedDate])
@@ -378,7 +381,7 @@ model GoodsReceiptItem {
   drugId          String
   drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
   purchaseOrderItemId String?
-  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
+  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
   
   // จำนวน
   orderedQty      Int?          // จำนวนที่สั่ง (จาก PO)

@@ -322,6 +322,10 @@ model StockTransaction {
   @@index([stockCardId, transactionDate])
   @@index([transactionType])
   @@map("stock_transactions")
+
+  requisitionId   String?
+  requisition     Requisition?  @relation(fields: [requisitionId], references: [id], onDelete: SetNull)
+  
 }
 
 // การนับสต็อก

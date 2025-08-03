@@ -197,9 +197,9 @@ model ComplianceCheck {
   
   // ผู้รับผิดชอบ
   checkedBy       String
-  checker         User            @relation(fields: [checkedBy], references: [id], onDelete: Restrict)
+  checker         User      @relation("ComplianceChecker", fields: [checkedBy], references: [id], onDelete: Restrict)
   reviewedBy      String?
-  reviewer        User?           @relation("ComplianceReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  reviewer        User?     @relation("ComplianceReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
   
   // การติดตาม
   checkDate       DateTime        @default(now())
@@ -234,11 +234,11 @@ model ControlledSubstanceLog {
   
   // ผู้เกี่ยวข้อง
   handledBy       String
-  handler         User          @relation(fields: [handledBy], references: [id], onDelete: Restrict)
+  handler         User      @relation("CSLHandler", fields: [handledBy], references: [id], onDelete: Restrict)
   witnessedBy     String?
-  witness         User?         @relation("CSLWitness", fields: [witnessedBy], references: [id], onDelete: SetNull)
-  authorizedBy    String?       // ผู้มีอำนาจอนุมัติ
-  authorizer      User?         @relation("CSLAuthorizer", fields: [authorizedBy], references: [id], onDelete: SetNull)
+  witness         User?     @relation("CSLWitness", fields: [witnessedBy], references: [id], onDelete: Restrict)
+  authorizedBy    String?
+  authorizer      User?     @relation("CSLAuthorizer", fields: [authorizedBy], references: [id], onDelete: Restrict)
   
   // เอกสารอ้างอิง
   referenceDoc    String?       // เลขที่เอกสารอ้างอิง
@@ -329,9 +329,9 @@ model SecurityIncident {
   
   // ผู้เกี่ยวข้อง
   reportedBy      String
-  reporter        User          @relation(fields: [reportedBy], references: [id], onDelete: Restrict)
-  suspectedUserId String?       // ผู้ต้องสงสัย
-  suspectedUser   User?         @relation("SuspectedUser", fields: [suspectedUserId], references: [id], onDelete: SetNull)
+  reporter        User      @relation("SecurityReporter", fields: [reportedBy], references: [id], onDelete: Restrict)
+  suspectedUserId String?
+  suspectedUser   User?     @relation("SuspectedUser", fields: [suspectedUserId], references: [id], onDelete: Restrict)
   
   // เวลาและสถานที่
   occurredAt      DateTime      // เวลาที่เกิดเหตุ
@@ -346,8 +346,8 @@ model SecurityIncident {
   
   // การดำเนินการ
   status          String        @default("REPORTED") // "REPORTED", "INVESTIGATING", "RESOLVED", "CLOSED"
-  investigatedBy  String?       // ผู้สอบสวน
-  investigator    User?         @relation("Investigator", fields: [investigatedBy], references: [id], onDelete: SetNull)
+  investigatedBy  String?
+  investigator    User?     @relation("Investigator", fields: [investigatedBy], references: [id], onDelete: Restrict)
   actionsTaken    Json?         // การดำเนินการที่ทำ
   resolution      String?       // การแก้ไข
   

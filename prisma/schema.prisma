@@ -1,6 +1,6 @@
 // This file is auto-generated. Do not edit manually.
 // Edit files in prisma/schemas/ directory instead.
-// Last generated: 2025-08-02T16:43:14.980Z
+// Last generated: 2025-08-02T17:09:54.427Z
 
 generator client {
   provider = "prisma-client-js"
@@ -847,6 +847,10 @@ model StockTransaction {
   @@index([stockCardId, transactionDate])
   @@index([transactionType])
   @@map("stock_transactions")
+
+  requisitionId   String?
+  requisition     Requisition?  @relation(fields: [requisitionId], references: [id], onDelete: SetNull)
+  
 }
 
 // การนับสต็อก
@@ -1387,6 +1391,7 @@ model Supplier {
   batches         StockBatch[]
   purchaseOrders  PurchaseOrder[]
   evaluations     SupplierEvaluation[]
+  goodsReceipts   GoodsReceipt[]
   
   @@unique([hospitalId, code])
   @@index([hospitalId, status])
@@ -1530,9 +1535,9 @@ model PurchaseOrder {
   
   // ผู้รับผิดชอบ
   orderedBy       String
-  orderer         User                @relation(fields: [orderedBy], references: [id], onDelete: Restrict)
+  orderer         User      @relation("POOrderer", fields: [orderedBy], references: [id], onDelete: Restrict)
   approvedBy      String?
-  approver        User?               @relation("POApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  approver        User?     @relation("POApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
   
   // หมายเหตุ
   notes           String?
@@ -1586,6 +1591,8 @@ model PurchaseOrderItem {
   // Audit fields
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  goodsReceiptItems GoodsReceiptItem[]
   
   @@index([purchaseOrderId])
   @@index([drugId])
@@ -1607,7 +1614,7 @@ model GoodsReceipt {
   hospitalId      String
   hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   supplierId      String
-  supplier        Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier        Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   purchaseOrderId String?
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
   
@@ -1629,9 +1636,9 @@ model GoodsReceipt {
   
   // ผู้รับผิดชอบ
   receivedBy      String
-  receiver        User          @relation(fields: [receivedBy], references: [id], onDelete: Restrict)
+  receiver        User      @relation("GRReceiver", fields: [receivedBy], references: [id], onDelete: Restrict)
   verifiedBy      String?
-  verifier        User?         @relation("GRVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  verifier        User?     @relation("GRVerifier", fields: [verifiedBy], references: [id], onDelete: Restrict)
   
   // หมายเหตุ
   notes           String?
@@ -1642,7 +1649,7 @@ model GoodsReceipt {
   updatedAt       DateTime      @updatedAt
   
   // Relations
-  items           GoodsReceiptItem[]
+  goodsReceiptItems   GoodsReceiptItem[]
   
   @@index([hospitalId, supplierId])
   @@index([receivedDate])
@@ -1659,7 +1666,7 @@ model GoodsReceiptItem {
   drugId          String
   drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
   purchaseOrderItemId String?
-  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
+  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
   
   // จำนวน
   orderedQty      Int?          // จำนวนที่สั่ง (จาก PO)
@@ -2368,9 +2375,9 @@ model ComplianceCheck {
   
   // ผู้รับผิดชอบ
   checkedBy       String
-  checker         User            @relation(fields: [checkedBy], references: [id], onDelete: Restrict)
+  checker         User      @relation("ComplianceChecker", fields: [checkedBy], references: [id], onDelete: Restrict)
   reviewedBy      String?
-  reviewer        User?           @relation("ComplianceReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  reviewer        User?     @relation("ComplianceReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
   
   // การติดตาม
   checkDate       DateTime        @default(now())
@@ -2405,11 +2412,11 @@ model ControlledSubstanceLog {
   
   // ผู้เกี่ยวข้อง
   handledBy       String
-  handler         User          @relation(fields: [handledBy], references: [id], onDelete: Restrict)
+  handler         User      @relation("CSLHandler", fields: [handledBy], references: [id], onDelete: Restrict)
   witnessedBy     String?
-  witness         User?         @relation("CSLWitness", fields: [witnessedBy], references: [id], onDelete: SetNull)
-  authorizedBy    String?       // ผู้มีอำนาจอนุมัติ
-  authorizer      User?         @relation("CSLAuthorizer", fields: [authorizedBy], references: [id], onDelete: SetNull)
+  witness         User?     @relation("CSLWitness", fields: [witnessedBy], references: [id], onDelete: Restrict)
+  authorizedBy    String?
+  authorizer      User?     @relation("CSLAuthorizer", fields: [authorizedBy], references: [id], onDelete: Restrict)
   
   // เอกสารอ้างอิง
   referenceDoc    String?       // เลขที่เอกสารอ้างอิง
@@ -2500,9 +2507,9 @@ model SecurityIncident {
   
   // ผู้เกี่ยวข้อง
   reportedBy      String
-  reporter        User          @relation(fields: [reportedBy], references: [id], onDelete: Restrict)
-  suspectedUserId String?       // ผู้ต้องสงสัย
-  suspectedUser   User?         @relation("SuspectedUser", fields: [suspectedUserId], references: [id], onDelete: SetNull)
+  reporter        User      @relation("SecurityReporter", fields: [reportedBy], references: [id], onDelete: Restrict)
+  suspectedUserId String?
+  suspectedUser   User?     @relation("SuspectedUser", fields: [suspectedUserId], references: [id], onDelete: Restrict)
   
   // เวลาและสถานที่
   occurredAt      DateTime      // เวลาที่เกิดเหตุ
@@ -2517,8 +2524,8 @@ model SecurityIncident {
   
   // การดำเนินการ
   status          String        @default("REPORTED") // "REPORTED", "INVESTIGATING", "RESOLVED", "CLOSED"
-  investigatedBy  String?       // ผู้สอบสวน
-  investigator    User?         @relation("Investigator", fields: [investigatedBy], references: [id], onDelete: SetNull)
+  investigatedBy  String?
+  investigator    User?     @relation("Investigator", fields: [investigatedBy], references: [id], onDelete: Restrict)
   actionsTaken    Json?         // การดำเนินการที่ทำ
   resolution      String?       // การแก้ไข
   
