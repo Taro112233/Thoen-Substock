@@ -1,36 +1,76 @@
 // app/api/auth/login/route.ts
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { NextRequest, NextResponse } from 'next/server';
-import { serialize } from 'cookie';
+import { NextRequest, NextResponse } from "next/server";
+import { loginSchema } from "@/lib/validations/auth";
+import { auth } from "@/app/utils/auth";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-    }
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { accounts: true },
+    const body = await request.json();
+    const validatedData = loginSchema.parse(body);
+    
+    // ตรวจสอบว่าผู้ใช้อยู่ในโรงพยาบาลที่เลือกหรือไม่
+    const user = await prisma.user.findFirst({
+      where: {
+        username: validatedData.username,
+        hospitalId: validatedData.hospitalId,
+      },
     });
-    if (!user || !user.accounts[0]?.password) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: "ไม่พบผู้ใช้ในหน่วยงานที่เลือก" },
+        { status: 400 }
+      );
     }
-    const valid = await bcrypt.compare(password, user.accounts[0].password);
-    if (!valid) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    
+    // เข้าสู่ระบบผ่าน Better Auth
+    const result = await auth.api.signInEmail({
+      body: {
+        email: user.email,
+        password: validatedData.password,
+      },
+    });
+    
+    if (!result.user) {
+      return NextResponse.json(
+        { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" },
+        { status: 400 }
+      );
     }
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    const cookie = serialize('token', token, { path: '/', httpOnly: true, maxAge: 60 * 60 * 24 * 7 });
-    const res = NextResponse.json({ user: { id: user.id, name: user.name, email: user.email }, token });
-    res.headers.set('Set-Cookie', cookie);
-    return res;
-  } catch {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    
+    // อัปเดตข้อมูลการเข้าสู่ระบบ
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        loginCount: { increment: 1 },
+      },
+    });
+    
+    return NextResponse.json({
+      success: true,
+      message: "เข้าสู่ระบบสำเร็จ",
+      user: result.user,
+      needsApproval: user.status === "PENDING",
+      needsProfileCompletion: !user.isProfileComplete,
+    });
+    
+  } catch (error) {
+    console.error("Login error:", error);
+    
+    if (error instanceof Error && error.name === 'ZodError') {
+      return NextResponse.json(
+        { error: "ข้อมูลไม่ถูกต้อง", details: error.message },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" },
+      { status: 500 }
+    );
   }
-} 
+}

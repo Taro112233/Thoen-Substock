@@ -1,6 +1,6 @@
 // This file is auto-generated. Do not edit manually.
 // Edit files in prisma/schemas/ directory instead.
-// Last generated: 2025-08-03T12:53:11.904Z
+// Last generated: 2025-08-03T15:03:49.410Z
 
 generator client {
   provider = "prisma-client-js"
@@ -45,12 +45,19 @@ model User {
   // ข้อมูลพื้นฐาน
   email         String      @unique
   name          String
+  username      String      @unique  // เพิ่มสำหรับ login
+  firstName     String?     // ชื่อ
+  lastName      String?     // นามสกุล
   phoneNumber   String?
   employeeId    String?     // รหัสพนักงาน
+  position      String?     // ตำแหน่ง
   
   // การยืนยันตัวตน
   emailVerified Boolean     @default(false)
   password      String?     // hashed password
+  
+  // Profile completion tracking
+  isProfileComplete Boolean @default(false)
   
   // บทบาทและสิทธิ์
   role          Role
@@ -76,11 +83,18 @@ model User {
   lastModifiedBy String?    // ผู้แก้ไขล่าสุด
   
   // ================================
+  // BETTER AUTH COMPATIBILITY
+  // ================================
+  
+  // Better Auth required relations
+  accounts      Account[]
+  sessions      Session[]
+  
+  // ================================
   // RELATIONS (All opposite fields)
   // ================================
   
-  // Authentication Relations
-  sessions                  Session[]
+  // Authentication Relations (existing)
   refreshTokens            RefreshToken[]
   passwordResetTokens      PasswordResetToken[]
   emailVerificationTokens  EmailVerificationToken[]
@@ -135,33 +149,59 @@ model User {
   @@map("users")
 }
 
+// ================================
+// BETTER AUTH REQUIRED MODELS
+// ================================
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  
+  // Relation to User
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Better Auth requirement
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
 model Session {
-  id        String   @id @default(uuid())
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
   
-  // ความสัมพันธ์กับผู้ใช้
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Additional session fields
+  ipAddress    String?
+  userAgent    String?
+  isActive     Boolean  @default(true)
   
-  // ข้อมูลเซสชั่น
-  token     String   @unique
-  expiresAt DateTime
-  
-  // ข้อมูลการเชื่อมต่อ
-  ipAddress String?
-  userAgent String?
-  
-  // สถานะ
-  isActive  Boolean  @default(true)
+  // Relation to User
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Audit fields
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   
   @@index([userId])
-  @@index([token])
-  @@index([expiresAt])
+  @@index([sessionToken])
+  @@index([expires])
   @@map("sessions")
 }
+
+// ================================
+// EXISTING AUTH MODELS (Updated)
+// ================================
 
 model RefreshToken {
   id        String   @id @default(uuid())

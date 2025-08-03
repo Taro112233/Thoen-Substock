@@ -1,4 +1,4 @@
-// app/utils/auth.ts
+// lib/auth.ts
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
-    provider: "postgresql", // เปลี่ยนจาก sqlite เป็น postgresql
+    provider: "postgresql",
   }),
   
   // เปิดใช้งาน email และ password
@@ -27,7 +27,7 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 7, // 7 วัน
   },
   
-  // User model configuration
+  // Custom user model fields
   user: {
     additionalFields: {
       username: {
@@ -77,14 +77,29 @@ export const auth = betterAuth({
     },
   },
   
+  // Hooks สำหรับ custom logic
+  hooks: {
+    after: [
+      {
+        matcher: (context) => {
+          return context.path === "/sign-up" && context.method === "POST";
+        },
+        handler: async (context) => {
+          // Auto login หลังจากสมัครสำเร็จ
+          if (context.returned?.user) {
+            // จะถูกจัดการใน frontend
+            console.log("User registered:", context.returned.user.id);
+          }
+        },
+      },
+    ],
+  },
+  
   // Rate limiting
   rateLimit: {
     window: 60, // 1 นาที
     max: 10, // สูงสุด 10 attempts
   },
-  
-  // Base URL configuration
-  baseURL: process.env.NEXTAUTH_URL || "http://localhost:3000",
 });
 
 export type Session = typeof auth.$Infer.Session;
