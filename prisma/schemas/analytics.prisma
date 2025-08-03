@@ -1,422 +1,108 @@
 // prisma/schemas/analytics.prisma
 // Analytics and Reporting Schema
-// ระบบวิเคราะห์และรายงานสำหรับ Hospital Pharmacy System
-
-enum ReportType {
-  DAILY_STOCK_MOVEMENT     // รายงานการเคลื่อนไหวสต็อกรายวัน
-  MONTHLY_CONSUMPTION      // รายงานการใช้ยารายเดือน
-  ABC_ANALYSIS            // การวิเคราะห์ ABC
-  SLOW_MOVING_INVENTORY   // รายงานสต็อกเคลื่อนไหวช้า
-  EXPIRY_ALERT           // รายงานยาใกล้หมดอายุ
-  COST_ANALYSIS          // รายงานการวิเคราะห์ต้นทุน
-  SUPPLIER_PERFORMANCE   // รายงานประสิทธิภาพซัพพลายเออร์
-  DEPARTMENT_UTILIZATION // รายงานการใช้งานของแผนก
-  REGULATORY_COMPLIANCE  // รายงานตามกฎหมาย
-  FINANCIAL_SUMMARY      // สรุปทางการเงิน
-}
-
-enum ReportStatus {
-  PENDING     // รอการสร้าง
-  GENERATING  // กำลังสร้าง
-  COMPLETED   // เสร็จสิ้น
-  FAILED      // ล้มเหลว
-  EXPIRED     // หมดอายุ
-}
-
-enum ReportFormat {
-  PDF         // ไฟล์ PDF
-  EXCEL       // ไฟล์ Excel
-  CSV         // ไฟล์ CSV
-  JSON        // ข้อมูล JSON
-  HTML        // หน้าเว็บ
-}
+// ระบบการวิเคราะห์และรายงานสำหรับ Hospital Pharmacy System
 
 model Report {
-  id              String        @id @default(uuid())
+  id              String      @id @default(uuid())
   
   // ความสัมพันธ์
   hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  requestedBy     String
+  requester       User        @relation(fields: [requestedBy], references: [id], onDelete: Restrict)
   
   // ข้อมูลรายงาน
-  name            String        // ชื่อรายงาน
-  description     String?       // คำอธิบาย
-  type            ReportType
-  format          ReportFormat
+  title           String
+  description     String?
+  reportType      String      // "STOCK", "REQUISITION", "SUPPLIER", "COMPLIANCE", etc.
   
-  // ช่วงเวลา
-  fromDate        DateTime
-  toDate          DateTime
+  // พารามิเตอร์
+  parameters      Json?       // พารามิเตอร์การสร้างรายงาน
+  filterCriteria  Json?       // เงื่อนไขการกรอง
   
-  // ตัวกรอง
-  filters         Json?         // ตัวกรองต่างๆ เช่น department, drug category
-  parameters      Json?         // พารามิเตอร์เพิ่มเติม
+  // การสร้าง
+  status          String      @default("PENDING") // "PENDING", "GENERATING", "COMPLETED", "FAILED"
+  generatedAt     DateTime?   // เวลาที่สร้างเสร็จ
+  filePath        String?     // path ของไฟล์รายงาน
+  fileSize        Int?        // ขนาดไฟล์ (bytes)
   
-  // สถานะ
-  status          ReportStatus  @default(PENDING)
-  
-  // ไฟล์ผลลัพธ์
-  fileUrl         String?       // URL ของไฟล์รายงาน
-  fileSize        Int?          // ขนาดไฟล์ (bytes)
-  
-  // การประมวลผล
-  startedAt       DateTime?     // เวลาเริ่มสร้าง
-  completedAt     DateTime?     // เวลาเสร็จสิ้น
-  errorMessage    String?       // ข้อความข้อผิดพลาด
-  
-  // ผู้ขอรายงาน
-  requestedBy     String
-  requester       User          @relation(fields: [requestedBy], references: [id], onDelete: Restrict)
-  
-  // การตั้งค่า
-  isScheduled     Boolean       @default(false) // รายงานตามกำหนดเวลา
-  scheduleConfig  Json?         // การตั้งค่าตารางเวลา
+  // การดาวน์โหลด
+  downloadCount   Int         @default(0)
+  lastDownloaded  DateTime?
   
   // Audit fields
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  expiresAt       DateTime?     // วันหมดอายุของไฟล์
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
   
-  @@index([hospitalId, type])
-  @@index([status])
+  @@index([hospitalId])
   @@index([requestedBy])
+  @@index([reportType])
+  @@index([status])
   @@map("reports")
 }
 
-// Dashboard สำหรับผู้ใช้แต่ละคน
 model Dashboard {
-  id              String        @id @default(uuid())
+  id              String      @id @default(uuid())
   
   // ความสัมพันธ์
   hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   userId          String
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // ข้อมูล Dashboard
-  name            String        // ชื่อ Dashboard
-  description     String?       // คำอธิบาย
-  layout          Json          // การจัดวาง widgets
-  isDefault       Boolean       @default(false) // Dashboard หลัก
+  // ข้อมูล dashboard
+  name            String
+  description     String?
+  layout          Json        // การจัดวาง widgets
+  widgets         Json        // รายการ widgets และการตั้งค่า
   
-  // การแชร์
-  isPublic        Boolean       @default(false)
-  sharedWith      String[]      // User IDs ที่แชร์ให้
+  // การใช้งาน
+  isDefault       Boolean     @default(false) // dashboard เริ่มต้น
+  isPublic        Boolean     @default(false) // แชร์ให้ผู้อื่นใช้ได้
+  viewCount       Int         @default(0)
+  lastViewedAt    DateTime?
   
   // Audit fields
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  lastViewedAt    DateTime?     // เข้าดูล่าสุด
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
   
-  // Relations
-  widgets         DashboardWidget[]
-  
-  @@index([hospitalId, userId])
+  @@index([hospitalId])
+  @@index([userId])
   @@map("dashboards")
 }
 
-enum WidgetType {
-  KPI_CARD                // การ์ดแสดง KPI
-  LINE_CHART             // กราฟเส้น
-  BAR_CHART              // กราฟแท่ง
-  PIE_CHART              // กราฟวงกลม
-  TABLE                  // ตาราง
-  ALERT_LIST             // รายการแจ้งเตือน
-  STOCK_LEVEL_GAUGE      // เกจแสดงระดับสต็อก
-  TREND_INDICATOR        // ตัวบ่งชี้แนวโน้ม
-  HEATMAP                // แผนที่ความร้อน
-  PROGRESS_BAR           // แถบความคืบหน้า
-}
-
-model DashboardWidget {
-  id              String        @id @default(uuid())
-  
-  // ความสัมพันธ์
-  dashboardId     String
-  dashboard       Dashboard     @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูล Widget
-  title           String        // ชื่อ Widget
-  type            WidgetType
-  config          Json          // การตั้งค่า Widget
-  dataSource      Json          // แหล่งข้อมูล
-  
-  // การจัดวาง
-  x               Int           // ตำแหน่ง X
-  y               Int           // ตำแหน่ง Y
-  width           Int           // ความกว้าง
-  height          Int           // ความสูง
-  
-  // การรีเฟรช
-  refreshInterval Int?          // ความถี่การรีเฟรช (วินาที)
-  lastRefreshed   DateTime?     // รีเฟรชล่าสุด
-  
-  // สถานะ
-  isActive        Boolean       @default(true)
-  
-  // Audit fields
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  @@index([dashboardId])
-  @@map("dashboard_widgets")
-}
-
-// การติดตาม KPI และเมตริกต่างๆ
-model KPIMetric {
-  id              String        @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลเมตริก
-  name            String        // ชื่อเมตริก
-  category        String        // หมวดหมู่ เช่น "inventory", "cost", "performance"
-  description     String?       // คำอธิบาย
-  
-  // ค่าเป้าหมาย
-  targetValue     Decimal?      // ค่าเป้าหมาย
-  thresholdMin    Decimal?      // ค่าขั้นต่ำ
-  thresholdMax    Decimal?      // ค่าสูงสุด
-  
-  // หน่วย
-  unit            String?       // หน่วยนับ เช่น "%", "บาท", "วัน"
-  
-  // การคำนวณ
-  calculationMethod String      // วิธีการคำนวณ
-  dataQuery       Json?         // SQL query หรือ config สำหรับดึงข้อมูล
-  
-  // การตั้งค่า
-  isActive        Boolean       @default(true)
-  updateFrequency String?       // ความถี่การอัพเดต
-  
-  // Audit fields
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Relations
-  values          KPIValue[]
-  
-  @@index([hospitalId, category])
-  @@map("kpi_metrics")
-}
-
-model KPIValue {
-  id              String        @id @default(uuid())
-  
-  // ความสัมพันธ์
-  kpiMetricId     String
-  kpiMetric       KPIMetric     @relation(fields: [kpiMetricId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลค่า
-  value           Decimal       // ค่าที่วัดได้
-  periodType      String        // ประเภทช่วงเวลา "daily", "weekly", "monthly", "quarterly", "yearly"
-  periodStart     DateTime      // เริ่มต้นช่วงเวลา
-  periodEnd       DateTime      // สิ้นสุดช่วงเวลา
-  
-  // การเปรียบเทียบ
-  previousValue   Decimal?      // ค่าช่วงก่อน
-  changePercent   Decimal?      // เปอร์เซ็นต์การเปลี่ยนแปลง
-  trendDirection  String?       // "UP", "DOWN", "STABLE"
-  
-  // การประเมิน
-  isOnTarget      Boolean?      // อยู่ในเป้าหมายหรือไม่
-  performanceLevel String?      // "EXCELLENT", "GOOD", "AVERAGE", "POOR"
-  
-  // หมายเหतุ
-  notes           String?       // หมายเหตุการวัด
-  
-  // การติดตาม
-  recordedAt      DateTime      @default(now())
-  calculatedBy    String?       // ระบบหรือผู้ใช้ที่คำนวณ
-  
-  @@index([kpiMetricId, periodStart])
-  @@index([periodType])
-  @@map("kpi_values")
-}
-
-// การติดตามการใช้งานระบบ
 model SystemUsage {
-  id              String        @id @default(uuid())
+  id              String      @id @default(uuid())
   
   // ความสัมพันธ์
   hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   userId          String?
-  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   
   // ข้อมูลการใช้งาน
-  action          String        // การกระทำ เช่น "LOGIN", "STOCK_TRANSACTION", "REQUISITION_CREATE"
-  module          String        // โมดูล เช่น "INVENTORY", "REQUISITION", "REPORTS"
-  resourceType    String?       // ประเภทข้อมูล เช่น "STOCK_CARD", "DRUG"
-  resourceId      String?       // ID ของข้อมูล
+  feature         String      // ฟีเจอร์ที่ใช้
+  action          String      // การกระทำ
+  sessionId       String?     // session ID
   
-  // เวลาและระยะเวลา
-  timestamp       DateTime      @default(now())
-  duration        Int?          // ระยะเวลาใช้งาน (มิลลิวินาที)
+  // เวลา
+  startTime       DateTime    @default(now())
+  endTime         DateTime?
+  duration        Int?        // ระยะเวลา (มิลลิวินาที)
   
   // ข้อมูลเทคนิค
   ipAddress       String?
   userAgent       String?
-  deviceType      String?       // "DESKTOP", "MOBILE", "TABLET"
-  browser         String?
+  platform        String?     // "web", "mobile", "desktop"
   
-  // ผลลัพธ์
-  success         Boolean       @default(true)
-  errorMessage    String?       // ข้อความข้อผิดพลาด (ถ้ามี)
+  // เมตริก
+  clicks          Int         @default(0)
+  pageViews       Int         @default(0)
+  dataTransferred Int         @default(0) // bytes
   
-  @@index([hospitalId, timestamp])
-  @@index([userId, timestamp])
-  @@index([action])
-  @@index([module])
+  @@index([hospitalId])
+  @@index([userId])
+  @@index([feature])
+  @@index([startTime])
   @@map("system_usage")
-}
-
-// การเก็บข้อมูลสำหรับ Machine Learning
-model MLDataPoint {
-  id              String        @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ประเภทข้อมูล
-  dataType        String        // "CONSUMPTION_PATTERN", "DEMAND_FORECAST", "STOCK_OPTIMIZATION"
-  features        Json          // ข้อมูล features สำหรับ ML
-  target          Json?         // ค่าเป้าหมาย (สำหรับ supervised learning)
-  
-  // เวลาและบริบท
-  timestamp       DateTime      @default(now())
-  context         Json?         // บริบทเพิ่มเติม เช่น season, holiday, emergency
-  
-  // การประมวลผล
-  isProcessed     Boolean       @default(false)
-  processedAt     DateTime?
-  modelVersion    String?       // เวอร์ชั่นของโมเดล
-  
-  // คุณภาพข้อมูล
-  qualityScore    Decimal?      // คะแนนคุณภาพข้อมูล
-  isAnomaly       Boolean       @default(false) // ข้อมูลผิดปกติ
-  
-  @@index([hospitalId, dataType])
-  @@index([timestamp])
-  @@index([isProcessed])
-  @@map("ml_data_points")
-}
-
-// การพยากรณ์และ insights
-model Forecast {
-  id              String        @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลการพยากรณ์
-  forecastType    String        // "DEMAND", "CONSUMPTION", "REORDER_POINT", "BUDGET"
-  targetEntity    String        // "DRUG", "CATEGORY", "DEPARTMENT", "HOSPITAL"
-  entityId        String?       // ID ของ entity
-  
-  // ช่วงเวลา
-  forecastPeriod  String        // "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY"
-  periodStart     DateTime      // เริ่มต้นช่วงพยากรณ์
-  periodEnd       DateTime      // สิ้นสุดช่วงพยากรณ์
-  
-  // ค่าพยากรณ์
-  predictedValue  Decimal       // ค่าที่พยากรณ์
-  confidenceLevel Decimal       // ระดับความเชื่อมั่น (0-1)
-  lowerBound      Decimal?      // ขอบเขตล่าง
-  upperBound      Decimal?      // ขอบเขตบน
-  
-  // โมเดล
-  modelName       String        // ชื่อโมเดลที่ใช้
-  modelVersion    String        // เวอร์ชั่นโมเดล
-  accuracy        Decimal?      // ความแม่นยำของโมเดล
-  
-  // ข้อมูลเพิ่มเติม
-  features        Json?         // Features ที่ใช้ในการพยากรณ์
-  metadata        Json?         // ข้อมูลเพิ่มเติม
-  
-  // การติดตาม
-  createdAt       DateTime      @default(now())
-  actualValue     Decimal?      // ค่าจริงที่เกิดขึ้น (update ภายหลัง)
-  accuracy_score  Decimal?      // คะแนนความแม่นยำเมื่อเปรียบเทียบกับค่าจริง
-  
-  @@index([hospitalId, forecastType])
-  @@index([targetEntity, entityId])
-  @@index([periodStart])
-  @@map("forecasts")
-}
-
-// การวิเคราะห์แนวโน้มและ patterns
-model TrendAnalysis {
-  id              String        @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลการวิเคราะห์
-  analysisType    String        // "SEASONAL", "GROWTH", "ANOMALY", "CORRELATION"
-  targetMetric    String        // เมตริกที่วิเคราะห์
-  timeframe       String        // ช่วงเวลาการวิเคราะห์
-  
-  // ผลการวิเคราะห์
-  trendDirection  String        // "INCREASING", "DECREASING", "STABLE", "VOLATILE"
-  trendStrength   Decimal       // ความแข็งแกร่งของแนวโน้ม (0-1)
-  changeRate      Decimal?      // อัตราการเปลี่ยนแปลง
-  
-  // Insights
-  summary         String        // สรุปผลการวิเคราะห์
-  recommendations Json?         // ข้อเสนอแนะ
-  actionItems     Json?         // รายการการดำเนินการ
-  
-  // ข้อมูลสถิติ
-  statisticalData Json          // ข้อมูลสถิติต่างๆ
-  visualizationData Json?       // ข้อมูลสำหรับการแสดงผลกราฟ
-  
-  // การติดตาม
-  analyzedAt      DateTime      @default(now())
-  validUntil      DateTime?     // ผลการวิเคราะห์ใช้ได้จนถึงเมื่อไร
-  
-  @@index([hospitalId, analysisType])
-  @@index([analyzedAt])
-  @@map("trend_analyses")
-}
-
-// Performance benchmarks และการเปรียบเทียบ
-model Benchmark {
-  id              String        @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูล Benchmark
-  metricName      String        // ชื่อเมตริก
-  category        String        // หมวดหมู่
-  period          String        // ช่วงเวลา
-  
-  // ค่าการเปรียบเทียบ
-  hospitalValue   Decimal       // ค่าของโรงพยาบาลนี้
-  industryAverage Decimal?      // ค่าเฉลี่ยอุตสาหกรรม
-  bestPractice    Decimal?      // ค่า best practice
-  percentile      Int?          // อยู่ใน percentile ไหน
-  
-  // การจัดอันดับ
-  ranking         String?       // "EXCELLENT", "GOOD", "AVERAGE", "BELOW_AVERAGE", "POOR"
-  improvementGap  Decimal?      // ช่องว่างที่ต้องปรับปรุง
-  
-  // ข้อเสนะแนะ
-  recommendations String?       // ข้อเสนแนะการปรับปรุง
-  actionPlan      Json?         // แผนการดำเนินการ
-  
-  // การติดตาม
-  benchmarkedAt   DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  @@index([hospitalId, category])
-  @@index([metricName])
-  @@map("benchmarks")
 }

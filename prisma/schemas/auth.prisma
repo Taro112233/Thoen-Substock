@@ -130,13 +130,17 @@ model Session {
   // ข้อมูลการเชื่อมต่อ
   ipAddress String?
   userAgent String?
-  deviceInfo String? // JSON string สำหรับข้อมูลอุปกรณ์
   
-  // การติดตาม
-  createdAt DateTime @default(now())
-  lastUsedAt DateTime @default(now())
+  // สถานะ
   isActive  Boolean  @default(true)
   
+  // Audit fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
   @@map("sessions")
 }
 
@@ -151,11 +155,14 @@ model RefreshToken {
   token     String   @unique
   expiresAt DateTime
   
-  // การติดตาม
-  createdAt DateTime @default(now())
+  // สถานะ
   isRevoked Boolean  @default(false)
-  revokedAt DateTime?
   
+  // Audit fields
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
   @@map("refresh_tokens")
 }
 
@@ -170,13 +177,14 @@ model PasswordResetToken {
   token     String   @unique
   expiresAt DateTime
   
-  // การใช้งาน
+  // สถานะ
   isUsed    Boolean  @default(false)
-  usedAt    DateTime?
   
-  // การติดตาม
+  // Audit fields
   createdAt DateTime @default(now())
   
+  @@index([userId])
+  @@index([token])
   @@map("password_reset_tokens")
 }
 
@@ -191,38 +199,39 @@ model EmailVerificationToken {
   token     String   @unique
   expiresAt DateTime
   
-  // การใช้งาน
-  isVerified Boolean @default(false)
-  verifiedAt DateTime?
+  // สถานะ
+  isUsed    Boolean  @default(false)
   
-  // การติดตาม
+  // Audit fields
   createdAt DateTime @default(now())
   
+  @@index([userId])
+  @@index([token])
   @@map("email_verification_tokens")
 }
 
-// การติดตามการเข้าสู่ระบบ
 model LoginAttempt {
   id        String   @id @default(uuid())
   
-  // ข้อมูลการเข้าสู่ระบบ
+  // ความสัมพันธ์กับผู้ใช้ (nullable สำหรับ failed attempts)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการพยายามเข้าสู่ระบบ
   email     String
   ipAddress String
   userAgent String?
   
   // ผลลัพธ์
-  isSuccessful Boolean
-  failureReason String? // "invalid_credentials", "account_locked", "email_not_verified"
+  success   Boolean
+  failureReason String?
   
-  // ข้อมูลผู้ใช้ (ถ้าสำเร็จ)
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Audit fields
+  createdAt DateTime @default(now())
   
-  // การติดตาม
-  attemptedAt DateTime @default(now())
-  
+  @@index([userId])
   @@index([email])
   @@index([ipAddress])
-  @@index([attemptedAt])
+  @@index([createdAt])
   @@map("login_attempts")
 }

@@ -1,154 +1,128 @@
 // prisma/schemas/suppliers.prisma
 // Supplier Management Schema
-// ระบบจัดการซัพพลายเออร์และการจัดซื้อ
-
-enum SupplierType {
-  MANUFACTURER    // บริษัทผลิต
-  DISTRIBUTOR     // ผู้จัดจำหน่าย
-  WHOLESALER      // ผู้ค้าส่ง
-  IMPORTER        // ผู้นำเข้า
-  LOCAL_PHARMACY  // ร้านยาท้องถิ่น
-  GOVERNMENT      // หน่วยงานราชการ
-  INTERNATIONAL   // ต่างประเทศ
-}
+// ระบบจัดการซัพพลายเออร์และการจัดซื้อสำหรับ Hospital Pharmacy System
 
 enum SupplierStatus {
-  ACTIVE          // ใช้งานปกติ
-  INACTIVE        // ไม่ใช้งานชั่วคราว
-  SUSPENDED       // ระงับการใช้งาน
-  BLACKLISTED     // ขึ้นบัญชีดำ
-  PENDING_APPROVAL // รอการอนุมัติ
-  UNDER_REVIEW    // อยู่ระหว่างการทบทวน
+  PENDING     // รอการอนุมัติ
+  ACTIVE      // ใช้งานได้
+  SUSPENDED   // ระงับการใช้งาน
+  INACTIVE    // ปิดการใช้งาน
+  BLACKLISTED // อยู่ในบัญชีดำ
 }
 
-enum SupplierRating {
-  EXCELLENT       // ดีเยี่ยม
-  GOOD           // ดี
-  AVERAGE        // ปานกลาง
-  POOR           // แย่
-  UNRATED        // ไม่ได้รับการประเมิน
+enum SupplierType {
+  PHARMACEUTICAL  // บริษัทยา
+  MEDICAL_DEVICE  // อุปกรณ์การแพทย์
+  CONSUMABLE     // วัสดุสิ้นเปลือง
+  LABORATORY     // เครื่องมือห้องปฏิบัติการ
+  OTHER          // อื่นๆ
 }
 
 model Supplier {
   id              String          @id @default(uuid())
   
-  // ความสัมพันธ์กับโรงพยาบาล
-  hospitalId      String
-  hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลพื้นฐาน
-  code            String          // รหัสซัพพลายเออร์
-  name            String          // ชื่อบริษัท
+  // ข้อมูลซัพพลายเออร์
+  supplierCode    String          @unique // รหัสซัพพลายเออร์
+  name            String
   nameEn          String?         // ชื่อภาษาอังกฤษ
-  shortName       String?         // ชื่อย่อ
   
   // ประเภทและสถานะ
   type            SupplierType
-  status          SupplierStatus  @default(PENDING_APPROVAL)
-  rating          SupplierRating  @default(UNRATED)
+  status          SupplierStatus  @default(ACTIVE)
   
-  // ข้อมูลทางธุรกิจ
+  // ข้อมูลการจดทะเบียน
   taxId           String?         // เลขประจำตัวผู้เสียภาษี
-  businessLicense String?         // ใบอนุญาตประกอบธุรกิจ
-  pharmacyLicense String?         // ใบอนุญาตร้านยา (ถ้ามี)
-  gmpCertificate  String?         // ใบรับรอง GMP
+  registrationNo  String?         // เลขที่จดทะเบียน
+  licenseNo       String?         // เลขที่ใบอนุญาต
+  licenseExpiry   DateTime?       // วันหมดอายุใบอนุญาต
   
   // ที่อยู่
-  address         Json            // ที่อยู่ทางไปรษณีย์
-  billingAddress  Json?           // ที่อยู่สำหรับเรียกเก็บเงิน
-  shippingAddress Json?           // ที่อยู่สำหรับจัดส่ง
+  address         String
+  district        String?         // ตำบล/แขวง
+  subDistrict     String?         // อำเภอ/เขต
+  province        String
+  postalCode      String?
+  country         String          @default("Thailand")
   
   // ข้อมูลติดต่อ
-  contactInfo     Json            // { phone, fax, email, website }
-  emergencyContact Json?          // ติดต่อฉุกเฉิน
+  phone           String?
+  fax             String?
+  email           String?
+  website         String?
   
-  // เงื่อนไขทางการค้า
-  paymentTerms    String?         // เงื่อนไขการชำระเงิน
+  // ข้อมูลทางการเงิน
+  paymentTerms    String?         // เงื่อนไขการชำระเงิน (30 days, COD, etc.)
   creditLimit     Decimal?        // วงเงินเครดิต
-  creditPeriod    Int?            // ระยะเวลาเครดิต (วัน)
-  deliveryTerms   String?         // เงื่อนไขการส่งมอบ
-  minimumOrder    Decimal?        // จำนวนสั่งซื้อขั้นต่ำ
+  currency        String          @default("THB")
   
-  // การประเมินผลการปฏิบัติงาน
-  onTimeDeliveryRate Decimal?     // อัตราการส่งมอบตรงเวลา (%)
+  // การประเมิน
+  rating          Decimal?        // คะแนนประเมิน (1-5)
   qualityScore    Decimal?        // คะแนนคุณภาพ
-  serviceScore    Decimal?        // คะแนนการบริการ
-  overallScore    Decimal?        // คะแนนรวม
-  
-  // การติดต่อทางเทคนิค
-  ediCapable      Boolean         @default(false) // รองรับ EDI
-  apiEndpoint     String?         // API สำหรับเชื่อมต่อ
-  catalogUpdate   String?         // วิธีการอัพเดตแคตตาล็อก
-  
-  // ใบรับรองและมาตรฐาน
-  certifications  Json?           // ใบรับรองต่างๆ
-  accreditations  Json?           // การรับรอง
-  
-  // การติดตามการทำงาน
-  lastOrderDate   DateTime?       // วันที่สั่งซื้อล่าสุด
-  lastDeliveryDate DateTime?      // วันที่ส่งมอบล่าสุด
-  totalOrders     Int             @default(0)
-  totalValue      Decimal         @default(0)
+  deliveryScore   Decimal?        // คะแนนการส่งมอบ
+  serviceScore    Decimal?        // คะแนนบริการ
   
   // หมายเหตุ
-  notes           String?         // หมายเหตุทั่วไป
+  notes           String?
   internalNotes   String?         // หมายเหตุภายใน
+  
+  // การติดตาม
+  lastOrderDate   DateTime?       // วันที่สั่งซื้อล่าสุด
+  totalOrders     Int             @default(0)
+  totalValue      Decimal         @default(0)
   
   // Audit fields
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  createdBy       String?
-  isActive        Boolean         @default(true)
   
-  // Relations
+  // ================================
+  // RELATIONS (Fixed opposite fields)
+  // ================================
   contacts        SupplierContact[]
   products        SupplierProduct[]
-  batches         StockBatch[]
   purchaseOrders  PurchaseOrder[]
+  goodsReceipts   GoodsReceipt[]  // Fixed: เพิ่ม relation กลับ
   evaluations     SupplierEvaluation[]
-  goodsReceipts   GoodsReceipt[]
   
-  @@unique([hospitalId, code])
-  @@index([hospitalId, status])
+  @@index([supplierCode])
+  @@index([status])
   @@index([type])
-  @@index([rating])
   @@map("suppliers")
 }
 
 model SupplierContact {
-  id            String      @id @default(uuid())
+  id          String      @id @default(uuid())
   
   // ความสัมพันธ์
-  supplierId    String
-  supplier      Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId  String
+  supplier    Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   
-  // ข้อมูลบุคคล
-  name          String
-  position      String?     // ตำแหน่ง
-  department    String?     // แผนก
+  // ข้อมูลผู้ติดต่อ
+  name        String
+  position    String?     // ตำแหน่ง
+  department  String?     // แผนก
   
   // ข้อมูลติดต่อ
-  phone         String?
-  mobile        String?
-  email         String?
-  fax           String?
+  phone       String?
+  mobile      String?
+  email       String?
+  fax         String?
   
   // ประเภทการติดต่อ
-  contactType   String      // "PRIMARY", "SECONDARY", "SALES", "TECHNICAL", "BILLING", "EMERGENCY"
-  isPrimary     Boolean     @default(false)
+  contactType String      // "PRIMARY", "SECONDARY", "SALES", "TECHNICAL", "BILLING", "EMERGENCY"
+  isPrimary   Boolean     @default(false)
   
   // สถานะ
-  isActive      Boolean     @default(true)
+  isActive    Boolean     @default(true)
   
   // การติดตาม
   lastContactDate DateTime?
   
   // หมายเหตุ
-  notes         String?
+  notes       String?
   
   // Audit fields
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   
   @@index([supplierId])
   @@map("supplier_contacts")
@@ -230,33 +204,27 @@ model PurchaseOrder {
   orderDate       DateTime            @default(now())
   requiredDate    DateTime            // วันที่ต้องการรับ
   expectedDate    DateTime?           // วันที่คาดว่าจะได้รับ
-  confirmedDate   DateTime?           // วันที่ซัพพลายเออร์ยืนยัน
+  confirmedDate   DateTime?           // วันที่ยืนยัน
   
-  // ข้อมูลการสั่งซื้อ
-  totalAmount     Decimal             @default(0)
-  taxAmount       Decimal             @default(0)
+  // มูลค่า
+  subtotal        Decimal             @default(0)
   discountAmount  Decimal             @default(0)
-  shippingCost    Decimal             @default(0)
-  netAmount       Decimal             @default(0)
-  
-  // เงื่อนไขการชำระเงิน
-  paymentTerms    String?
-  creditPeriod    Int?                // วัน
-  
-  // การจัดส่ง
-  deliveryAddress Json                // ที่อยู่จัดส่ง
-  deliveryMethod  String?             // วิธีการจัดส่ง
-  specialInstructions String?         // คำแนะนำพิเศษ
+  taxAmount       Decimal             @default(0)
+  totalAmount     Decimal             @default(0)
   
   // ผู้รับผิดชอบ
   orderedBy       String
-  orderer         User      @relation("POOrderer", fields: [orderedBy], references: [id], onDelete: Restrict)
+  orderer         User                @relation("POOrderer", fields: [orderedBy], references: [id], onDelete: Restrict)
   approvedBy      String?
-  approver        User?     @relation("POApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  approver        User?               @relation("POApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  
+  // เงื่อนไขการชำระเงิน
+  paymentTerms    String?
+  deliveryTerms   String?
   
   // หมายเหตุ
   notes           String?
-  internalNotes   String?             // หมายเหตุภายใน
+  internalNotes   String?
   
   // Audit fields
   createdAt       DateTime            @default(now())
@@ -264,11 +232,11 @@ model PurchaseOrder {
   
   // Relations
   items           PurchaseOrderItem[]
-  receipts        GoodsReceipt[]
+  goodsReceipts   GoodsReceipt[]
   
   @@index([hospitalId, supplierId])
-  @@index([status])
   @@index([orderDate])
+  @@index([status])
   @@map("purchase_orders")
 }
 
@@ -281,24 +249,23 @@ model PurchaseOrderItem {
   drugId          String
   drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
   
-  // จำนวนและราคา
-  orderedQty      Int           // จำนวนที่สั่ง
-  receivedQty     Int           @default(0) // จำนวนที่รับแล้ว
-  remainingQty    Int           @default(0) // จำนวนที่เหลือ
-  unitPrice       Decimal       // ราคาต่อหน่วย
-  totalPrice      Decimal       // ราคารวม
+  // รายละเอียดสินค้า
+  description     String?       // รายละเอียดเพิ่มเติม
+  specification   String?       // รายละเอียดทางเทคนิค
   
-  // ข้อมูลผลิตภัณฑ์
-  supplierProductCode String?   // รหัสสินค้าของซัพพลายเออร์
-  unitOfMeasure   String        // หน่วยนับ
-  packSize        Int?          // ขนาดแพ็ค
+  // จำนวนและราคา
+  quantity        Int
+  unitPrice       Decimal
+  discountPercent Decimal       @default(0)
+  discountAmount  Decimal       @default(0)
+  lineTotal       Decimal
   
   // การส่งมอบ
-  requiredDate    DateTime      // วันที่ต้องการ
-  expectedDate    DateTime?     // วันที่คาดว่าจะได้รับ
+  requestedDate   DateTime?     // วันที่ต้องการ
+  deliveredQty    Int           @default(0) // จำนวนที่ส่งแล้ว
   
   // สถานะ
-  status          String        @default("PENDING") // "PENDING", "CONFIRMED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"
+  status          String        @default("PENDING") // "PENDING", "PARTIAL", "COMPLETED", "CANCELLED"
   
   // หมายเหตุ
   notes           String?
@@ -306,8 +273,11 @@ model PurchaseOrderItem {
   // Audit fields
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-
-  goodsReceiptItems GoodsReceiptItem[]
+  
+  // ================================
+  // RELATIONS (Fixed opposite fields)
+  // ================================
+  goodsReceiptItems GoodsReceiptItem[] // Fixed: เพิ่ม relation กลับ
   
   @@index([purchaseOrderId])
   @@index([drugId])
@@ -315,11 +285,11 @@ model PurchaseOrderItem {
 }
 
 enum ReceiptStatus {
-  PENDING         // รอการตรวจสอบ
-  VERIFIED        // ตรวจสอบแล้ว
-  DISCREPANCY     // มีความผิดปกติ
-  COMPLETED       // เสร็จสิ้น
-  REJECTED        // ปฏิเสธ
+  PENDING     // รอตรวจสอบ
+  VERIFIED    // ตรวจสอบแล้ว
+  APPROVED    // อนุมัติแล้ว
+  REJECTED    // ปฏิเสธ
+  CANCELLED   // ยกเลิก
 }
 
 model GoodsReceipt {
@@ -329,7 +299,7 @@ model GoodsReceipt {
   hospitalId      String
   hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   supplierId      String
-  supplier        Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier        Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   purchaseOrderId String?
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
   
@@ -351,9 +321,9 @@ model GoodsReceipt {
   
   // ผู้รับผิดชอบ
   receivedBy      String
-  receiver        User      @relation("GRReceiver", fields: [receivedBy], references: [id], onDelete: Restrict)
+  receiver        User          @relation("GRReceiver", fields: [receivedBy], references: [id], onDelete: Restrict)
   verifiedBy      String?
-  verifier        User?     @relation("GRVerifier", fields: [verifiedBy], references: [id], onDelete: Restrict)
+  verifier        User?         @relation("GRVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
   
   // หมายเหตุ
   notes           String?
@@ -364,7 +334,7 @@ model GoodsReceipt {
   updatedAt       DateTime      @updatedAt
   
   // Relations
-  goodsReceiptItems   GoodsReceiptItem[]
+  items           GoodsReceiptItem[]
   
   @@index([hospitalId, supplierId])
   @@index([receivedDate])
@@ -381,7 +351,7 @@ model GoodsReceiptItem {
   drugId          String
   drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
   purchaseOrderItemId String?
-  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
+  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
   
   // จำนวน
   orderedQty      Int?          // จำนวนที่สั่ง (จาก PO)
@@ -417,45 +387,47 @@ model GoodsReceiptItem {
   @@map("goods_receipt_items")
 }
 
-// การประเมินซัพพลายเออร์
 model SupplierEvaluation {
   id              String      @id @default(uuid())
   
   // ความสัมพันธ์
   supplierId      String
   supplier        Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  hospitalId      String
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  evaluatedBy     String
+  evaluator       User        @relation(fields: [evaluatedBy], references: [id], onDelete: Restrict)
   
-  // ช่วงเวลาประเมิน
-  evaluationPeriod String     // "Q1 2024", "2024"
-  fromDate        DateTime
-  toDate          DateTime
+  // ระยะเวลาการประเมิน
+  periodStart     DateTime
+  periodEnd       DateTime
   
-  // คะแนนประเมิน
-  qualityScore    Decimal     // คุณภาพสินค้า (1-5)
-  deliveryScore   Decimal     // การส่งมอบตรงเวลา (1-5)
-  serviceScore    Decimal     // การบริการ (1-5)
-  priceScore      Decimal     // ความเหมาะสมราคา (1-5)
-  overallScore    Decimal     // คะแนนรวม (1-5)
-  
-  // สถิติการปฏิบัติงาน
-  totalOrders     Int         // จำนวนคำสั่งซื้อ
-  onTimeDeliveries Int        // จำนวนการส่งมอบตรงเวลา
-  qualityIssues   Int         // จำนวนปัญหาคุณภาพ
+  // คะแนนประเมิน (1-5)
+  qualityScore    Decimal     // คุณภาพสินค้า
+  deliveryScore   Decimal     // การส่งมอบตรงเวลา
+  serviceScore    Decimal     // คุณภาพบริการ
+  priceScore      Decimal     // ความเหมาะสมของราคา
+  responseScore   Decimal     // การตอบสนอง
+  overallScore    Decimal     // คะแนนรวม
   
   // ความคิดเห็น
   strengths       String?     // จุดแข็ง
   weaknesses      String?     // จุดอ่อน
   recommendations String?     // ข้อเสนอแนะ
   
-  // ผู้ประเมิน
-  evaluatedBy     String
-  evaluator       User        @relation(fields: [evaluatedBy], references: [id], onDelete: Restrict)
+  // การดำเนินการ
+  actionRequired  Boolean     @default(false)
+  followUpDate    DateTime?
   
-  // การติดตาม
+  // สถานะ
+  status          String      @default("DRAFT") // "DRAFT", "SUBMITTED", "APPROVED"
+  
+  // Audit fields
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   
   @@index([supplierId])
-  @@index([evaluationPeriod])
+  @@index([hospitalId])
+  @@index([periodStart, periodEnd])
   @@map("supplier_evaluations")
 }

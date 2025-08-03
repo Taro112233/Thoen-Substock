@@ -1,383 +1,163 @@
 // prisma/schemas/notifications.prisma
-// Notification and Alert Management Schema
-// ระบบจัดการการแจ้งเตือนและการแจ้งเตือนอัตโนมัติ
+// Notification Management Schema
+// ระบบจัดการการแจ้งเตือนสำหรับ Hospital Pharmacy System
 
 enum NotificationType {
-  STOCK_LOW       // สต็อกต่ำ
-  STOCK_OUT       // สต็อกหมด
-  STOCK_EXPIRY    // ยาใกล้หมดอายุ
-  REQUISITION     // เกี่ยวกับใบเบิก
-  APPROVAL        // การอนุมัติ
-  SYSTEM          // ระบบ
-  SECURITY        // ความปลอดภัย
-  MAINTENANCE     // การบำรุงรักษา
-  AUDIT           // การตรวจสอบ
-  QUALITY         // คุณภาพ
-  URGENT          // เร่งด่วน
+  STOCK_LOW           // สต็อกต่ำ
+  STOCK_OUT           // สต็อกหมด
+  STOCK_EXPIRED       // ยาหมดอายุ
+  STOCK_EXPIRING      // ยาใกล้หมดอายุ
+  REQUISITION_PENDING // ใบเบิกรอดำเนินการ
+  REQUISITION_APPROVED // ใบเบิกอนุมัติแล้ว
+  REQUISITION_REJECTED // ใบเบิกปฏิเสธ
+  PO_CREATED          // สร้าง PO แล้ว
+  PO_APPROVED         // PO อนุมัติแล้ว
+  GOODS_RECEIVED      // รับของแล้ว
+  COMPLIANCE_ALERT    // การแจ้งเตือนการปฏิบัติตาม
+  SECURITY_ALERT      // การแจ้งเตือนความปลอดภัย
+  SYSTEM_MAINTENANCE  // บำรุงรักษาระบบ
+  USER_CREATED        // สร้างผู้ใช้ใหม่
+  PASSWORD_RESET      // รีเซ็ตรหัสผ่าน
 }
 
-enum ChannelType {
-  EMAIL     // อีเมล
-  SMS       // ข้อความ
-  LINE      // LINE
-  SLACK     // Slack
-  PUSH      // Push notification
-  IN_APP    // ในแอปพลิเคชัน
-  WEBHOOK   // Webhook
+enum NotificationPriority {
+  LOW                 // ต่ำ
+  NORMAL              // ปกติ
+  HIGH                // สูง
+  URGENT              // เร่งด่วน
 }
 
 enum NotificationStatus {
-  PENDING     // รอการส่ง
-  SENT        // ส่งแล้ว
-  DELIVERED   // ส่งถึงแล้ว
-  READ        // อ่านแล้ว
-  FAILED      // ล้มเหลว
-  EXPIRED     // หมดอายุ
-  CANCELLED   // ยกเลิก
+  PENDING             // รอส่ง
+  SENT                // ส่งแล้ว
+  DELIVERED           // ส่งถึงแล้ว
+  READ                // อ่านแล้ว
+  FAILED              // ส่งไม่สำเร็จ
 }
 
-// การแจ้งเตือนหลัก
 model Notification {
-  id              String            @id @default(uuid())
+  id              String              @id @default(uuid())
   
   // ความสัมพันธ์
   hospitalId      String
-  hospital        Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospital        Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
   // ข้อมูลการแจ้งเตือน
   type            NotificationType
+  priority        NotificationPriority @default(NORMAL)
   title           String
   message         String
-  data            Json?             // ข้อมูลเพิ่มเติม (JSON)
   
-  // ความสำคัญ
-  priority        Priority          @default(NORMAL)
+  // การอ้างอิง
+  referenceType   String?             // "DRUG", "REQUISITION", "PURCHASE_ORDER", etc.
+  referenceId     String?             // ID ของข้อมูลที่อ้างอิง
   
-  // ช่องทางการส่ง
-  channels        ChannelType[]
+  // การกำหนดเป้าหมาย
+  targetRoles     String[]            // บทบาทเป้าหมาย
+  targetUsers     Json?               // ผู้ใช้เฉพาะ (array of user IDs)
+  targetDepartments Json?             // แผนกเป้าหมาย (array of department IDs)
   
-  // เป้าหมาย
-  targetRoles     String[]          // บทบาทเป้าหมาย
-  targetUsers     String[]          // ผู้ใช้เป้าหมายเฉพาะ
-  targetDepartments String[]        // แผนกเป้าหมาย
+  // การส่ง
+  sendEmail       Boolean             @default(false)
+  sendSMS         Boolean             @default(false)
+  sendPush        Boolean             @default(true)
+  sendInApp       Boolean             @default(true)
   
-  // การกำหนดเวลาส่ง
-  scheduleAt      DateTime?         // กำหนดเวลาส่ง
-  retryCount      Int               @default(0) // จำนวนครั้งที่พยายามส่งใหม่
-  maxRetries      Int               @default(3) // จำนวนครั้งสูงสุดที่ลองส่งใหม่
+  // กำหนดการ
+  scheduledAt     DateTime?           // เวลาที่กำหนดส่ง
+  sentAt          DateTime?           // เวลาที่ส่งจริง
+  expiresAt       DateTime?           // เวลาหมดอายุ
   
   // สถานะ
-  status          NotificationStatus @default(PENDING)
+  status          NotificationStatus  @default(PENDING)
   
   // การติดตาม
-  createdAt       DateTime          @default(now())
-  sentAt          DateTime?         // เวลาที่ส่ง
-  deliveredAt     DateTime?         // เวลาที่ส่งถึง
-  expiresAt       DateTime?         // เวลาหมดอายุ
+  totalRecipients Int                 @default(0)
+  readCount       Int                 @default(0)
+  clickCount      Int                 @default(0)
   
-  // ข้อผิดพลาด
-  errorMessage    String?           // ข้อความข้อผิดพลาด
-  lastAttemptAt   DateTime?         // ครั้งสุดท้ายที่พยายามส่ง
+  // ข้อมูลเพิ่มเติม
+  metadata        Json?               // ข้อมูลเพิ่มเติม
+  actionUrl       String?             // URL สำหรับการกระทำ
   
-  // Relations - เพิ่ม inverse relations
-  recipients      NotificationUser[]
-  deliveries      NotificationDelivery[]
+  // Audit fields
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
   
-  @@index([hospitalId, type])
-  @@index([status])
+  // Relations
+  users           NotificationUser[]
+  
+  @@index([hospitalId])
+  @@index([type])
   @@index([priority])
-  @@index([scheduleAt])
+  @@index([status])
+  @@index([scheduledAt])
   @@map("notifications")
 }
 
 model NotificationUser {
-  id              String            @id @default(uuid())
+  id              String              @id @default(uuid())
   
   // ความสัมพันธ์
   notificationId  String
-  notification    Notification      @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  notification    Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   userId          String
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // สถานะสำหรับผู้ใช้แต่ละคน
-  status          NotificationStatus @default(PENDING)
-  channel         ChannelType       // ช่องทางที่ส่งให้ผู้ใช้คนนี้
+  // สถานะการส่ง
+  emailSent       Boolean             @default(false)
+  smsSent         Boolean             @default(false)
+  pushSent        Boolean             @default(false)
+  inAppSent       Boolean             @default(false)
   
-  // การติดตาม
-  sentAt          DateTime?         // เวลาที่ส่งให้ผู้ใช้คนนี้
-  deliveredAt     DateTime?         // เวลาที่ส่งถึง
-  readAt          DateTime?         // เวลาที่อ่าน
-  acknowledgedAt  DateTime?         // เวลาที่รับทราบ
+  // การอ่าน
+  isRead          Boolean             @default(false)
+  readAt          DateTime?
   
-  // ข้อมูลการส่ง
-  recipientAddress String?          // ที่อยู่ปลายทาง (email, phone, etc.)
-  errorMessage    String?           // ข้อความข้อผิดพลาด
+  // การกระทำ
+  isClicked       Boolean             @default(false)
+  clickedAt       DateTime?
   
-  @@unique([notificationId, userId, channel])
-  @@index([userId, status])
-  @@index([sentAt])
+  // การส่ง
+  deliveredAt     DateTime?
+  failedAt        DateTime?
+  failureReason   String?
+  
+  @@unique([notificationId, userId])
+  @@index([userId])
+  @@index([isRead])
   @@map("notification_users")
 }
 
-// เทมเพลตการแจ้งเตือน
-model NotificationTemplate {
-  id              String            @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลเทมเพลต
-  name            String            // ชื่อเทมเพลต
-  code            String            // รหัสเทมเพลต
-  type            NotificationType
-  
-  // เนื้อหา
-  titleTemplate   String            // เทมเพลตหัวข้อ
-  messageTemplate String            // เทมเพลตข้อความ
-  
-  // การตั้งค่า
-  defaultPriority Priority          @default(NORMAL)
-  defaultChannels ChannelType[]
-  
-  // ตัวแปร
-  variables       Json              // ตัวแปรที่ใช้ในเทมเพลต
-  
-  // การใช้งาน
-  isActive        Boolean           @default(true)
-  isSystem        Boolean           @default(false) // เทมเพลตระบบ
-  
-  // การติดตาม
-  usageCount      Int               @default(0)
-  lastUsedAt      DateTime?
-  
-  // Audit fields
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  createdBy       String?
-  
-  // Relations - เพิ่ม inverse relations
-  alertRules      AlertRule[]
-  
-  @@unique([hospitalId, code])
-  @@index([type])
-  @@map("notification_templates")
-}
-
-// การตั้งค่าการแจ้งเตือนของผู้ใช้
 model NotificationPreference {
-  id              String            @id @default(uuid())
+  id              String      @id @default(uuid())
   
   // ความสัมพันธ์
   userId          String
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // การตั้งค่าทั่วไป
-  enableAll       Boolean           @default(true)
-  quietHoursStart String?           // เวลาเริ่มโหมดเงียบ (HH:mm)
-  quietHoursEnd   String?           // เวลาสิ้นสุดโหมดเงียบ (HH:mm)
-  timezone        String            @default("Asia/Bangkok")
+  // ประเภทการแจ้งเตือน
+  notificationType NotificationType
   
-  // การตั้งค่าตามประเภท
-  stockAlerts     Json              // การตั้งค่าแจ้งเตือนสต็อก
-  expiryAlerts    Json              // การตั้งค่าแจ้งเตือนหมดอายุ
-  requisitionAlerts Json            // การตั้งค่าแจ้งเตือนใบเบิก
-  systemAlerts    Json              // การตั้งค่าแจ้งเตือนระบบ
+  // ช่องทางการแจ้งเตือน
+  enableEmail     Boolean     @default(true)
+  enableSMS       Boolean     @default(false)
+  enablePush      Boolean     @default(true)
+  enableInApp     Boolean     @default(true)
   
-  // ช่องทางที่ต้องการ
-  preferredChannels ChannelType[]
+  // เวลาการแจ้งเตือน
+  quietHoursStart String?     // เวลาเริ่มช่วงเงียบ (HH:mm)
+  quietHoursEnd   String?     // เวลาสิ้นสุดช่วงเงียบ (HH:mm)
+  weekendEnabled  Boolean     @default(true)
   
-  // ข้อมูลติดต่อ
-  email           String?           // อีเมลสำหรับแจ้งเตือน
-  phoneNumber     String?           // เบอร์โทรสำหรับ SMS
-  lineUserId      String?           // LINE User ID
-  slackUserId     String?           // Slack User ID
+  // การกรอง
+  minimumPriority NotificationPriority @default(NORMAL)
   
-  // การติดตาม
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
   
-  @@unique([userId])
+  @@unique([userId, notificationType])
+  @@index([userId])
   @@map("notification_preferences")
-}
-
-// กฎการแจ้งเตือนอัตโนมัติ
-model AlertRule {
-  id              String            @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลกฎ
-  name            String            // ชื่อกฎ
-  description     String?           // คำอธิบาย
-  type            NotificationType
-  
-  // เงื่อนไข
-  conditions      Json              // เงื่อนไขการแจ้งเตือน
-  threshold       Json?             // ค่าขีดจำกัด
-  
-  // การดำเนินการ
-  actions         Json              // การดำเนินการเมื่อเข้าเงื่อนไข
-  templateId      String?           // เทมเพลตที่ใช้
-  template        NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  
-  // เป้าหมาย
-  targetRoles     String[]          // บทบาทเป้าหมาย
-  targetUsers     String[]          // ผู้ใช้เป้าหมาย
-  targetDepartments String[]        // แผนกเป้าหมาย
-  
-  // การตั้งค่า
-  priority        Priority          @default(NORMAL)
-  channels        ChannelType[]
-  
-  // ความถี่
-  frequency       String?           // ความถี่การตรวจสอบ
-  cooldownPeriod  Int?              // ช่วงเวลาหยุดพัก (นาที)
-  
-  // สถานะ
-  isActive        Boolean           @default(true)
-  isSystem        Boolean           @default(false) // กฎระบบ
-  
-  // การติดตาม
-  lastTriggered   DateTime?         // ครั้งสุดท้ายที่ทำงาน
-  triggerCount    Int               @default(0) // จำนวนครั้งที่ทำงาน
-  
-  // Audit fields
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  createdBy       String?
-  
-  // Relations - เพิ่ม inverse relations
-  alertLogs       AlertLog[]
-  
-  @@index([hospitalId, type])
-  @@index([isActive])
-  @@map("alert_rules")
-}
-
-// บันทึกการแจ้งเตือนที่เกิดขึ้น
-model AlertLog {
-  id              String            @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  alertRuleId     String?
-  alertRule       AlertRule?        @relation(fields: [alertRuleId], references: [id], onDelete: SetNull)
-  
-  // ข้อมูลการแจ้งเตือน
-  alertType       String            // ประเภทการแจ้งเตือน
-  message         String            // ข้อความ
-  data            Json?             // ข้อมูลเพิ่มเติม
-  
-  // ความรุนแรง
-  severity        String            // "INFO", "WARNING", "ERROR", "CRITICAL"
-  priority        Priority
-  
-  // การตอบสนอง
-  isAcknowledged  Boolean           @default(false) // รับทราบแล้ว
-  acknowledgedBy  String?           // ผู้รับทราบ
-  acknowledgedAt  DateTime?         // เวลาที่รับทราบ
-  response        String?           // การตอบสนอง
-  
-  // การแก้ไข
-  isResolved      Boolean           @default(false) // แก้ไขแล้ว
-  resolvedBy      String?           // ผู้แก้ไข
-  resolvedAt      DateTime?         // เวลาที่แก้ไข
-  resolution      String?           // วิธีการแก้ไข
-  
-  // การติดตาม
-  triggeredAt     DateTime          @default(now())
-  
-  @@index([hospitalId, alertType])
-  @@index([severity])
-  @@index([isAcknowledged])
-  @@index([triggeredAt])
-  @@map("alert_logs")
-}
-
-// การตั้งค่าช่องทางการแจ้งเตือน
-model NotificationChannel {
-  id              String            @id @default(uuid())
-  
-  // ความสัมพันธ์
-  hospitalId      String
-  hospital        Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  // ข้อมูลช่องทาง
-  name            String            // ชื่อช่องทาง
-  type            ChannelType
-  
-  // การตั้งค่า
-  config          Json              // การตั้งค่าเฉพาะช่องทาง
-  credentials     Json?             // ข้อมูลรับรอง (encrypted)
-  
-  // สถานะ
-  isActive        Boolean           @default(true)
-  isDefault       Boolean           @default(false) // ช่องทางหลัก
-  
-  // การทดสอบ
-  lastTestAt      DateTime?         // ครั้งสุดท้ายที่ทดสอบ
-  testResult      String?           // ผลการทดสอบ
-  
-  // สถิติ
-  totalSent       Int               @default(0) // จำนวนที่ส่งทั้งหมด
-  successRate     Decimal?          // อัตราความสำเร็จ
-  
-  // Audit fields
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  createdBy       String?
-  
-  // Relations - เพิ่ม inverse relations
-  deliveries      NotificationDelivery[]
-  
-  @@unique([hospitalId, type, name])
-  @@index([type])
-  @@map("notification_channels")
-}
-
-// บันทึกการส่งการแจ้งเตือน
-model NotificationDelivery {
-  id              String            @id @default(uuid())
-  
-  // ความสัมพันธ์
-  notificationId  String
-  notification    Notification      @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-  channelId       String?
-  channel         NotificationChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
-  
-  // ข้อมูลการส่ง
-  channelType     ChannelType
-  recipient       String            // ที่อยู่ปลายทาง
-  
-  // สถานะ
-  status          NotificationStatus
-  
-  // การลองส่งใหม่
-  attempts        Int               @default(0)
-  lastAttemptAt   DateTime?
-  nextRetryAt     DateTime?
-  
-  // ข้อมูลการส่ง
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  readAt          DateTime?
-  
-  // ข้อมูลเทคนิค
-  messageId       String?           // ID จากระบบภายนอก
-  response        Json?             // การตอบกลับจากระบบภายนอก
-  errorCode       String?           // รหัสข้อผิดพลาด
-  errorMessage    String?           // ข้อความข้อผิดพลาด
-  
-  // การติดตาม
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  @@index([notificationId])
-  @@index([status])
-  @@index([channelType])
-  @@map("notification_deliveries")
 }

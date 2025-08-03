@@ -1,268 +1,555 @@
 // prisma/schemas/hospital-core.prisma
 // Hospital Core Management Schema
-// ระบบจัดการข้อมูลหลักของโรงพยาบาล แผนก และคลังยา
-
-enum HospitalType {
-  GENERAL         // โรงพยาบาลทั่วไป
-  SPECIALTY       // โรงพยาบาลเฉพาะทาง
-  UNIVERSITY      // โรงพยาบาลมหาวิทยาลัย
-  PRIVATE         // โรงพยาบาลเอกชน
-  COMMUNITY       // โรงพยาบาลชุมชน
-  DISTRICT        // โรงพยาบาลระดับอำเภอ
-}
+// ระบบจัดการโรงพยาบาลและแผนกหลักสำหรับ Hospital Pharmacy System
 
 enum HospitalStatus {
-  ACTIVE      // ใช้งานปกติ
-  INACTIVE    // ปิดชั่วคราว
-  SUSPENDED   // ระงับการใช้งาน
-  PENDING     // รอการอนุมัติ
+  ACTIVE          // ใช้งานได้
+  INACTIVE        // ปิดการใช้งานชั่วคราว
+  SUSPENDED       // ระงับการใช้งาน
+  PENDING         // รอการอนุมัติ
+  MAINTENANCE     // อยู่ระหว่างบำรุงรักษา
+}
+
+enum HospitalType {
+  GOVERNMENT      // โรงพยาบาลรัฐ
+  PRIVATE         // โรงพยาบาลเอกชน
+  UNIVERSITY      // โรงพยาบาลมหาวิทยาลัย
+  MILITARY        // โรงพยาบาลทหาร
+  POLICE          // โรงพยาบาลตำรวจ
+  COMMUNITY       // โรงพยาบาลชุมชน
+  SPECIALIZED     // โรงพยาบาลเฉพาะทาง
 }
 
 model Hospital {
-  id          String        @id @default(uuid())
+  id              String          @id @default(uuid())
   
   // ข้อมูลพื้นฐาน
-  name        String
-  nameEn      String?       // ชื่อภาษาอังกฤษ
-  shortName   String?       // ชื่อย่อ
-  code        String        @unique // รหัสโรงพยาบาล
-  description String?
+  name            String
+  nameEn          String?         // ชื่อภาษาอังกฤษ
+  hospitalCode    String          @unique // รหัสโรงพยาบาล
   
   // ประเภทและสถานะ
-  type        HospitalType
-  status      HospitalStatus @default(PENDING)
+  type            HospitalType
+  status          HospitalStatus  @default(PENDING)
   
-  // ข้อมูลใบอนุญาต
-  licenseNumber String?     // เลขใบอนุญาต
-  licenseExpiry DateTime?   // วันหมดอายุใบอนุญาต
-  accreditation String?     // การรับรอง
+  // ข้อมูลการจดทะเบียน
+  licenseNo       String?         // เลขที่ใบอนุญาต
+  licenseExpiry   DateTime?       // วันหมดอายุใบอนุญาต
+  taxId           String?         // เลขประจำตัวผู้เสียภาษี
+  registrationNo  String?         // เลขที่จดทะเบียน
   
-  // ที่อยู่และการติดต่อ
-  address     Json          // ที่อยู่ครบถ้วน
-  phoneNumber String?
-  faxNumber   String?
-  email       String?
-  website     String?
+  // ที่อยู่
+  address         String
+  district        String?         // ตำบล/แขวง
+  subDistrict     String?         // อำเภอ/เขต
+  province        String
+  postalCode      String?
+  country         String          @default("Thailand")
+  
+  // ข้อมูลติดต่อ
+  phone           String?
+  fax             String?
+  email           String?
+  website         String?
+  
+  // ข้อมูลเพิ่มเติม
+  bedCount        Int?            // จำนวนเตียง
+  employeeCount   Int?            // จำนวนพนักงาน
+  establishedYear Int?            // ปีที่ก่อตั้ง
   
   // การตั้งค่าระบบ
-  timezone    String        @default("Asia/Bangkok")
-  locale      String        @default("th")
-  currency    String        @default("THB")
+  timezone        String          @default("Asia/Bangkok")
+  locale          String          @default("th-TH")
+  currency        String          @default("THB")
   
   // การสมัครสมาชิก
-  subscription Json?        // ข้อมูลการสมัครสมาชิก
-  planType    String?       // ประเภทแผน: "BASIC", "STANDARD", "PREMIUM"
-  planStartDate DateTime?
-  planEndDate   DateTime?
-  maxUsers      Int?        // จำนวนผู้ใช้สูงสุด
-  maxDepartments Int?       // จำนวนแผนกสูงสุด
+  subscriptionPlan String?        // แผนการใช้งาน
+  subscriptionStart DateTime?     // วันเริ่มใช้งาน
+  subscriptionEnd DateTime?       // วันสิ้นสุด
+  maxUsers        Int?            // จำนวนผู้ใช้สูงสุด
+  maxWarehouses   Int?            // จำนวนคลังสูงสุด
   
-  // การเงิน
-  billingAddress Json?      // ที่อยู่สำหรับเรียกเก็บเงิน
-  taxId         String?     // เลขประจำตัวผู้เสียภาษี
+  // การติดตาม
+  lastActivityAt  DateTime?       // กิจกรรมล่าสุด
+  isTrialAccount  Boolean         @default(false)
   
   // Audit fields
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  createdBy   String?
-  isActive    Boolean       @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   
-  // Relations - เพิ่ม inverse relations ทั้งหมด
-  users       User[]
-  departments Department[]
-  warehouses  Warehouse[]
-  drugs       Drug[]
-  stockCards  StockCard[]
-  suppliers   Supplier[]
-  requisitions Requisition[]
+  // ================================
+  // RELATIONS (Fixed opposite fields)
+  // ================================
+  
+  // Core Relations
+  users           User[]
+  departments     Department[]
+  warehouses      Warehouse[]
+  
+  // Drug & Inventory Relations
+  drugs           Drug[]
+  stockCards      StockCard[]
+  stockCounts     StockCount[]
+  
+  // Requisition Relations
+  requisitions    Requisition[]
   requisitionTemplates RequisitionTemplate[]
-  purchaseOrders PurchaseOrder[]
-  goodsReceipts GoodsReceipt[]
-  auditLogs   AuditLog[]
-  notifications Notification[]
-  reports     Report[]
-  dashboards  Dashboard[]
-  kpiMetrics  KPIMetric[]
-  systemUsage SystemUsage[]
-  mlDataPoints MLDataPoint[]
-  forecasts   Forecast[]
-  trendAnalyses TrendAnalysis[]
-  benchmarks  Benchmark[]
-  dataAccessLogs DataAccessLog[]
+  
+  // Supplier Relations
+  purchaseOrders  PurchaseOrder[]
+  goodsReceipts   GoodsReceipt[]
+  supplierEvaluations SupplierEvaluation[]
+  
+  // Analytics Relations
+  reports         Report[]
+  dashboards      Dashboard[]
+  systemUsage     SystemUsage[]
+  
+  // Audit Relations
+  auditLogs       AuditLog[]
+  dataAccessLogs  DataAccessLog[]
   complianceChecks ComplianceCheck[]
   controlledSubstanceLogs ControlledSubstanceLog[]
-  internalAudits InternalAudit[]
+  internalAudits  InternalAudit[]
   securityIncidents SecurityIncident[]
-  notificationTemplates NotificationTemplate[]
-  alertRules  AlertRule[]
-  alertLogs   AlertLog[]
-  notificationChannels NotificationChannel[]
   
+  // Notification Relations
+  notifications   Notification[]
+  
+  // Drug Information Relations
+  drugCategories  DrugCategory[]
+  drugInteractions DrugInteraction[]
+  drugAllergens   DrugAllergen[]
+  
+  @@index([hospitalCode])
+  @@index([status])
+  @@index([type])
   @@map("hospitals")
 }
 
 enum DepartmentType {
-  CLINICAL        // แผนกคลินิก - Internal Medicine, Surgery, Pediatrics
-  SUPPORT         // แผนกสนับสนุน - Laboratory, Radiology, Pharmacy
-  CRITICAL_CARE   // แผนกวิกฤต - ICU, CCU, ER
-  OUTPATIENT      // แผนกผู้ป่วยนอก - OPD clinics, Specialty clinics
-  ADMINISTRATIVE  // แผนกบริหาร - HR, Finance, IT
-}
-
-enum DepartmentStatus {
-  ACTIVE      // ใช้งานปกติ
-  INACTIVE    // ปิดชั่วคราว
-  PLANNED     // อยู่ระหว่างการวางแผน
-  CLOSED      // ปิดถาวร
+  PHARMACY        // เภสัชกรรม
+  EMERGENCY       // ฉุกเฉิน
+  ICU             // หอผู้ป่วยวิกฤต
+  SURGERY         // ศลยกรรม
+  MEDICINE        // อายุรกรรม
+  PEDIATRICS      // กุมารเวชกรรม
+  OBSTETRICS      // สูติกรรม
+  ORTHOPEDICS     // ออร์โธปิดิกส์
+  CARDIOLOGY      // หัวใจ
+  NEUROLOGY       // ประสาท
+  ONCOLOGY        // มะเร็งวิทยา
+  PSYCHIATRY      // จิตเวช
+  RADIOLOGY       // รังสีวิทยา
+  LABORATORY      // ห้องปฏิบัติการ
+  OUTPATIENT      // ผู้ป่วยนอก
+  INPATIENT       // ผู้ป่วยใน
+  ADMINISTRATION  // บริหาร
+  OTHER           // อื่นๆ
 }
 
 model Department {
-  id             String          @id @default(uuid())
+  id              String          @id @default(uuid())
   
-  // ความสัมพันธ์กับโรงพยาบาล
-  hospitalId     String
-  hospital       Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
-  // ข้อมูลพื้นฐาน
-  name           String
-  nameEn         String?
-  shortName      String?
-  code           String          // รหัสแผนก
-  description    String?
+  // ข้อมูลแผนก
+  name            String
+  nameEn          String?         // ชื่อภาษาอังกฤษ
+  departmentCode  String          // รหัสแผนก
+  type            DepartmentType
   
-  // ประเภทและสถานะ
-  type           DepartmentType
-  status         DepartmentStatus @default(ACTIVE)
+  // โครงสร้างองค์กร
+  parentDepartmentId String?      // แผนกแม่
+  parentDepartment Department?    @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id], onDelete: SetNull)
+  childDepartments Department[]   @relation("DepartmentHierarchy")
   
-  // การจัดการทางการเงิน
-  budgetAllocation Decimal?      // งบประมาณที่ได้รับ
-  costCenter     String?         // รหัสศูนย์ต้นทุน
+  // ผู้รับผิดชอบ
+  headOfDepartmentId String?      // หัวหน้าแผนก
+  headOfDepartment User?          @relation("DepartmentHead", fields: [headOfDepartmentId], references: [id], onDelete: SetNull)
   
-  // การติดต่อ
-  location       String?         // ตำแหน่งในโรงพยาบาล
-  phoneExtension String?         // หมายเลขต่อใน
+  // ข้อมูลเพิ่มเติม
+  location        String?         // ตำแหน่งที่ตั้ง (ชั้น, อาคาร)
+  phone           String?         // เบอร์โทรศัพท์
+  email           String?         // อีเมล
   
-  // การจัดการ
-  headUserId     String?         // หัวหน้าแผนก
-  headUser       User?           @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
+  // การตั้งค่าการเบิกยา
+  allowRequisition Boolean        @default(true) // อนุญาตให้เบิกยาได้
+  requireApproval Boolean         @default(false) // ต้องการการอนุมัติ
+  maxRequisitionValue Decimal?    // มูลค่าเบิกสูงสุด
   
-  // การตั้งค่า
-  settings       Json?           // การตั้งค่าเฉพาะแผนก
-  operatingHours Json?           // เวลาทำการ
+  // งบประมาณ
+  budgetLimit     Decimal?        // วงเงินงบประมาณ
+  currentSpending Decimal         @default(0) // การใช้จ่ายปัจจุบัน
+  
+  // สถานะ
+  isActive        Boolean         @default(true)
   
   // Audit fields
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  isActive       Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   
-  // Relations - เพิ่ม inverse relations
-  users          User[]          // Staff ในแผนก
-  requisitions   Requisition[]   // ใบเบิกจากแผนก
+  // ================================
+  // RELATIONS (Fixed opposite fields)
+  // ================================
+  
+  // User Relations
+  users           User[]          // พนักงานในแผนก
+  
+  // Requisition Relations
+  requisitions    Requisition[]   @relation("RequestingDepartment")
   requisitionTemplates RequisitionTemplate[]
   
-  @@unique([hospitalId, code])
+  @@unique([hospitalId, departmentCode])
+  @@index([hospitalId])
+  @@index([type])
+  @@index([isActive])
   @@map("departments")
 }
 
 enum WarehouseType {
-  MAIN_PHARMACY   // เภสัชกรรมหลัก
-  SATELLITE       // คลังย่อย
+  CENTRAL         // คลังกลาง
+  DEPARTMENT      // คลังแผนก
   EMERGENCY       // คลังฉุกเฉิน
   CONTROLLED      // คลังยาควบคุม
   COLD_STORAGE    // ห้องเย็น
   QUARANTINE      // ห้องกักกัน
-  EXPIRED         // คลังยาหมดอายุ
-}
-
-enum WarehouseStatus {
-  ACTIVE      // ใช้งานปกติ
-  INACTIVE    // ปิดใช้งานชั่วคราว
-  MAINTENANCE // อยู่ระหว่างซ่อมบำรุง
-  FULL        // เต็ม ไม่สามารถรับเพิ่มได้
+  DISPOSAL        // ห้องทำลาย
+  RECEIVING       // ห้องรับของ
+  DISPENSING      // ห้องจ่ายยา
 }
 
 model Warehouse {
-  id           String          @id @default(uuid())
+  id              String          @id @default(uuid())
   
-  // ความสัมพันธ์กับโรงพยาบาล
-  hospitalId   String
-  hospital     Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
-  // ข้อมูลพื้นฐาน
-  name         String
-  code         String          // รหัสคลัง
-  description  String?
+  // ข้อมูลคลัง
+  name            String
+  warehouseCode   String          // รหัสคลัง
+  type            WarehouseType
   
-  // ประเภทและสถานะ
-  type         WarehouseType
-  status       WarehouseStatus @default(ACTIVE)
+  // ตำแหน่งที่ตั้ง
+  location        String          // ตำแหน่ง (อาคาร, ชั้น, ห้อง)
+  address         String?         // ที่อยู่โดยละเอียด
   
-  // ตำแหน่งและขนาด
-  location     String?         // ตำแหน่งภายในโรงพยาบาล
-  floor        String?         // ชั้น
-  room         String?         // ห้อง
-  capacity     Decimal?        // ความจุ (ลูกบาศก์เมตร)
+  // ผู้รับผิดชอบ
+  managerId       String?         // ผู้จัดการคลัง
+  manager         User?           @relation("WarehouseManager", fields: [managerId], references: [id], onDelete: SetNull)
+  
+  // ข้อมูลทางเทคนิค
+  area            Decimal?        // พื้นที่ (ตารางเมตร)
+  capacity        Decimal?        // ความจุ (หน่วยสินค้า)
   
   // การควบคุมสิ่งแวดล้อม
-  tempMin      Decimal?        // อุณหภูมิต่ำสุด (°C)
-  tempMax      Decimal?        // อุณหภูมิสูงสุด (°C)
-  humidityMin  Decimal?        // ความชื้นต่ำสุด (%)
-  humidityMax  Decimal?        // ความชื้นสูงสุด (%)
-  hasTemperatureControl Boolean @default(false)
-  hasHumidityControl Boolean @default(false)
+  hasTemperatureControl Boolean   @default(false) // ควบคุมอุณหภูมิ
+  minTemperature  Decimal?        // อุณหภูมิต่ำสุด (°C)
+  maxTemperature  Decimal?        // อุณหภูมิสูงสุด (°C)
+  hasHumidityControl Boolean      @default(false) // ควบคุมความชื้น
+  minHumidity     Decimal?        // ความชื้นต่ำสุด (%)
+  maxHumidity     Decimal?        // ความชื้นสูงสุด (%)
   
   // ความปลอดภัย
-  securityLevel String?        // ระดับความปลอดภัย
-  accessControl Json?          // การควบคุมการเข้าถึง
-  requiresApproval Boolean     @default(false)
+  securityLevel   String          @default("STANDARD") // "BASIC", "STANDARD", "HIGH", "MAXIMUM"
+  accessControl   Boolean         @default(false) // ควบคุมการเข้าถึง
+  cctv            Boolean         @default(false) // กล้องวงจรปิด
+  alarm           Boolean         @default(false) // ระบบเตือนภัย
   
-  // การจัดการ
-  managerUserId String?        // ผู้จัดการคลัง
-  managerUser   User?          @relation("WarehouseManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  // การตั้งค่าการดำเนินงาน
+  allowReceiving  Boolean         @default(true) // อนุญาตให้รับของ
+  allowDispensing Boolean         @default(true) // อนุญาตให้จ่ายของ
+  allowTransfer   Boolean         @default(true) // อนุญาตให้โอน
+  requireApproval Boolean         @default(false) // ต้องการการอนุมัติ
   
-  // การตั้งค่า
-  settings      Json?          // การตั้งค่าเฉพาะคลัง
+  // สถานะ
+  isActive        Boolean         @default(true)
+  isMaintenance   Boolean         @default(false) // อยู่ระหว่างบำรุงรักษา
+  
+  // การติดตาม
+  lastStockCount  DateTime?       // การนับสต็อกครั้งล่าสุด
+  totalValue      Decimal         @default(0) // มูลค่าสินค้ารวม
+  totalItems      Int             @default(0) // จำนวนรายการสินค้า
+  
+  // หมายเหตุ
+  description     String?
+  notes           String?
   
   // Audit fields
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  isActive      Boolean        @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   
-  // Relations - เพิ่ม inverse relations ทั้งหมด
-  stockCards    StockCard[]
-  transactions  StockTransaction[]
-  transfersFrom StockTransaction[] @relation("TransferFrom")
-  transfersTo   StockTransaction[] @relation("TransferTo")
-  stockCounts   StockCount[]
-  monitoringLogs TemperatureLog[]
+  // ================================
+  // RELATIONS (Fixed opposite fields)
+  // ================================
   
-  @@unique([hospitalId, code])
+  // Stock Relations
+  stockCards      StockCard[]
+  stockCounts     StockCount[]
+  stockTransactions StockTransaction[]
+  
+  // Transfer Relations  
+  transfersOut    StockTransaction[] @relation("TransferFrom")
+  transfersIn     StockTransaction[] @relation("TransferTo")
+  
+  // Requisition Relations
+  requisitions    Requisition[]   @relation("FulfillmentWarehouse")
+  
+  @@unique([hospitalId, warehouseCode])
+  @@index([hospitalId])
+  @@index([type])
+  @@index([isActive])
   @@map("warehouses")
 }
 
-// การติดตามอุณหภูมิและความชื้น
-model TemperatureLog {
-  id          String    @id @default(uuid())
+model Drug {
+  id              String          @id @default(uuid())
   
   // ความสัมพันธ์
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  hospitalId      String
+  hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
-  // ข้อมูลการวัด
-  temperature Decimal   // อุณหภูมิ (°C)
-  humidity    Decimal?  // ความชื้น (%)
+  // ข้อมูลยาพื้นฐาน
+  hospitalDrugCode String         // รหัสยาของโรงพยาบาล
+  name            String          // ชื่อยา
+  genericName     String?         // ชื่อสามัญ
+  brandName       String?         // ชื่อการค้า
   
-  // สถานะ
-  isWithinRange Boolean  // อยู่ในช่วงที่กำหนดหรือไม่
-  alertTriggered Boolean @default(false) // มีการแจ้งเตือนหรือไม่
+  // รูปแบบยา
+  dosageForm      String          // รูปแบบ (tablet, capsule, injection, etc.)
+  strength        String?         // ความแรง (500mg, 10mg/ml, etc.)
+  unit            String          // หน่วยนับ (tablet, vial, bottle, etc.)
   
-  // อุปกรณ์วัด
-  deviceId    String?   // รหัสอุปกรณ์วัด
-  deviceType  String?   // ประเภทอุปกรณ์
+  // การจำแนกประเภท
+  therapeuticClass String?        // หมวดยาตามการรักษา
+  pharmacologicalClass String?   // หมวดยาตามเภสัชวิทยา
+  atcCode         String?         // รหัส ATC
+  
+  // ผู้ผลิต
+  manufacturer    String?         // บริษัทผู้ผลิต
+  countryOfOrigin String?         // ประเทศผู้ผลิต
+  registrationNo  String?         // เลขทะเบียนตำรับยา
+  
+  // การควบคุม
+  isControlled    Boolean         @default(false) // ยาควบคุม
+  isNarcotic      Boolean         @default(false) // ยาเสพติด
+  isPsychotropic  Boolean         @default(false) // ยาจิตเวช
+  isDangerous     Boolean         @default(false) // ยาอันตราย
+  isHazardous     Boolean         @default(false) // ยาอันตรายต่อสิ่งแวดล้อม
+  
+  // การจัดเก็บ
+  storageCondition String?        // เงื่อนไขการเก็บ
+  storageTemperature String?      // อุณหภูมิการเก็บ
+  requiresColdChain Boolean       @default(false) // ต้องควบคุมห่วงโซ่ความเย็น
+  lightSensitive  Boolean         @default(false) // ไวต่อแสง
+  moistureSensitive Boolean       @default(false) // ไวต่อความชื้น
+  
+  // ข้อมูลทางเศรษฐกิจ
+  unitCost        Decimal?        // ต้นทุนต่อหน่วย
+  sellingPrice    Decimal?        // ราคาขาย
+  reimbursementPrice Decimal?     // ราคาที่เบิกได้
+  averageCost     Decimal?        // ต้นทุนเฉลี่ย
+  
+  // การใช้งาน
+  isActive        Boolean         @default(true)
+  isFormulary     Boolean         @default(false) // อยู่ในบัญชียาหลัก
+  isEmergencyDrug Boolean         @default(false) // ยาฉุกเฉิน
+  isHighAlert     Boolean         @default(false) // ยาเสี่ยงสูง
+  
+  // การจำหน่าย
+  requiresPrescription Boolean    @default(true) // ต้องมีใบสั่งแพทย์
+  maxDispenseQty  Int?            // จำนวนจ่ายสูงสุดต่อครั้ง
+  maxDailyDose    String?         // ขนาดรับประทานสูงสุดต่อวัน
+  
+  // ข้อมูลบรรจุภัณฑ์
+  packageSize     Int?            // ขนาดบรรจุ
+  packageUnit     String?         // หน่วยบรรจุ
+  packageType     String?         // ประเภทบรรจุภัณฑ์
+  
+  // วันที่สำคัญ
+  registrationDate DateTime?      // วันที่ขึ้นทะเบียน
+  approvalDate    DateTime?       // วันที่อนุมัติใช้
+  discontinuedDate DateTime?      // วันที่หยุดใช้
+  lastReviewDate  DateTime?       // วันที่ทบทวนล่าสุด
+  nextReviewDate  DateTime?       // วันที่ทบทวนครั้งต่อไป
+  
+  // หมายเหตุและคำแนะนำ
+  indications     String?         // ข้อบ่งใช้
+  contraindications String?       // ข้อห้ามใช้
+  sideEffects     String?         // ผลข้างเคียง
+  interactions    String?         // ปฏิกิริยาระหว่างยา
+  dosageInstructions String?      // วิธีใช้
+  precautions     String?         // ข้อควรระวัง
+  warnings        String?         // คำเตือน
+  notes           String?         // หมายเหตุเพิ่มเติม
   
   // การติดตาม
-  recordedAt  DateTime  @default(now())
+  monthlyUsage    Int             @default(0) // การใช้เฉลี่ยต่อเดือน
+  yearlyUsage     Int             @default(0) // การใช้ต่อปี
+  lastUsageUpdate DateTime?       // อัพเดทการใช้ล่าสุด
   
-  @@index([warehouseId, recordedAt])
-  @@map("temperature_logs")
+  // คะแนนและการประเมิน
+  popularityScore Decimal?        // คะแนนความนิยม
+  criticalityScore Decimal?       // คะแนนความสำคัญ
+  safetyScore     Decimal?        // คะแนนความปลอดภัย
+  
+  // ข้อมูล Barcode และ QR Code
+  barcode         String?         // บาร์โค้ด
+  qrCode          String?         // QR โค้ด
+  
+  // Audit fields
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // ================================
+  // RELATIONS (Fixed opposite fields)
+  // ================================
+  
+  // Stock Relations
+  stockCards      StockCard[]
+  stockTransactions StockTransaction[]
+  
+  // Requisition Relations
+  requisitionItems RequisitionItem[]
+  
+  // Supplier Relations
+  supplierProducts SupplierProduct[]
+  purchaseOrderItems PurchaseOrderItem[]
+  goodsReceiptItems GoodsReceiptItem[]
+  
+  // Compliance Relations
+  controlledSubstanceLogs ControlledSubstanceLog[]
+  
+  // Drug Information Relations
+  drug1Interactions DrugInteraction[] @relation("Drug1Interactions")
+  drug2Interactions DrugInteraction[] @relation("Drug2Interactions")
+  allergens         DrugAllergen[]    @relation("DrugAllergens")
+  
+  @@unique([hospitalId, hospitalDrugCode])
+  @@index([hospitalId])
+  @@index([genericName])
+  @@index([isActive])
+  @@index([isControlled])
+  @@index([isFormulary])
+  @@index([barcode])
+  @@map("drugs")
+}
+
+// =============================================
+// DRUG CATEGORIES AND CLASSIFICATIONS
+// =============================================
+
+model DrugCategory {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลหมวดหมู่
+  categoryCode    String      // รหัสหมวดหมู่
+  categoryName    String      // ชื่อหมวดหมู่
+  description     String?     // คำอธิบาย
+  
+  // โครงสร้างหมวดหมู่
+  parentCategoryId String?    // หมวดหมู่แม่
+  parentCategory  DrugCategory? @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id], onDelete: SetNull)
+  childCategories DrugCategory[] @relation("CategoryHierarchy")
+  
+  // การจัดเรียง
+  sortOrder       Int         @default(0)
+  level           Int         @default(0) // ระดับของหมวดหมู่
+  
+  // สถานะ
+  isActive        Boolean     @default(true)
+  
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@unique([hospitalId, categoryCode])
+  @@index([hospitalId])
+  @@index([isActive])
+  @@map("drug_categories")
+}
+
+model DrugInteraction {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  drug1Id         String      // ยาตัวที่ 1
+  drug1           Drug        @relation("Drug1Interactions", fields: [drug1Id], references: [id], onDelete: Cascade)
+  drug2Id         String      // ยาตัวที่ 2
+  drug2           Drug        @relation("Drug2Interactions", fields: [drug2Id], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลปฏิกิริยา
+  interactionType String      // "CONTRAINDICATED", "MAJOR", "MODERATE", "MINOR"
+  severity        String      // "CRITICAL", "HIGH", "MEDIUM", "LOW"
+  
+  // รายละเอียด
+  description     String      // คำอธิบายปฏิกิริยา
+  mechanism       String?     // กลไกการเกิดปฏิกิริยา
+  clinicalEffect  String?     // ผลทางคลินิก
+  management      String?     // การจัดการ
+  
+  // แหล่งข้อมูล
+  source          String?     // แหล่งข้อมูล
+  referenceUrl    String?     // URL อ้างอิง
+  evidenceLevel   String?     // ระดับหลักฐาน
+  
+  // สถานะ
+  isActive        Boolean     @default(true)
+  
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@unique([hospitalId, drug1Id, drug2Id])
+  @@index([hospitalId])
+  @@index([drug1Id])
+  @@index([drug2Id])
+  @@index([severity])
+  @@map("drug_interactions")
+}
+
+model DrugAllergen {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  drugId          String
+  drug            Drug        @relation("DrugAllergens", fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลสารก่อภูมิแพ้
+  allergenName    String      // ชื่อสารก่อภูมิแพ้
+  allergenType    String      // ประเภท: "ACTIVE_INGREDIENT", "EXCIPIENT", "PRESERVATIVE", "DYE"
+  
+  // ความรุนแรง
+  severity        String      // "MILD", "MODERATE", "SEVERE", "LIFE_THREATENING"
+  
+  // อาการ
+  symptoms        String?     // อาการที่อาจเกิดขึ้น
+  
+  // การจัดการ
+  management      String?     // วิธีการจัดการ
+  alternatives    String?     // ยาทดแทน
+  
+  // สถานะ
+  isActive        Boolean     @default(true)
+  
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@unique([hospitalId, drugId, allergenName])
+  @@index([hospitalId])
+  @@index([drugId])
+  @@index([allergenName])
+  @@map("drug_allergens")
 }
