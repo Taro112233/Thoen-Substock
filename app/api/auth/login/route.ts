@@ -1,11 +1,17 @@
-// app/api/auth/login/route.ts - Updated Login API
+// app/api/auth/login/route.ts - Fixed with JWT & Cookie
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { SignJWT } from 'jose';
 import { verifyPassword } from "@/lib/password-utils";
 import { loginSchema } from "@/lib/validations/auth";
 import { ZodError } from "zod";
 
 const prisma = new PrismaClient();
+
+// JWT Secret
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || 'your-secret-key'
+);
 
 export async function POST(request: NextRequest) {
   try {
@@ -84,17 +90,22 @@ export async function POST(request: NextRequest) {
     
     const isValidPassword = await verifyPassword(validatedData.password, user.password);
     if (!isValidPassword) {
-      // Log failed login attempt
-      await prisma.loginAttempt.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-          userAgent: request.headers.get('user-agent') || 'unknown',
-          success: false,
-          failureReason: 'INVALID_PASSWORD'
-        }
-      });
+      // Log failed login attempt (if LoginAttempt model exists)
+      try {
+        await prisma.loginAttempt.create({
+          data: {
+            userId: user.id,
+            email: user.email,
+            ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+            userAgent: request.headers.get('user-agent') || 'unknown',
+            success: false,
+            failureReason: 'INVALID_PASSWORD'
+          }
+        });
+      } catch (e) {
+        // LoginAttempt model might not exist, skip logging
+        console.log('Login attempt logging skipped (model not found)');
+      }
       
       return NextResponse.json(
         { error: "รหัสผ่านไม่ถูกต้อง" },
@@ -139,6 +150,22 @@ export async function POST(request: NextRequest) {
       });
     }
     
+    // สร้าง JWT Token
+    const token = await new SignJWT({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      hospitalId: user.hospitalId,
+      departmentId: user.departmentId,
+    })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('24h')
+    .setIssuedAt()
+    .sign(JWT_SECRET);
+    
+    console.log('🔍 [DEBUG] JWT Token created:', token.substring(0, 50) + '...');
+    
     // อัปเดตข้อมูลการเข้าสู่ระบบ
     await prisma.user.update({
       where: { id: user.id },
@@ -149,20 +176,26 @@ export async function POST(request: NextRequest) {
       }
     });
     
-    // Log successful login
-    await prisma.loginAttempt.create({
-      data: {
-        userId: user.id,
-        email: user.email,
-        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown',
-        success: true
-      }
-    });
+    // Log successful login (if LoginAttempt model exists)
+    try {
+      await prisma.loginAttempt.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+          userAgent: request.headers.get('user-agent') || 'unknown',
+          success: true
+        }
+      });
+    } catch (e) {
+      // LoginAttempt model might not exist, skip logging
+      console.log('Login attempt logging skipped (model not found)');
+    }
     
     console.log('🔍 [DEBUG] Login successful for user:', user.id);
     
-    return NextResponse.json({
+    // สร้าง Response พร้อม Set Cookie
+    const response = NextResponse.json({
       success: true,
       message: "เข้าสู่ระบบสำเร็จ",
       user: {
@@ -175,12 +208,27 @@ export async function POST(request: NextRequest) {
         role: user.role,
         status: user.status,
         isProfileComplete: user.isProfileComplete,
+        hospitalId: user.hospitalId,
+        departmentId: user.departmentId,
         hospital: user.hospital,
         department: user.department
       },
       needsApproval: false,
       needsProfileCompletion: false
     });
+    
+    // Set JWT Cookie
+    response.cookies.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/'
+    });
+    
+    console.log('🔍 [DEBUG] Cookie set successfully');
+    
+    return response;
     
   } catch (error) {
     console.error("Login error:", error);
