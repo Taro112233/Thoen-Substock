@@ -1,7 +1,7 @@
-// ===== 1. lib/validations/auth.ts - แก้ไข schema =====
+// lib/validations/auth.ts - Updated Profile Completion Schema
 import { z } from "zod";
 
-// Registration Schema - รวม hospitalId เข้าไปในนี้
+// Registration Schema
 export const registerSchema = z.object({
   username: z
     .string()
@@ -46,7 +46,7 @@ export const loginSchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
-// Profile Completion Schema
+// Profile Completion Schema - Fixed Department ID validation
 export const profileCompletionSchema = z.object({
   firstName: z
     .string()
@@ -60,7 +60,8 @@ export const profileCompletionSchema = z.object({
   
   phoneNumber: z
     .string()
-    .regex(/^[0-9]{10}$/, "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก"),
+    .regex(/^[0-9]{10}$/, "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก")
+    .min(1, "กรุณากรอกเบอร์โทรศัพท์"),
   
   employeeId: z
     .string()
@@ -72,9 +73,11 @@ export const profileCompletionSchema = z.object({
     .min(1, "กรุณากรอกตำแหน่ง")
     .max(100, "ตำแหน่งต้องไม่เกิน 100 ตัวอักษร"),
   
+  // Department is optional - allow empty string
   departmentId: z
     .string()
-    .optional(),
+    .optional()
+    .or(z.literal("")), // Allow empty string for optional field
 });
 
 // Type exports
