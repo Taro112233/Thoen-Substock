@@ -1,11 +1,7 @@
-// app/dashboard/page.tsx
-import { Suspense } from "react";
-import ProtectedLayout from "@/app/components/ProtectedLayout";
-import { getCurrentUser } from "@/lib/auth-utils";
+// app/dashboard/page.tsx - แก้ไข client component
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { 
   User, 
   Building2, 
@@ -16,50 +12,74 @@ import {
   Package,
   FileText,
   Users,
-  BarChart
+  BarChart,
+  LogOut,
+  Bell,
+  Home
 } from "lucide-react";
 import { translateUserRole, translateUserStatus } from "@/lib/auth-utils";
+import { Metadata } from "next";
+import LogoutButtonClient from "./components/LogoutButton";
 
-export default function DashboardPage() {
+export const metadata: Metadata = {
+  title: "แดชบอร์ด | ระบบจัดการสต็อกยา",
+  description: "แดชบอร์ดหลักของระบบจัดการสต็อกยาโรงพยาบาล",
+};
+
+export default async function DashboardPage() {
+  // Mock user data for testing
+  const user = {
+    id: "1",
+    name: "ทดสอบ ระบบ",
+    firstName: "ทดสอบ",
+    email: "test@example.com",
+    role: "STAFF_NURSE",
+    status: "ACTIVE",
+    loginCount: 5,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    hospital: { name: "โรงพยาบาลทดสอบ" },
+    department: { name: "แผนกเภสัชกรรม" },
+  };
+
   return (
-    <ProtectedLayout>
-      <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardContent />
-      </Suspense>
-    </ProtectedLayout>
-  );
-}
-
-async function DashboardContent() {
-  const user = await getCurrentUser();
-  
-  if (!user) {
-    return null; // จะถูก redirect ไปที่ login
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">
+            <div className="flex items-center space-x-4">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <Home className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">
                 ระบบจัดการสต็อกยาโรงพยาบาล
               </h1>
             </div>
+            
             <div className="flex items-center space-x-4">
-              <Badge variant="secondary">
+              <Button variant="ghost" size="sm" className="relative">
+                <Bell className="h-4 w-4" />
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+              </Button>
+              
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
                 {translateUserRole(user.role)}
               </Badge>
+              
               <div className="flex items-center space-x-2">
-                <User className="h-4 w-4 text-gray-500" />
-                <span className="text-sm text-gray-700">{user.name}</span>
+                <div className="w-8 h-8 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">{user.name}</span>
               </div>
+              
               <Button variant="outline" size="sm">
                 <Settings className="h-4 w-4 mr-1" />
                 ตั้งค่า
               </Button>
+              
+              <LogoutButtonClient />
             </div>
           </div>
         </div>
@@ -69,40 +89,50 @@ async function DashboardContent() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            ยินดีต้อนรับ, {user.firstName || user.name}
-          </h2>
-          <p className="text-gray-600">
-            ระบบจัดการสต็อกยา - {user.hospital.name}
-            {user.department && ` / ${user.department.name}`}
-          </p>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              ยินดีต้อนรับ, {user.firstName || user.name} 👋
+            </h2>
+            <p className="text-gray-600 text-lg">
+              ระบบจัดการสต็อกยา - {user.hospital.name}
+              {user.department && (
+                <span className="text-blue-600 font-medium">
+                  {` / ${user.department.name}`}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
 
         {/* Status Card */}
         <div className="mb-8">
-          <Card className="bg-gradient-to-r from-green-50 to-blue-50">
+          <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-sm">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">
                     สถานะบัญชี
                   </h3>
-                  <div className="flex items-center space-x-4">
-                    <Badge variant="default" className="bg-green-500">
-                      <Shield className="h-3 w-3 mr-1" />
+                  <div className="flex items-center space-x-6">
+                    <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                      <Shield className="h-3 w-3 mr-2" />
                       {translateUserStatus(user.status)}
                     </Badge>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-600 flex items-center">
+                      <Activity className="h-4 w-4 mr-1" />
                       เข้าสู่ระบบครั้งที่ {user.loginCount}
                     </span>
                     {user.lastLoginAt && (
-                      <span className="text-sm text-gray-600">
-                        เข้าสู่ระบบล่าสุด: {new Date(user.lastLoginAt).toLocaleDateString('th-TH')}
+                      <span className="text-sm text-gray-600 flex items-center">
+                        <Calendar className="h-4 w-4 mr-1" />
+                        {new Date(user.lastLoginAt).toLocaleDateString('th-TH')}
                       </span>
                     )}
                   </div>
                 </div>
-                <Activity className="h-12 w-12 text-green-500" />
+                <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center">
+                  <Activity className="h-8 w-8 text-green-600" />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -116,6 +146,8 @@ async function DashboardContent() {
             icon={<Package className="h-6 w-6" />}
             href="/inventory"
             color="blue"
+            count="1,234"
+            subtitle="รายการยา"
           />
           <QuickActionCard
             title="เบิกจ่ายยา"
@@ -123,6 +155,8 @@ async function DashboardContent() {
             icon={<FileText className="h-6 w-6" />}
             href="/requisitions"
             color="green"
+            count="56"
+            subtitle="รอดำเนินการ"
           />
           <QuickActionCard
             title="รายงาน"
@@ -130,77 +164,90 @@ async function DashboardContent() {
             icon={<BarChart className="h-6 w-6" />}
             href="/reports"
             color="purple"
+            count="12"
+            subtitle="รายงานใหม่"
           />
           <QuickActionCard
             title="จัดการผู้ใช้"
             description="อนุมัติและจัดการบัญชี"
             icon={<Users className="h-6 w-6" />}
-            href="/users"
+            href="/admin/users"
             color="orange"
-            requiresAdmin={true}
-            userRole={user.role}
+            count="8"
+            subtitle="รออนุมัติ"
           />
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity & System Info */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
+          <Card className="shadow-sm border border-gray-200">
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <Activity className="h-5 w-5 mr-2" />
+              <CardTitle className="flex items-center text-lg">
+                <Activity className="h-5 w-5 mr-3 text-blue-600" />
                 กิจกรรมล่าสุด
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">เข้าสู่ระบบ</p>
-                    <p className="text-xs text-gray-500">
-                      {user.lastLoginAt ? 
-                        new Date(user.lastLoginAt).toLocaleString('th-TH') : 
-                        'ไม่มีข้อมูล'
-                      }
-                    </p>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                      <LogOut className="w-4 h-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">เข้าสู่ระบบ</p>
+                      <p className="text-xs text-gray-500">
+                        {user.lastLoginAt ? 
+                          new Date(user.lastLoginAt).toLocaleString('th-TH') : 
+                          'ไม่มีข้อมูล'
+                        }
+                      </p>
+                    </div>
                   </div>
-                  <Badge variant="outline">สำเร็จ</Badge>
+                  <Badge variant="outline" className="text-green-600 border-green-200">
+                    สำเร็จ
+                  </Badge>
                 </div>
-                <div className="text-center text-sm text-gray-500 py-4">
-                  ไม่มีกิจกรรมอื่นๆ
+                
+                <div className="text-center text-sm text-gray-500 py-8">
+                  <Activity className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                  <p>ไม่มีกิจกรรมอื่นๆ</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-sm border border-gray-200">
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <Calendar className="h-5 w-5 mr-2" />
+              <CardTitle className="flex items-center text-lg">
+                <Calendar className="h-5 w-5 mr-3 text-purple-600" />
                 ข้อมูลระบบ
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">โรงพยาบาล:</span>
-                  <span className="text-sm font-medium">{user.hospital.name}</span>
-                </div>
+                <InfoRow 
+                  icon={<Building2 className="w-4 h-4 text-gray-500" />}
+                  label="โรงพยาบาล"
+                  value={user.hospital.name}
+                />
                 {user.department && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">แผนก:</span>
-                    <span className="text-sm font-medium">{user.department.name}</span>
-                  </div>
+                  <InfoRow 
+                    icon={<Users className="w-4 h-4 text-gray-500" />}
+                    label="แผนก"
+                    value={user.department.name}
+                  />
                 )}
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">บทบาท:</span>
-                  <span className="text-sm font-medium">{translateUserRole(user.role)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">สมัครสมาชิกเมื่อ:</span>
-                  <span className="text-sm font-medium">
-                    {new Date(user.createdAt).toLocaleDateString('th-TH')}
-                  </span>
-                </div>
+                <InfoRow 
+                  icon={<Shield className="w-4 h-4 text-gray-500" />}
+                  label="บทบาท"
+                  value={translateUserRole(user.role)}
+                />
+                <InfoRow 
+                  icon={<Calendar className="w-4 h-4 text-gray-500" />}
+                  label="สมัครสมาชิกเมื่อ"
+                  value={new Date(user.createdAt).toLocaleDateString('th-TH')}
+                />
               </div>
             </CardContent>
           </Card>
@@ -213,11 +260,11 @@ async function DashboardContent() {
 interface QuickActionCardProps {
   title: string;
   description: string;
-  icon: ReactNode;
+  icon: React.ReactNode;
   href: string;
   color: 'blue' | 'green' | 'purple' | 'orange';
-  requiresAdmin?: boolean;
-  userRole?: string;
+  count?: string;
+  subtitle?: string;
 }
 
 function QuickActionCard({ 
@@ -226,72 +273,55 @@ function QuickActionCard({
   icon, 
   href, 
   color,
-  requiresAdmin = false,
-  userRole 
+  count,
+  subtitle
 }: QuickActionCardProps) {
-  // ตรวจสอบสิทธิ์สำหรับการ์ดที่ต้องการ admin
-  if (requiresAdmin && userRole) {
-    const isAdmin = ['HOSPITAL_ADMIN', 'PHARMACY_MANAGER'].includes(userRole);
-    if (!isAdmin) {
-      return null;
-    }
-  }
-
   const colorClasses = {
-    blue: 'border-blue-200 hover:border-blue-300 bg-blue-50 text-blue-600',
-    green: 'border-green-200 hover:border-green-300 bg-green-50 text-green-600',
-    purple: 'border-purple-200 hover:border-purple-300 bg-purple-50 text-purple-600',
-    orange: 'border-orange-200 hover:border-orange-300 bg-orange-50 text-orange-600',
+    blue: 'border-blue-200 hover:border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-600',
+    green: 'border-green-200 hover:border-green-300 bg-green-50 hover:bg-green-100 text-green-600',
+    purple: 'border-purple-200 hover:border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-600',
+    orange: 'border-orange-200 hover:border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-600',
   };
 
   return (
-    <Card className={`cursor-pointer transition-all duration-200 ${colorClasses[color]} hover:shadow-md`}>
+    <Card className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${colorClasses[color]}`}>
       <CardContent className="p-6">
-        <div className="flex items-center space-x-4">
-          <div className="p-2 rounded-lg bg-white">
+        <div className="flex items-start justify-between mb-4">
+          <div className="p-3 rounded-xl bg-white shadow-sm">
             {icon}
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">{title}</h3>
-            <p className="text-sm text-gray-600">{description}</p>
-          </div>
+          {count && (
+            <div className="text-right">
+              <div className="text-2xl font-bold text-gray-900">{count}</div>
+              {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
+            </div>
+          )}
+        </div>
+        <div>
+          <h3 className="font-bold text-gray-900 mb-1">{title}</h3>
+          <p className="text-sm text-gray-600">{description}</p>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function DashboardSkeleton() {
+function InfoRow({ 
+  icon, 
+  label, 
+  value 
+}: { 
+  icon: React.ReactNode; 
+  label: string; 
+  value: string; 
+}) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Skeleton className="h-6 w-48" />
-            <div className="flex items-center space-x-4">
-              <Skeleton className="h-6 w-20" />
-              <Skeleton className="h-6 w-24" />
-              <Skeleton className="h-8 w-16" />
-            </div>
-          </div>
-        </div>
-      </header>
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-6">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full" />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-64 w-full" />
-          </div>
-        </div>
-      </main>
+    <div className="flex items-center justify-between py-2">
+      <div className="flex items-center space-x-3">
+        {icon}
+        <span className="text-sm text-gray-600">{label}:</span>
+      </div>
+      <span className="text-sm font-medium text-gray-900">{value}</span>
     </div>
   );
 }

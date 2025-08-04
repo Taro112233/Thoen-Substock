@@ -1,106 +1,36 @@
-// lib/auth-utils.ts
-import { auth } from "@/app/utils/auth";
-import { headers } from "next/headers";
+// lib/auth-utils.ts - ปิดชั่วคราวเพื่อทดสอบ UI
 import { redirect } from "next/navigation";
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
-
-// ดึงข้อมูล session ปัจจุบัน
+// Mock functions for testing UI
 export async function getCurrentSession() {
-  try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
-    return session;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-// ดึงข้อมูลผู้ใช้ปัจจุบัน
 export async function getCurrentUser() {
-  const session = await getCurrentSession();
-  if (!session?.user) return null;
-  
-  // ดึงข้อมูลผู้ใช้เพิ่มเติมจาก database
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: {
-      hospital: true,
-      department: true,
-    },
-  });
-  
-  return user;
+  return null;
 }
 
-// ตรวจสอบว่าผู้ใช้ล็อกอินแล้วหรือไม่
 export async function requireAuth() {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/auth/login");
-  }
-  return user;
+  redirect("/auth/login");
 }
 
-// ตรวจสอบสถานะผู้ใช้และ redirect ตามความเหมาะสม
 export async function checkUserStatusAndRedirect() {
-  const user = await getCurrentUser();
-  
-  if (!user) {
-    redirect("/auth/login");
-  }
-  
-  // ถ้าข้อมูลส่วนตัวยังไม่สมบูรณ์
-  if (!user.isProfileComplete) {
-    redirect("/auth/register/profile");
-  }
-  
-  // ถ้าสถานะยังรอการอนุมัติ
-  if (user.status === "PENDING") {
-    redirect("/auth/pending-approval");
-  }
-  
-  // ถ้าบัญชีถูกระงับ
-  if (user.status === "SUSPENDED" || user.status === "INACTIVE") {
-    redirect("/auth/suspended");
-  }
-  
-  return user;
+  redirect("/auth/login");
 }
 
-// ตรวจสอบสิทธิ์ตามบทบาท
 export function hasRole(user: any, roles: string | string[]) {
-  const allowedRoles = Array.isArray(roles) ? roles : [roles];
-  return allowedRoles.includes(user.role);
+  return false;
 }
 
-// ตรวจสอบว่าเป็น admin หรือไม่
 export function isAdmin(user: any) {
-  return hasRole(user, ["HOSPITAL_ADMIN", "PHARMACY_MANAGER"]);
+  return false;
 }
 
-// ตรวจสอบสิทธิ์ในการอนุมัติผู้ใช้
 export function canApproveUsers(user: any) {
-  return hasRole(user, [
-    "HOSPITAL_ADMIN", 
-    "PHARMACY_MANAGER", 
-    "SENIOR_PHARMACIST"
-  ]);
+  return false;
 }
 
-// สร้าง role options สำหรับ form
-export const roleOptions = [
-  { value: "PHARMACY_MANAGER", label: "ผู้จัดการเภสัชกรรม" },
-  { value: "SENIOR_PHARMACIST", label: "เภสัชกรอาวุโส" },
-  { value: "STAFF_PHARMACIST", label: "เภสัชกรประจำ" },
-  { value: "DEPARTMENT_HEAD", label: "หัวหน้าแผนก" },
-  { value: "STAFF_NURSE", label: "พยาบาลประจำ" },
-  { value: "PHARMACY_TECHNICIAN", label: "เทคนิคเภสัชกรรม" },
-];
-
-// สร้าง position options สำหรับ profile form
+// Position options สำหรับ form
 export const positionOptions = [
   { value: "PHARMACIST", label: "เภสัชกร" },
   { value: "NURSE", label: "พยาบาล" },
@@ -108,6 +38,16 @@ export const positionOptions = [
   { value: "MANAGER", label: "ผู้จัดการ" },
   { value: "HEAD", label: "หัวหน้าแผนก" },
   { value: "ADMIN", label: "ผู้ดูแลระบบ" },
+];
+
+// Role options สำหรับ form
+export const roleOptions = [
+  { value: "PHARMACY_MANAGER", label: "ผู้จัดการเภสัชกรรม" },
+  { value: "SENIOR_PHARMACIST", label: "เภสัชกรอาวุโส" },
+  { value: "STAFF_PHARMACIST", label: "เภสัชกรประจำ" },
+  { value: "DEPARTMENT_HEAD", label: "หัวหน้าแผนก" },
+  { value: "STAFF_NURSE", label: "พยาบาลประจำ" },
+  { value: "PHARMACY_TECHNICIAN", label: "เทคนิคเภสัชกรรม" },
 ];
 
 // Helper สำหรับแปลงสถานะเป็นภาษาไทย
