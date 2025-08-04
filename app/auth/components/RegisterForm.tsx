@@ -1,58 +1,177 @@
-// app/auth/components/RegisterForm.tsx
+// app/auth/components/RegisterForm.tsx - Updated to handle hospitalCode
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
+import { useForm } from "react-hook-form";
+import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, Loader2, User, Mail } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, User, Mail, Building2 } from "lucide-react";
+
+interface Hospital {
+  id: string;
+  name: string;
+  hospitalCode: string; // Fixed: use hospitalCode instead of code
+  status?: string;
+  type?: string;
+}
 
 export default function RegisterForm() {
-  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const [success, setSuccess] = useState<string | null>(null);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [loadingHospitals, setLoadingHospitals] = useState(true);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<RegisterFormData>({
+  const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
+    mode: "onChange",
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      hospitalId: "",
+    },
   });
 
-  const onSubmit = async (data: RegisterFormData) => {
+  const { register, handleSubmit, setValue, watch, trigger, formState: { errors, isValid } } = form;
+
+  // Watch all values for debugging
+  const watchedValues = watch();
+  const selectedHospitalId = watch("hospitalId");
+
+  // Load hospitals
+  useEffect(() => {
+    const fetchHospitals = async () => {
+      try {
+        console.log('🔄 Loading hospitals...');
+        const response = await fetch("/api/hospitals");
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Hospitals response:', data);
+          
+          // Handle response as array directly
+          const hospitalsArray = Array.isArray(data) ? data : [];
+          setHospitals(hospitalsArray);
+          
+          if (hospitalsArray.length === 0) {
+            setError("ไม่พบข้อมูลโรงพยาบาลที่สามารถใช้งานได้");
+          }
+        } else {
+          console.error('❌ Failed to load hospitals:', response.status);
+          setError("ไม่สามารถโหลดรายการโรงพยาบาลได้");
+        }
+      } catch (error) {
+        console.error("❌ Hospital fetch error:", error);
+        setError("เกิดข้อผิดพลาดในการโหลดข้อมูลโรงพยาบาล");
+      } finally {
+        setLoadingHospitals(false);
+      }
+    };
+
+    fetchHospitals();
+  }, []);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Form Debug:', {
+      values: watchedValues,
+      errors: Object.keys(errors),
+      isValid,
+      hospitalsCount: hospitals.length,
+      isLoading,
+      loadingHospitals,
+    });
+  }, [watchedValues, errors, isValid, hospitals.length, isLoading, loadingHospitals]);
+
+  const onSubmit = async (data: RegisterInput) => {
+    console.log('🚀 Submitting registration:', {
+      ...data,
+      password: '[HIDDEN]',
+      confirmPassword: '[HIDDEN]'
+    });
+
     setIsLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(data),
       });
 
       const result = await response.json();
+      console.log('📥 Registration response:', result);
 
       if (response.ok) {
-        // สมัครสำเร็จ ไปหน้ากรอกข้อมูลส่วนตัว
-        router.push("/auth/register/profile");
+        setSuccess(result.message || "สมัครสมาชิกสำเร็จ!");
+        
+        // Redirect after success
+        setTimeout(() => {
+          if (result.nextStep === "profile-completion") {
+            router.push(`/auth/profile-completion?userId=${result.userId}`);
+          } else {
+            router.push("/auth/login?message=registration-success");
+          }
+        }, 2000);
       } else {
         setError(result.error || "เกิดข้อผิดพลาดในการสมัครสมาชิก");
+        
+        if (result.details) {
+          console.log('🔍 Validation errors:', result.details);
+        }
       }
     } catch (err) {
+      console.error('❌ Registration error:', err);
       setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Handle hospital selection properly
+  const handleHospitalSelect = async (value: string) => {
+    console.log('🏥 Hospital selected:', value);
+    setValue("hospitalId", value);
+    await trigger("hospitalId"); // Trigger validation
+  };
+
+  // Calculate if form can be submitted
+  const canSubmit = !isLoading && 
+                   !loadingHospitals && 
+                   hospitals.length > 0 && 
+                   isValid && 
+                   selectedHospitalId;
+
+  if (loadingHospitals) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
+        <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="flex items-center space-x-4">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+              <span className="text-gray-600">กำลังโหลดข้อมูล...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
@@ -64,24 +183,80 @@ export default function RegisterForm() {
             </div>
             <div className="text-center">
               <CardTitle className="text-2xl font-bold text-gray-900">สมัครสมาชิก</CardTitle>
-              <p className="text-sm text-gray-600 mt-2">
+              <CardDescription className="text-sm text-gray-600 mt-2">
                 สร้างบัญชีใหม่เพื่อเข้าใช้งานระบบ
-              </p>
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
         
         <CardContent className="space-y-6">
+          {/* Debug Info in Development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="p-3 bg-gray-50 rounded text-xs space-y-1">
+              <div>✅ Form Valid: {isValid ? 'Yes' : 'No'}</div>
+              <div>🏥 Hospitals: {hospitals.length}</div>
+              <div>🔗 Hospital Selected: {selectedHospitalId || 'None'}</div>
+              <div>🚀 Can Submit: {canSubmit ? 'Yes' : 'No'}</div>
+              {Object.keys(errors).length > 0 && (
+                <div className="text-red-600">❌ Errors: {Object.keys(errors).join(', ')}</div>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            {/* Error Alert */}
             {error && (
               <Alert variant="error" className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-red-800">{error}</AlertDescription>
               </Alert>
             )}
 
+            {/* Success Alert */}
+            {success && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">{success}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Hospital Selection - Put First */}
+            <div className="space-y-2">
+              <Label htmlFor="hospitalId" className="text-sm font-medium text-gray-700">
+                เลือกโรงพยาบาล *
+              </Label>
+              <Select
+                onValueChange={handleHospitalSelect}
+                disabled={isLoading}
+                value={selectedHospitalId}
+              >
+                <SelectTrigger className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-gray-400" />
+                    <SelectValue placeholder="เลือกโรงพยาบาล" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {hospitals.map((hospital) => (
+                    <SelectItem key={hospital.id} value={hospital.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{hospital.name}</span>
+                        <span className="text-xs text-gray-500">{hospital.hospitalCode}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.hospitalId && (
+                <p className="text-sm text-red-500 mt-1">{errors.hospitalId.message}</p>
+              )}
+            </div>
+
+            {/* Username */}
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm font-medium text-gray-700">
-                ชื่อผู้ใช้
+                ชื่อผู้ใช้ *
               </Label>
               <div className="relative">
                 <Input
@@ -98,9 +273,10 @@ export default function RegisterForm() {
               )}
             </div>
 
+            {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                อีเมล
+                อีเมล *
               </Label>
               <div className="relative">
                 <Input
@@ -118,9 +294,10 @@ export default function RegisterForm() {
               )}
             </div>
 
+            {/* Password */}
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                รหัสผ่าน
+                รหัสผ่าน *
               </Label>
               <div className="relative">
                 <Input
@@ -138,6 +315,7 @@ export default function RegisterForm() {
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLoading}
+                  tabIndex={-1}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 text-gray-500" />
@@ -151,9 +329,10 @@ export default function RegisterForm() {
               )}
             </div>
 
+            {/* Confirm Password */}
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                ยืนยันรหัสผ่าน
+                ยืนยันรหัสผ่าน *
               </Label>
               <div className="relative">
                 <Input
@@ -171,6 +350,7 @@ export default function RegisterForm() {
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   disabled={isLoading}
+                  tabIndex={-1}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4 text-gray-500" />
@@ -186,17 +366,19 @@ export default function RegisterForm() {
               )}
             </div>
 
+            {/* Submit Button */}
             <div className="pt-2">
               <Button 
                 type="submit" 
-                className="w-full h-11 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200" 
-                disabled={isLoading}
+                className="w-full h-11 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200" 
+                disabled={!canSubmit}
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                ดำเนินการต่อ
+                {isLoading ? "กำลังสมัครสมาชิก..." : "สมัครสมาชิก"}
               </Button>
             </div>
 
+            {/* Login Link */}
             <div className="text-center pt-4">
               <Button
                 type="button"

@@ -1,4 +1,4 @@
-// app/api/auth/register/route.ts - แก้ไข username field
+// app/api/auth/register/route.ts - Fixed Schema Fields
 import { NextRequest, NextResponse } from "next/server";
 import { registerSchema } from "@/lib/validations/auth";
 import { PrismaClient } from "@prisma/client";
@@ -10,70 +10,138 @@ const prisma = new PrismaClient();
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('🔍 [DEBUG] Registration request body:', body);
+    console.log('🔍 [API] Registration request received:', {
+      ...body,
+      password: '[HIDDEN]',
+      confirmPassword: '[HIDDEN]'
+    });
     
+    // Validate input data
     const validatedData = registerSchema.parse(body);
-    console.log('🔍 [DEBUG] Validated data:', validatedData);
+    console.log('✅ [API] Data validation passed');
     
-    // ตรวจสอบ email ซ้ำ
+    // Check for existing email
     const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email },
     });
     
     if (existingUser) {
+      console.log('❌ [API] Email already exists');
       return NextResponse.json(
         { error: "อีเมลนี้มีอยู่ในระบบแล้ว" },
         { status: 400 }
       );
     }
     
-    // ตรวจสอบ username ซ้ำ (เพิ่มการตรวจสอบนี้)
+    // Check for existing username
     const existingUsername = await prisma.user.findUnique({
       where: { username: validatedData.username },
     });
     
     if (existingUsername) {
+      console.log('❌ [API] Username already exists');
       return NextResponse.json(
         { error: "ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว" },
         { status: 400 }
       );
     }
     
+    // Verify hospital exists - Fixed field name
+    const hospital = await prisma.hospital.findUnique({
+      where: { id: validatedData.hospitalId },
+      select: {
+        id: true,
+        name: true,
+        hospitalCode: true, // Fixed: use hospitalCode instead of code
+        status: true,
+      }
+    });
+    
+    if (!hospital) {
+      console.log('❌ [API] Hospital not found');
+      return NextResponse.json(
+        { error: "โรงพยาบาลที่เลือกไม่ถูกต้อง" },
+        { status: 400 }
+      );
+    }
+    
+    // Check if hospital is active
+    if (hospital.status !== 'ACTIVE') {
+      console.log('❌ [API] Hospital not active:', hospital.status);
+      return NextResponse.json(
+        { error: "โรงพยาบาลนี้ไม่สามารถใช้งานได้ในขณะนี้" },
+        { status: 400 }
+      );
+    }
+    
     // Hash password
     const hashedPassword = await hashPassword(validatedData.password);
-    console.log('🔍 [DEBUG] Password hashed successfully');
+    console.log('🔐 [API] Password hashed successfully');
     
-    // สร้าง user โดยใส่ field ที่จำเป็นครบถ้วน
+    // Create user - Fixed select fields
     const user = await prisma.user.create({
       data: {
         email: validatedData.email,
-        name: validatedData.username, // ใช้ username เป็น display name ชั่วคราว
-        username: validatedData.username, // เพิ่ม field username ที่ required
-        password: hashedPassword, // เพิ่ม password field
+        name: validatedData.username, // Temporary display name
+        username: validatedData.username,
+        password: hashedPassword,
         emailVerified: false,
-        role: "STAFF_PHARMACIST", // ใช้ Role ที่มีใน enum จริงแทน "User"
-        status: "PENDING", // เพิ่ม status ตาม schema
-        hospitalId: validatedData.hospitalId, // เพิ่ม hospitalId ที่ required
-        isProfileComplete: false, // เพิ่ม field นี้
+        role: "STAFF_PHARMACIST", // Default role
+        status: "PENDING", // Requires approval
+        hospitalId: validatedData.hospitalId,
+        isProfileComplete: false, // Need to complete profile
         createdAt: new Date(),
         updatedAt: new Date(),
       },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        status: true,
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+            hospitalCode: true, // Fixed: use hospitalCode instead of code
+            status: true,
+          }
+        }
+      }
     });
     
-    console.log('🔍 [DEBUG] User created successfully:', user.id);
+    console.log('✅ [API] User created successfully:', {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      status: user.status,
+      hospital: user.hospital.name
+    });
     
     return NextResponse.json({
       success: true,
       message: "สมัครสมาชิกสำเร็จ กรุณารอการอนุมัติจากผู้ดูแลระบบ",
       userId: user.id,
-      nextStep: "profile-completion", // บอกว่าขั้นตอนต่อไปคือกรอกข้อมูลส่วนตัว
+      nextStep: "profile-completion",
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        status: user.status,
+        hospital: {
+          id: user.hospital.id,
+          name: user.hospital.name,
+          hospitalCode: user.hospital.hospitalCode, // Fixed field name
+          status: user.hospital.status,
+        }
+      }
     });
     
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error("❌ [API] Registration error:", error);
     
-    // ตรวจสอบ error ประเภทจาก Prisma
+    // Handle Zod validation errors
     if (error instanceof ZodError) {
+      console.log('❌ [API] Validation error:', error.issues);
       return NextResponse.json(
         { 
           error: "ข้อมูลไม่ถูกต้อง", 
@@ -86,7 +154,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Prisma unique constraint error
+    // Handle Prisma unique constraint error
     if (error.code === 'P2002') {
       const target = error.meta?.target;
       if (target?.includes('email')) {
@@ -103,8 +171,17 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // Handle other Prisma errors
+    if (error.code) {
+      console.log('❌ [API] Prisma error code:', error.code);
+      console.log('❌ [API] Prisma error meta:', error.meta);
+    }
+    
     return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" },
+      { 
+        error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      },
       { status: 500 }
     );
   } finally {
