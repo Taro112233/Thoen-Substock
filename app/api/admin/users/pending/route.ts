@@ -1,23 +1,32 @@
 // app/api/admin/users/pending/route.ts
-// API สำหรับดึงรายการผู้ใช้ที่รอการอนุมัติ
-
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { validateAdminAuth } from '@/lib/auth-middleware';
 
 const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const hospitalId = searchParams.get('hospitalId');
-
-    if (!hospitalId) {
+    console.log('🔍 [PENDING API] Starting validation...');
+    
+    // ตรวจสอบสิทธิ์ admin
+    const authResult = await validateAdminAuth(request);
+    
+    console.log('🔍 [PENDING API] Auth result:', authResult);
+    
+    if ('error' in authResult) {
+      console.log('❌ [PENDING API] Auth failed:', authResult.error);
       return NextResponse.json(
-        { error: 'Hospital ID is required' },
-        { status: 400 }
+        { error: authResult.error },
+        { status: authResult.status }
       );
     }
 
+    const { hospitalId } = authResult;
+    
+    console.log('🔍 [PENDING API] Hospital ID:', hospitalId);
+
+    // ดึงรายการผู้ใช้ที่รอการอนุมัติ
     const pendingUsers = await prisma.user.findMany({
       where: {
         hospitalId,
@@ -25,31 +34,52 @@ export async function GET(request: NextRequest) {
       },
       include: {
         hospital: {
-          select: { name: true, code: true }
+          select: { name: true, hospitalCode: true }
         },
         department: {
-          select: { name: true, code: true }
+          select: { name: true, departmentCode: true }
         }
       },
-      orderBy: { createdAt: 'asc' } // เก่าสุดก่อน
+      orderBy: { createdAt: 'asc' }
     });
 
-    // ซ่อน password
-    const sanitizedUsers = pendingUsers.map(user => ({
-      ...user,
-      password: undefined,
-    }));
+    console.log('🔍 [PENDING API] Found pending users:', pendingUsers.length);
+
+    // ซ่อน password และข้อมูลที่ไม่จำเป็น
+    const sanitizedUsers = pendingUsers.map(user => {
+      const { password, updatedAt, lastModifiedBy, ...safeUser } = user;
+      return safeUser;
+    });
+
+    // คำนวณสถิติเพิ่มเติม
+    const stats = {
+      pending: pendingUsers.length,
+      oldestRequest: pendingUsers.length > 0 ? pendingUsers[0].createdAt : null,
+      departmentBreakdown: pendingUsers.reduce((acc, user) => {
+        const deptName = user.department?.name || 'ไม่ระบุแผนก';
+        acc[deptName] = (acc[deptName] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    };
+
+    console.log('✅ [PENDING API] Returning data:', {
+      count: sanitizedUsers.length,
+      stats
+    });
 
     return NextResponse.json({
       users: sanitizedUsers,
-      count: pendingUsers.length
+      count: pendingUsers.length,
+      stats
     });
 
   } catch (error) {
-    console.error('Error fetching pending users:', error);
+    console.error('❌ [PENDING API] Error fetching pending users:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }

@@ -1,5 +1,5 @@
 // prisma/schemas/auth.prisma
-// Authentication and User Management Schema
+// Authentication and User Management Schema (Enhanced with Approval System)
 // ระบบจัดการผู้ใช้และการยืนยันตัวตนสำหรับ Hospital Pharmacy System
 
 enum Role {
@@ -57,11 +57,34 @@ model User {
   lastLoginIP   String?
   loginCount    Int         @default(0)
   
-  // Audit fields
+  // ================================
+  // USER APPROVAL SYSTEM FIELDS
+  // ================================
+  
+  // การอนุมัติผู้ใช้งาน
+  approvedAt      DateTime?    // วันที่อนุมัติ
+  approvedBy      String?      // ผู้อนุมัติ (User ID)
+  rejectedAt      DateTime?    // วันที่ปฏิเสธ
+  rejectedBy      String?      // ผู้ปฏิเสธ (User ID)
+  rejectionReason String?      // เหตุผลการปฏิเสธ
+  
+  // การติดตาม changes
+  lastModifiedBy  String?      // ผู้แก้ไขล่าสุด (User ID)
+  statusChangedAt DateTime?    // วันที่เปลี่ยนสถานะล่าสุด
+  statusHistory   Json?        // ประวัติการเปลี่ยนสถานะ
+  
+  // ข้อมูลเพิ่มเติมสำหรับการอนุมัติ
+  applicationNotes String?     // หมายเหตุใบสมัคร
+  approvalNotes   String?      // หมายเหตุการอนุมัติ
+  requestedRole   Role?        // บทบาทที่ขอ (อาจแตกต่างจากที่ได้รับ)
+  
+  // ================================
+  // AUDIT FIELDS
+  // ================================
+  
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   createdBy     String?     // ผู้สร้างบัญชี
-  lastModifiedBy String?    // ผู้แก้ไขล่าสุด
   
   // ================================
   // BETTER AUTH COMPATIBILITY
@@ -126,6 +149,18 @@ model User {
   // Notifications
   notificationPreferences  NotificationPreference[]
   notifications            NotificationUser[]
+  
+  // ================================
+  // USER APPROVAL RELATIONS
+  // ================================
+  
+  // ผู้ใช้ที่อนุมัติโดยผู้ใช้นี้
+  usersApproved           User[] @relation("UserApprover")
+  usersRejected           User[] @relation("UserRejecter")
+  
+  // ผู้ที่อนุมัติ/ปฏิเสธผู้ใช้นี้
+  approver                User?  @relation("UserApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  rejecter                User?  @relation("UserRejecter", fields: [rejectedBy], references: [id], onDelete: SetNull)
   
   @@map("users")
 }

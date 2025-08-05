@@ -1,5 +1,5 @@
 // prisma/schemas/audit.prisma
-// Audit and Compliance Management Schema
+// Audit and Compliance Management Schema (Enhanced for User Approval)
 // ระบบจัดการการตรวจสอบและการปฏิบัติตามกฎระเบียบ
 
 enum AuditAction {
@@ -19,6 +19,14 @@ enum AuditAction {
   IMPORT          // นำเข้าข้อมูล
   PRINT           // พิมพ์
   EMAIL           // ส่งอีเมล
+  
+  // User Management Actions
+  USER_APPROVED   // อนุมัติผู้ใช้
+  USER_REJECTED   // ปฏิเสธผู้ใช้
+  USER_SUSPENDED  // ระงับผู้ใช้
+  USER_ACTIVATED  // เปิดใช้ผู้ใช้
+  ROLE_CHANGED    // เปลี่ยนบทบาท
+  STATUS_CHANGED  // เปลี่ยนสถานะ
 }
 
 model AuditLog {
@@ -39,6 +47,7 @@ model AuditLog {
   description     String
   oldValues       Json?       // ค่าเดิม (สำหรับ UPDATE, DELETE)
   newValues       Json?       // ค่าใหม่ (สำหรับ CREATE, UPDATE)
+  details         Json?       // รายละเอียดเพิ่มเติม
   
   // การติดตาม
   ipAddress       String?
