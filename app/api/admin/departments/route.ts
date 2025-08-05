@@ -1,8 +1,10 @@
 // app/api/admin/departments/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { validateAdminAuth } from '@/lib/auth-middleware';
 import { z } from 'zod';
+
+const prisma = new PrismaClient();
 
 // Validation schemas
 const createDepartmentSchema = z.object({
