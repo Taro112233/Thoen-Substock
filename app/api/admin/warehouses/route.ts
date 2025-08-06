@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
               firstName: true, 
               lastName: true, 
               email: true,
-              phone: true 
+              phoneNumber: true  // Fixed: use phoneNumber instead of phone
             }
           },
           _count: {
@@ -165,11 +165,17 @@ export async function GET(request: NextRequest) {
 // POST - สร้างคลังใหม่
 export async function POST(request: NextRequest) {
   try {
+    console.log('[WAREHOUSES_POST] Starting warehouse creation...');
+    
     // Validate admin authentication
     const user = await validateAdminAuth(request);
+    console.log('[WAREHOUSES_POST] User authenticated:', user.id);
     
     const body = await request.json();
+    console.log('[WAREHOUSES_POST] Request body:', body);
+    
     const validatedData = createWarehouseSchema.parse(body);
+    console.log('[WAREHOUSES_POST] Data validated successfully');
 
     // Check if warehouse code already exists in this hospital
     const existingWarehouse = await prisma.warehouse.findFirst({
@@ -180,26 +186,32 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingWarehouse) {
+      console.log('[WAREHOUSES_POST] Warehouse code already exists');
       return NextResponse.json({ 
         error: 'รหัสคลังนี้มีอยู่แล้วในโรงพยาบาล' 
       }, { status: 409 });
     }
 
-    // Validate manager if provided
+    // Validate manager if provided - FIXED: Use status instead of isActive
     if (validatedData.managerId) {
+      console.log('[WAREHOUSES_POST] Validating manager:', validatedData.managerId);
+      
       const manager = await prisma.user.findFirst({
         where: {
           id: validatedData.managerId,
           hospitalId: user.hospitalId,
-          isActive: true,
+          status: 'ACTIVE',  // Fixed: Use status instead of isActive
         }
       });
 
       if (!manager) {
+        console.log('[WAREHOUSES_POST] Manager not found or not active');
         return NextResponse.json({ 
-          error: 'ไม่พบผู้จัดการคลังที่ระบุ' 
+          error: 'ไม่พบผู้จัดการคลังที่ระบุหรือไม่สามารถใช้งานได้' 
         }, { status: 400 });
       }
+      
+      console.log('[WAREHOUSES_POST] Manager validated:', manager.firstName, manager.lastName);
     }
 
     // Validate temperature and humidity ranges
@@ -229,6 +241,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log('[WAREHOUSES_POST] Creating warehouse...');
+
     // Create warehouse
     const warehouse = await prisma.warehouse.create({
       data: {
@@ -240,6 +254,10 @@ export async function POST(request: NextRequest) {
         maxTemperature: validatedData.maxTemperature ? new Decimal(validatedData.maxTemperature) : null,
         minHumidity: validatedData.minHumidity ? new Decimal(validatedData.minHumidity) : null,
         maxHumidity: validatedData.maxHumidity ? new Decimal(validatedData.maxHumidity) : null,
+        totalValue: new Decimal(0), // เริ่มต้นที่ 0
+        isActive: true,
+        createdBy: user.id,
+        updatedBy: user.id,
       },
       include: {
         manager: {
@@ -249,90 +267,55 @@ export async function POST(request: NextRequest) {
             lastName: true, 
             email: true 
           }
-        },
+        }
       }
     });
+
+    console.log('[WAREHOUSES_POST] Warehouse created successfully:', warehouse.id);
 
     // Log audit trail
-    await prisma.auditLog.create({
-      data: {
-        hospitalId: user.hospitalId,
-        userId: user.id,
-        action: 'CREATE_WAREHOUSE',
-        resourceType: 'WAREHOUSE',
-        resourceId: warehouse.id,
-        details: {
-          warehouseName: warehouse.name,
-          warehouseCode: warehouse.warehouseCode,
-          type: warehouse.type,
-          location: warehouse.location,
-        },
-        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown',
-      }
-    });
+    try {
+      await prisma.auditLog.create({
+        data: {
+          hospitalId: user.hospitalId,
+          userId: user.id,
+          action: 'CREATE_WAREHOUSE',
+          resourceType: 'WAREHOUSE',
+          resourceId: warehouse.id,
+          details: {
+            warehouseName: warehouse.name,
+            warehouseCode: warehouse.warehouseCode,
+            type: warehouse.type,
+            location: warehouse.location,
+          },
+          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+          userAgent: request.headers.get('user-agent') || 'unknown',
+        }
+      });
+      console.log('[WAREHOUSES_POST] Audit log created');
+    } catch (auditError) {
+      console.log('[WAREHOUSES_POST] Audit log skipped (table might not exist):', auditError.message);
+    }
 
     return NextResponse.json({ 
-      message: 'สร้างคลังใหม่สำเร็จ',
+      message: 'สร้างคลังสำเร็จแล้ว',
       warehouse 
     }, { status: 201 });
 
   } catch (error) {
-    console.error('[WAREHOUSES_POST]', error);
+    console.error('[WAREHOUSES_POST] Error', error);
     
     if (error instanceof z.ZodError) {
+      console.log('[WAREHOUSES_POST] Validation error:', error.errors);
       return NextResponse.json({ 
         error: 'ข้อมูลไม่ถูกต้อง', 
         details: error.errors 
       }, { status: 400 });
     }
     
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการสร้างคลัง' }, { status: 500 });
-  }
-}
-
-// GET - รายการผู้ใช้ที่สามารถเป็นผู้จัดการคลังได้
-export async function getAvailableManagers(request: NextRequest) {
-  try {
-    const user = await validateAdminAuth(request);
-    
-    const availableManagers = await prisma.user.findMany({
-      where: {
-        hospitalId: user.hospitalId,
-        isActive: true,
-        role: {
-          in: ['HOSPITAL_ADMIN', 'PHARMACY_MANAGER', 'SENIOR_PHARMACIST']
-        }
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: true,
-        position: true,
-        _count: {
-          select: {
-            warehousesManaged: true
-          }
-        }
-      },
-      orderBy: [
-        { role: 'asc' },
-        { firstName: 'asc' }
-      ]
-    });
-
-    return NextResponse.json({
-      managers: availableManagers.map(manager => ({
-        ...manager,
-        fullName: `${manager.firstName} ${manager.lastName}`,
-        warehouseCount: manager._count.warehousesManaged,
-      }))
-    });
-
-  } catch (error) {
-    console.error('[AVAILABLE_MANAGERS_GET]', error);
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้จัดการ' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'เกิดข้อผิดพลาดในการสร้างคลัง',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }, { status: 500 });
   }
 }

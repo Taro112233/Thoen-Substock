@@ -32,71 +32,37 @@ import {
   Zap
 } from 'lucide-react';
 
-// Form validation schema
+// Simplified and more flexible form validation schema
 const warehouseFormSchema = z.object({
   name: z.string().min(1, 'ชื่อคลังจำเป็น').max(100, 'ชื่อคลังต้องไม่เกิน 100 ตัวอักษร'),
   warehouseCode: z.string()
     .min(1, 'รหัสคลังจำเป็น')
     .max(10, 'รหัสคลังต้องไม่เกิน 10 ตัวอักษร')
-    .regex(/^[A-Z0-9_-]+$/, 'รหัสคลังต้องเป็นตัวอักษรพิมพ์ใหญ่ ตัวเลข หรือ - _ เท่านั้น'),
+    .regex(/^[A-Z0-9_-]+$/i, 'รหัสคลังต้องเป็นตัวอักษร ตัวเลข หรือ - _ เท่านั้น'),
   type: z.enum([
     'CENTRAL', 'DEPARTMENT', 'EMERGENCY', 'CONTROLLED', 
     'COLD_STORAGE', 'QUARANTINE', 'DISPOSAL', 'RECEIVING', 'DISPENSING'
-  ], { 
-    errorMap: () => ({ message: 'กรุณาเลือกประเภทคลัง' })
-  }),
+  ]),
   location: z.string().min(1, 'ตำแหน่งที่ตั้งจำเป็น').max(200, 'ตำแหน่งที่ตั้งต้องไม่เกิน 200 ตัวอักษร'),
-  address: z.string().max(500, 'ที่อยู่ต้องไม่เกิน 500 ตัวอักษร').optional(),
-  managerId: z.string().uuid().optional().or(z.literal('')),
-  area: z.number().positive('พื้นที่ต้องเป็นค่าบวก').optional(),
-  capacity: z.number().positive('ความจุต้องเป็นค่าบวก').optional(),
-  hasTemperatureControl: z.boolean().default(false),
-  minTemperature: z.number().optional(),
-  maxTemperature: z.number().optional(),
-  hasHumidityControl: z.boolean().default(false),
-  minHumidity: z.number().min(0, 'ความชื้นต้องไม่น้อยกว่า 0%').max(100, 'ความชื้นต้องไม่เกิน 100%').optional(),
-  maxHumidity: z.number().min(0, 'ความชื้นต้องไม่น้อยกว่า 0%').max(100, 'ความชื้นต้องไม่เกิน 100%').optional(),
-  securityLevel: z.enum(['BASIC', 'STANDARD', 'HIGH', 'MAXIMUM']).default('STANDARD'),
-  accessControl: z.boolean().default(false),
-  cctv: z.boolean().default(false),
-  alarm: z.boolean().default(false),
-  allowReceiving: z.boolean().default(true),
-  allowDispensing: z.boolean().default(true),
-  allowTransfer: z.boolean().default(true),
-  requireApproval: z.boolean().default(false),
-  description: z.string().max(1000, 'คำอธิบายต้องไม่เกิน 1000 ตัวอักษร').optional(),
-}).refine((data) => {
-  if (data.hasTemperatureControl) {
-    return data.minTemperature !== undefined && data.maxTemperature !== undefined;
-  }
-  return true;
-}, {
-  message: 'กรุณาระบุช่วงอุณหภูมิเมื่อเปิดการควบคุมอุณหภูมิ',
-  path: ['minTemperature']
-}).refine((data) => {
-  if (data.hasTemperatureControl && data.minTemperature !== undefined && data.maxTemperature !== undefined) {
-    return data.minTemperature < data.maxTemperature;
-  }
-  return true;
-}, {
-  message: 'อุณหภูมิต่ำสุดต้องน้อยกว่าอุณหภูมิสูงสุด',
-  path: ['maxTemperature']
-}).refine((data) => {
-  if (data.hasHumidityControl) {
-    return data.minHumidity !== undefined && data.maxHumidity !== undefined;
-  }
-  return true;
-}, {
-  message: 'กรุณาระบุช่วงความชื้นเมื่อเปิดการควบคุมความชื้น',
-  path: ['minHumidity']
-}).refine((data) => {
-  if (data.hasHumidityControl && data.minHumidity !== undefined && data.maxHumidity !== undefined) {
-    return data.minHumidity < data.maxHumidity;
-  }
-  return true;
-}, {
-  message: 'ความชื้นต่ำสุดต้องน้อยกว่าความชื้นสูงสุด',
-  path: ['maxHumidity']
+  address: z.string().optional().or(z.literal('')),
+  managerId: z.string().optional().or(z.literal('')),
+  area: z.union([z.number().positive('พื้นที่ต้องเป็นค่าบวก'), z.nan()]).optional(),
+  capacity: z.union([z.number().positive('ความจุต้องเป็นค่าบวก'), z.nan()]).optional(),
+  hasTemperatureControl: z.boolean(),
+  minTemperature: z.union([z.number(), z.nan()]).optional(),
+  maxTemperature: z.union([z.number(), z.nan()]).optional(),
+  hasHumidityControl: z.boolean(),
+  minHumidity: z.union([z.number().min(0).max(100), z.nan()]).optional(),
+  maxHumidity: z.union([z.number().min(0).max(100), z.nan()]).optional(),
+  securityLevel: z.enum(['BASIC', 'STANDARD', 'HIGH', 'MAXIMUM']),
+  accessControl: z.boolean(),
+  cctv: z.boolean(),
+  alarm: z.boolean(),
+  allowReceiving: z.boolean(),
+  allowDispensing: z.boolean(),
+  allowTransfer: z.boolean(),
+  requireApproval: z.boolean(),
+  description: z.string().optional().or(z.literal('')),
 });
 
 type WarehouseFormData = z.infer<typeof warehouseFormSchema>;
@@ -179,9 +145,12 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
     handleSubmit,
     setValue,
     watch,
-    formState: { errors, isValid },
+    trigger,
+    getValues,
+    formState: { errors, isDirty },
   } = useForm<WarehouseFormData>({
     resolver: zodResolver(warehouseFormSchema),
+    mode: 'onChange',
     defaultValues: {
       name: warehouse?.name || '',
       warehouseCode: warehouse?.warehouseCode || '',
@@ -189,14 +158,14 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
       location: warehouse?.location || '',
       address: warehouse?.address || '',
       managerId: warehouse?.managerId || '',
-      area: warehouse?.area || undefined,
-      capacity: warehouse?.capacity || undefined,
+      area: warehouse?.area,
+      capacity: warehouse?.capacity,
       hasTemperatureControl: warehouse?.hasTemperatureControl ?? false,
-      minTemperature: warehouse?.minTemperature || undefined,
-      maxTemperature: warehouse?.maxTemperature || undefined,
+      minTemperature: warehouse?.minTemperature,
+      maxTemperature: warehouse?.maxTemperature,
       hasHumidityControl: warehouse?.hasHumidityControl ?? false,
-      minHumidity: warehouse?.minHumidity || undefined,
-      maxHumidity: warehouse?.maxHumidity || undefined,
+      minHumidity: warehouse?.minHumidity,
+      maxHumidity: warehouse?.maxHumidity,
       securityLevel: (warehouse?.securityLevel as WarehouseFormData['securityLevel']) || 'STANDARD',
       accessControl: warehouse?.accessControl ?? false,
       cctv: warehouse?.cctv ?? false,
@@ -213,6 +182,19 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
   const watchHasTemperatureControl = watch('hasTemperatureControl');
   const watchHasHumidityControl = watch('hasHumidityControl');
   const watchSecurityLevel = watch('securityLevel');
+  const watchName = watch('name');
+  const watchCode = watch('warehouseCode');
+  const watchLocation = watch('location');
+
+  // Check if required fields are filled
+  const canSubmit = !loading && watchName?.trim() && watchCode?.trim() && watchLocation?.trim();
+
+  // Debug form state
+  useEffect(() => {
+    console.log('Form errors:', errors);
+    console.log('Form values:', getValues());
+    console.log('Can submit:', canSubmit);
+  }, [errors, getValues, canSubmit]);
 
   // Load available managers
   useEffect(() => {
@@ -248,19 +230,22 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
       setLoading(true);
       setError(null);
 
-      // Clean up empty strings to undefined
+      // Clean up data before sending
       const cleanedData = {
         ...data,
+        warehouseCode: data.warehouseCode.toUpperCase(), // Ensure uppercase
         address: data.address || undefined,
-        managerId: data.managerId || undefined,
-        area: data.area || undefined,
-        capacity: data.capacity || undefined,
-        minTemperature: data.hasTemperatureControl ? data.minTemperature : undefined,
-        maxTemperature: data.hasTemperatureControl ? data.maxTemperature : undefined,
-        minHumidity: data.hasHumidityControl ? data.minHumidity : undefined,
-        maxHumidity: data.hasHumidityControl ? data.maxHumidity : undefined,
+        managerId: (!data.managerId || data.managerId === 'none') ? undefined : data.managerId,
+        area: (data.area && !isNaN(data.area)) ? data.area : undefined,
+        capacity: (data.capacity && !isNaN(data.capacity)) ? data.capacity : undefined,
+        minTemperature: data.hasTemperatureControl && data.minTemperature !== undefined && !isNaN(data.minTemperature) ? data.minTemperature : undefined,
+        maxTemperature: data.hasTemperatureControl && data.maxTemperature !== undefined && !isNaN(data.maxTemperature) ? data.maxTemperature : undefined,
+        minHumidity: data.hasHumidityControl && data.minHumidity !== undefined && !isNaN(data.minHumidity) ? data.minHumidity : undefined,
+        maxHumidity: data.hasHumidityControl && data.maxHumidity !== undefined && !isNaN(data.maxHumidity) ? data.maxHumidity : undefined,
         description: data.description || undefined,
       };
+
+      console.log('Submitting data:', cleanedData);
 
       const url = isEditing 
         ? `/api/admin/warehouses/${warehouse.id}`
@@ -331,7 +316,10 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
               {...register('warehouseCode')}
               placeholder="เช่น ER-001"
               className={`font-mono ${errors.warehouseCode ? 'border-red-500' : ''}`}
-              style={{ textTransform: 'uppercase' }}
+              onChange={(e) => {
+                const value = e.target.value.toUpperCase();
+                setValue('warehouseCode', value);
+              }}
             />
             {errors.warehouseCode && (
               <p className="text-sm text-red-600">{errors.warehouseCode.message}</p>
@@ -403,15 +391,15 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
           <div className="space-y-2">
             <Label htmlFor="managerId">ผู้จัดการคลัง</Label>
             <Select 
-              value={watch('managerId') || ''} 
-              onValueChange={(value) => setValue('managerId', value || '')}
+              value={watch('managerId') || 'none'} 
+              onValueChange={(value) => setValue('managerId', value === 'none' ? '' : value)}
               disabled={loadingManagers}
             >
               <SelectTrigger>
                 <SelectValue placeholder={loadingManagers ? "กำลังโหลด..." : "เลือกผู้จัดการคลัง"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">ไม่มีผู้จัดการ</SelectItem>
+                <SelectItem value="none">ไม่มีผู้จัดการ</SelectItem>
                 {managers.map((manager) => (
                   <SelectItem key={manager.id} value={manager.id}>
                     <div>
@@ -457,13 +445,14 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="capacity">ความจุ (หน่วยสินค้า)</Label>
+            <Label htmlFor="capacity">ความจุ (ลูกบาศก์เมตร)</Label>
             <Input
               id="capacity"
               type="number"
               min="0"
+              step="0.01"
               {...register('capacity', { valueAsNumber: true })}
-              placeholder="เช่น 1000"
+              placeholder="เช่น 100.0"
               className={errors.capacity ? 'border-red-500' : ''}
             />
             {errors.capacity && (
@@ -479,8 +468,9 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
           <Thermometer className="w-5 h-5 text-orange-600" />
           การควบคุมสิ่งแวดล้อม
         </h3>
-        
-        <div className="space-y-4">
+
+        {/* Temperature Control */}
+        <div className="space-y-3 p-4 border rounded-lg">
           <div className="flex items-center space-x-2">
             <Checkbox
               id="hasTemperatureControl"
@@ -493,15 +483,15 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
           </div>
 
           {watchHasTemperatureControl && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
+            <div className="grid grid-cols-2 gap-4 ml-6">
               <div className="space-y-2">
-                <Label htmlFor="minTemperature">อุณหภูมิต่ำสุด (°C) *</Label>
+                <Label htmlFor="minTemperature">อุณหภูมิต่ำสุด (°C)</Label>
                 <Input
                   id="minTemperature"
                   type="number"
                   step="0.1"
                   {...register('minTemperature', { valueAsNumber: true })}
-                  placeholder="เช่น 2"
+                  placeholder="เช่น 2.0"
                   className={errors.minTemperature ? 'border-red-500' : ''}
                 />
                 {errors.minTemperature && (
@@ -510,13 +500,13 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="maxTemperature">อุณหภูมิสูงสุด (°C) *</Label>
+                <Label htmlFor="maxTemperature">อุณหภูมิสูงสุด (°C)</Label>
                 <Input
                   id="maxTemperature"
                   type="number"
                   step="0.1"
                   {...register('maxTemperature', { valueAsNumber: true })}
-                  placeholder="เช่น 8"
+                  placeholder="เช่น 8.0"
                   className={errors.maxTemperature ? 'border-red-500' : ''}
                 />
                 {errors.maxTemperature && (
@@ -525,23 +515,25 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
               </div>
             </div>
           )}
+        </div>
 
+        {/* Humidity Control */}
+        <div className="space-y-3 p-4 border rounded-lg">
           <div className="flex items-center space-x-2">
             <Checkbox
               id="hasHumidityControl"
               checked={watchHasHumidityControl}
               onCheckedChange={(checked) => setValue('hasHumidityControl', !!checked)}
             />
-            <Label htmlFor="hasHumidityControl" className="font-medium flex items-center gap-2">
-              <Droplets className="w-4 h-4" />
+            <Label htmlFor="hasHumidityControl" className="font-medium">
               ควบคุมความชื้น
             </Label>
           </div>
 
           {watchHasHumidityControl && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
+            <div className="grid grid-cols-2 gap-4 ml-6">
               <div className="space-y-2">
-                <Label htmlFor="minHumidity">ความชื้นต่ำสุด (%) *</Label>
+                <Label htmlFor="minHumidity">ความชื้นต่ำสุด (%)</Label>
                 <Input
                   id="minHumidity"
                   type="number"
@@ -557,7 +549,7 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="maxHumidity">ความชื้นสูงสุด (%) *</Label>
+                <Label htmlFor="maxHumidity">ความชื้นสูงสุด (%)</Label>
                 <Input
                   id="maxHumidity"
                   type="number"
@@ -582,11 +574,14 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
           <Shield className="w-5 h-5 text-red-600" />
           การรักษาความปลอดภัย
         </h3>
-        
+
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="securityLevel">ระดับความปลอดภัย</Label>
-            <Select value={watchSecurityLevel} onValueChange={(value) => setValue('securityLevel', value as WarehouseFormData['securityLevel'])}>
+            <Select 
+              value={watchSecurityLevel} 
+              onValueChange={(value) => setValue('securityLevel', value as WarehouseFormData['securityLevel'])}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="เลือกระดับความปลอดภัย" />
               </SelectTrigger>
@@ -603,15 +598,14 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
             </Select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="accessControl"
                 checked={watch('accessControl')}
                 onCheckedChange={(checked) => setValue('accessControl', !!checked)}
               />
-              <Label htmlFor="accessControl" className="font-medium flex items-center gap-2">
-                <Lock className="w-4 h-4" />
+              <Label htmlFor="accessControl" className="font-medium">
                 ควบคุมการเข้าถึง
               </Label>
             </div>
@@ -622,8 +616,7 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
                 checked={watch('cctv')}
                 onCheckedChange={(checked) => setValue('cctv', !!checked)}
               />
-              <Label htmlFor="cctv" className="font-medium flex items-center gap-2">
-                <Eye className="w-4 h-4" />
+              <Label htmlFor="cctv" className="font-medium">
                 กล้องวงจรปิด
               </Label>
             </div>
@@ -634,24 +627,23 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
                 checked={watch('alarm')}
                 onCheckedChange={(checked) => setValue('alarm', !!checked)}
               />
-              <Label htmlFor="alarm" className="font-medium flex items-center gap-2">
-                <Zap className="w-4 h-4" />
-                ระบบเตือนภัย
+              <Label htmlFor="alarm" className="font-medium">
+                ระบบแจ้งเตือน
               </Label>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Operation Settings */}
+      {/* Operational Settings */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Warehouse className="w-5 h-5 text-purple-600" />
+          <Zap className="w-5 h-5 text-purple-600" />
           การตั้งค่าการดำเนินงาน
         </h3>
-        
+
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="allowReceiving"
@@ -670,7 +662,7 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
                 onCheckedChange={(checked) => setValue('allowDispensing', !!checked)}
               />
               <Label htmlFor="allowDispensing" className="font-medium">
-                อนุญาตให้จ่ายของ
+                อนุญาตให้จ่ายยา
               </Label>
             </div>
 
@@ -699,6 +691,17 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
         </div>
       </div>
 
+      {/* Debug Info - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="p-4 bg-gray-100 rounded-lg text-xs">
+          <p><strong>Debug Info:</strong></p>
+          <p>Required fields filled: {watchName?.trim() ? '✅' : '❌'} Name, {watchCode?.trim() ? '✅' : '❌'} Code, {watchLocation?.trim() ? '✅' : '❌'} Location</p>
+          <p>Form errors: {Object.keys(errors).length > 0 ? JSON.stringify(errors) : 'None'}</p>
+          <p>Can submit: {canSubmit ? '✅' : '❌'}</p>
+          <p>Loading: {loading ? '⏳' : '✅'}</p>
+        </div>
+      )}
+
       {/* Form Actions */}
       <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
         <Button
@@ -713,7 +716,7 @@ export default function WarehouseForm({ warehouse, onSuccess, onCancel }: Wareho
         <Button
           type="submit"
           className="flex-1 bg-blue-600 hover:bg-blue-700"
-          disabled={loading || !isValid}
+          disabled={!canSubmit}
         >
           {loading ? (
             <>

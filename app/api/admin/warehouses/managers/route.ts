@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const availableManagers = await prisma.user.findMany({
       where: {
         hospitalId: user.hospitalId,
-        isActive: true,
+        status: 'ACTIVE',
         role: {
           in: ['HOSPITAL_ADMIN', 'PHARMACY_MANAGER', 'SENIOR_PHARMACIST', 'STAFF_PHARMACIST']
         }
@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
         firstName: true,
         lastName: true,
         email: true,
-        phone: true,
         role: true,
         position: true,
         _count: {

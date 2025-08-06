@@ -1,4 +1,4 @@
-// app/admin/departments/page.tsx - Complete Version
+// app/admin/warehouses/page.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -24,7 +24,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -36,124 +35,124 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { 
-  Building2, 
-  Plus, 
-  Search, 
-  Filter, 
-  Edit, 
-  Trash2,
-  Users,
-  FileText,
-  Phone,
-  Mail,
-  MapPin,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Eye,
-  MoreHorizontal
-} from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import DepartmentForm from './components/DepartmentForm';
+import { 
+  Warehouse, 
+  Plus, 
+  Search, 
+  Filter, 
+  Edit, 
+  Trash2,
+  Package,
+  Thermometer,
+  Shield,
+  User,
+  MapPin,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  MoreHorizontal,
+  Snowflake,
+  Lock
+} from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import WarehouseForm from './components/WarehouseForm';
 
 // Types
-interface Department {
+interface WarehouseData {
   id: string;
   name: string;
-  nameEn?: string;
-  departmentCode: string;
+  warehouseCode: string;
   type: string;
-  location?: string;
-  phone?: string;
-  email?: string;
+  location: string;
+  address?: string;
   isActive: boolean;
-  allowRequisition: boolean;
-  requireApproval: boolean;
-  maxRequisitionValue?: number;
-  budgetLimit?: number;
-  parentDepartment?: {
-    id: string;
-    name: string;
-    departmentCode: string;
-  };
-  childDepartments?: Array<{
-    id: string;
-    name: string;
-    departmentCode: string;
-  }>;
-  headOfDepartment?: {
+  hasTemperatureControl: boolean;
+  hasHumidityControl: boolean;
+  securityLevel: string;
+  accessControl: boolean;
+  cctv: boolean;
+  alarm: boolean;
+  temperatureRange?: string;
+  humidityRange?: string;
+  manager?: {
     id: string;
     firstName: string;
     lastName: string;
     email: string;
   };
-  userCount: number;
-  requisitionCount: number;
-  budgetUtilization: number;
+  stockItemCount: number;
+  transactionCount: number;
+  totalValue: number;
   createdAt: string;
   updatedAt: string;
 }
 
-interface DepartmentStats {
-  [key: string]: number;
+interface WarehouseStats {
+  byType: Record<string, number>;
+  totalValue: number;
+  totalWarehouses: number;
 }
 
 interface ApiResponse {
-  departments: Department[];
+  warehouses: WarehouseData[];
   pagination: {
     page: number;
     limit: number;
     total: number;
     pages: number;
   };
-  stats: DepartmentStats;
+  stats: WarehouseStats;
 }
 
-// Department type translations
-const departmentTypeTranslations = {
-  PHARMACY: 'เภสัชกรรม',
-  EMERGENCY: 'ฉุกเฉิน',
-  ICU: 'หอผู้ป่วยวิกฤต',
-  WARD: 'หอผู้ป่วยทั่วไป',
-  OPD: 'ผู้ป่วยนอก',
-  OR: 'ห้องผ่าตัด',
-  LABORATORY: 'ห้องปฏิบัติการ',
-  RADIOLOGY: 'รังสีวิทยา',
-  ADMINISTRATION: 'บริหารงาน',
-  FINANCE: 'การเงิน',
-  HR: 'ทรัพยากรบุคคล',
-  IT: 'เทคโนโลยีสารสนเทศ',
-  OTHER: 'อื่นๆ'
+// Warehouse type translations
+const warehouseTypeTranslations = {
+  CENTRAL: 'คลังกลาง',
+  DEPARTMENT: 'คลังแผนก',
+  EMERGENCY: 'คลังฉุกเฉิน',
+  CONTROLLED: 'คลังยาควบคุม',
+  COLD_STORAGE: 'ห้องเย็น',
+  QUARANTINE: 'ห้องกักกัน',
+  DISPOSAL: 'ห้องทำลาย',
+  RECEIVING: 'ห้องรับของ',
+  DISPENSING: 'ห้องจ่ายยา'
 };
 
-// Department type colors
-const departmentTypeColors = {
-  PHARMACY: 'bg-blue-100 text-blue-800 border-blue-200',
+// Warehouse type colors
+const warehouseTypeColors = {
+  CENTRAL: 'bg-blue-100 text-blue-800 border-blue-200',
+  DEPARTMENT: 'bg-green-100 text-green-800 border-green-200',
   EMERGENCY: 'bg-red-100 text-red-800 border-red-200',
-  ICU: 'bg-purple-100 text-purple-800 border-purple-200',
-  WARD: 'bg-green-100 text-green-800 border-green-200',
-  OPD: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  OR: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-  LABORATORY: 'bg-pink-100 text-pink-800 border-pink-200',
-  RADIOLOGY: 'bg-orange-100 text-orange-800 border-orange-200',
-  ADMINISTRATION: 'bg-gray-100 text-gray-800 border-gray-200',
-  FINANCE: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  HR: 'bg-cyan-100 text-cyan-800 border-cyan-200',
-  IT: 'bg-violet-100 text-violet-800 border-violet-200',
-  OTHER: 'bg-slate-100 text-slate-800 border-slate-200'
+  CONTROLLED: 'bg-orange-100 text-orange-800 border-orange-200',
+  COLD_STORAGE: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+  QUARANTINE: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  DISPOSAL: 'bg-gray-100 text-gray-800 border-gray-200',
+  RECEIVING: 'bg-purple-100 text-purple-800 border-purple-200',
+  DISPENSING: 'bg-indigo-100 text-indigo-800 border-indigo-200'
 };
 
-export default function DepartmentsPage() {
+// Security level translations
+const securityLevelTranslations = {
+  BASIC: 'พื้นฐาน',
+  STANDARD: 'มาตรฐาน',
+  HIGH: 'สูง',
+  MAXIMUM: 'สูงสุด'
+};
+
+export default function WarehousesPage() {
   const router = useRouter();
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [stats, setStats] = useState<DepartmentStats>({});
+  const [warehouses, setWarehouses] = useState<WarehouseData[]>([]);
+  const [stats, setStats] = useState<WarehouseStats>({
+    byType: {},
+    totalValue: 0,
+    totalWarehouses: 0
+  });
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -170,15 +169,15 @@ export default function DepartmentsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
+  const [managerFilter, setManagerFilter] = useState('');
   
   // Dialog States
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
-  const [deletingDepartment, setDeletingDepartment] = useState<Department | null>(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [editingWarehouse, setEditingWarehouse] = useState<WarehouseData | null>(null);
+  const [deletingWarehouse, setDeletingWarehouse] = useState<WarehouseData | null>(null);
 
-  // Fetch departments data
-  const fetchDepartments = async () => {
+  // Fetch warehouses data
+  const fetchWarehouses = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -191,8 +190,9 @@ export default function DepartmentsPage() {
       if (search) params.set('search', search);
       if (typeFilter && typeFilter !== 'all') params.set('type', typeFilter);
       if (activeFilter && activeFilter !== 'all') params.set('active', activeFilter);
+      if (managerFilter && managerFilter !== 'all') params.set('hasManager', managerFilter);
       
-      const response = await fetch(`/api/admin/departments?${params}`);
+      const response = await fetch(`/api/admin/warehouses?${params}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -200,43 +200,37 @@ export default function DepartmentsPage() {
       }
       
       const data: ApiResponse = await response.json();
-      setDepartments(data.departments);
+      setWarehouses(data.warehouses);
       setStats(data.stats);
       setPagination(data.pagination);
       
     } catch (err) {
-      console.error('Error fetching departments:', err);
+      console.error('Error fetching warehouses:', err);
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete department
-  const handleDeleteDepartment = async (department: Department) => {
-    if (deleteConfirmation !== department.name) {
-      setError('กรุณาพิมพ์ชื่อแผนกให้ถูกต้องเพื่อยืนยันการลบ');
-      return;
-    }
-
+  // Delete warehouse
+  const handleDeleteWarehouse = async (warehouse: WarehouseData) => {
     try {
-      const response = await fetch(`/api/admin/departments/${department.id}`, {
+      const response = await fetch(`/api/admin/warehouses/${warehouse.id}`, {
         method: 'DELETE',
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'เกิดข้อผิดพลาดในการลบแผนก');
+        throw new Error(errorData.error || 'เกิดข้อผิดพลาดในการลบคลัง');
       }
       
-      setSuccess(`ลบแผนก "${department.name}" สำเร็จแล้ว`);
-      setDeletingDepartment(null);
-      setDeleteConfirmation('');
-      fetchDepartments();
+      setSuccess(`ลบคลัง "${warehouse.name}" สำเร็จแล้ว`);
+      setDeletingWarehouse(null);
+      fetchWarehouses();
       
     } catch (err) {
-      console.error('Error deleting department:', err);
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการลบแผนก');
+      console.error('Error deleting warehouse:', err);
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการลบคลัง');
     }
   };
 
@@ -244,8 +238,8 @@ export default function DepartmentsPage() {
   const handleFormSuccess = (message: string) => {
     setSuccess(message);
     setCreateDialogOpen(false);
-    setEditingDepartment(null);
-    fetchDepartments();
+    setEditingWarehouse(null);
+    fetchWarehouses();
   };
 
   // Clear filters
@@ -253,12 +247,13 @@ export default function DepartmentsPage() {
     setSearch('');
     setTypeFilter('all');
     setActiveFilter('all');
+    setManagerFilter('all');
   };
 
   // Load data on component mount and when filters change
   useEffect(() => {
-    fetchDepartments();
-  }, [pagination.page, search, typeFilter, activeFilter]);
+    fetchWarehouses();
+  }, [pagination.page, search, typeFilter, activeFilter, managerFilter]);
 
   // Auto-clear messages
   useEffect(() => {
@@ -275,8 +270,15 @@ export default function DepartmentsPage() {
     }
   }, [error]);
 
-  // Calculate total departments
-  const totalDepartments = Object.values(stats).reduce((sum, count) => sum + count, 0);
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('th-TH', {
+      style: 'currency',
+      currency: 'THB',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -286,11 +288,11 @@ export default function DepartmentsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Building2 className="w-6 h-6 text-blue-600" />
-              จัดการแผนกงาน
+              <Warehouse className="w-6 h-6 text-blue-600" />
+              จัดการคลังเก็บยา
             </h1>
             <p className="text-gray-600 mt-1">
-              จัดการข้อมูลแผนกและหน่วยงานต่างๆ ในโรงพยาบาล
+              จัดการข้อมูลคลังและสถานที่เก็บยาต่างๆ ในโรงพยาบาล
             </p>
           </div>
           
@@ -299,7 +301,7 @@ export default function DepartmentsPage() {
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Plus className="w-4 h-4 mr-2" />
-            เพิ่มแผนกใหม่
+            เพิ่มคลังใหม่
           </Button>
         </div>
 
@@ -326,12 +328,12 @@ export default function DepartmentsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">แผนกทั้งหมด</p>
+                  <p className="text-sm text-gray-600">คลังทั้งหมด</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {totalDepartments}
+                    {stats.totalWarehouses}
                   </p>
                 </div>
-                <Building2 className="w-8 h-8 text-blue-600" />
+                <Warehouse className="w-8 h-8 text-blue-600" />
               </div>
             </CardContent>
           </Card>
@@ -340,13 +342,13 @@ export default function DepartmentsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">เภสัชกรรม</p>
+                  <p className="text-sm text-gray-600">คลังกลาง</p>
                   <p className="text-2xl font-bold text-blue-600">
-                    {stats.PHARMACY || 0}
+                    {stats.byType.CENTRAL || 0}
                   </p>
                 </div>
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 font-bold text-sm">💊</span>
+                  <Package className="w-4 h-4 text-blue-600" />
                 </div>
               </div>
             </CardContent>
@@ -356,29 +358,29 @@ export default function DepartmentsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">หอผู้ป่วย</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {(stats.ICU || 0) + (stats.WARD || 0)}
+                  <p className="text-sm text-gray-600">ห้องเย็น</p>
+                  <p className="text-2xl font-bold text-cyan-600">
+                    {stats.byType.COLD_STORAGE || 0}
+                  </p>
+                </div>
+                <div className="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center">
+                  <Snowflake className="w-4 h-4 text-cyan-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">มูลค่ารวม</p>
+                  <p className="text-lg font-bold text-green-600">
+                    {formatCurrency(stats.totalValue)}
                   </p>
                 </div>
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-green-600 font-bold text-sm">🏥</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">ฉุกเฉิน</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {stats.EMERGENCY || 0}
-                  </p>
-                </div>
-                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                  <span className="text-red-600 font-bold text-sm">🚨</span>
+                  <span className="text-green-600 font-bold text-sm">₿</span>
                 </div>
               </div>
             </CardContent>
@@ -393,7 +395,7 @@ export default function DepartmentsPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    placeholder="ค้นหาชื่อแผนก, รหัสแผนก..."
+                    placeholder="ค้นหาชื่อคลัง, รหัสคลัง, ตำแหน่ง..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="pl-10"
@@ -404,13 +406,25 @@ export default function DepartmentsPage() {
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="w-full sm:w-48">
                   <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="ประเภทแผนก" />
+                  <SelectValue placeholder="ประเภทคลัง" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">ทุกประเภท</SelectItem>
-                  {Object.entries(departmentTypeTranslations).map(([key, value]) => (
+                  {Object.entries(warehouseTypeTranslations).map(([key, value]) => (
                     <SelectItem key={key} value={key}>{value}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={managerFilter} onValueChange={setManagerFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <User className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="ผู้จัดการ" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">ทั้งหมด</SelectItem>
+                  <SelectItem value="true">มีผู้จัดการ</SelectItem>
+                  <SelectItem value="false">ไม่มีผู้จัดการ</SelectItem>
                 </SelectContent>
               </Select>
               
@@ -425,7 +439,7 @@ export default function DepartmentsPage() {
                 </SelectContent>
               </Select>
 
-              {(search || (typeFilter && typeFilter !== 'all') || (activeFilter && activeFilter !== 'all')) && (
+              {(search || (typeFilter && typeFilter !== 'all') || (activeFilter && activeFilter !== 'all') || (managerFilter && managerFilter !== 'all')) && (
                 <Button 
                   variant="outline" 
                   onClick={clearFilters}
@@ -438,12 +452,12 @@ export default function DepartmentsPage() {
           </CardContent>
         </Card>
 
-        {/* Departments Table */}
+        {/* Warehouses Table */}
         <Card>
           <CardHeader>
-            <CardTitle>รายการแผนกงาน</CardTitle>
+            <CardTitle>รายการคลังเก็บยา</CardTitle>
             <CardDescription>
-              แสดงรายการแผนกทั้งหมด {pagination.total} แผนง
+              แสดงรายการคลังทั้งหมด {pagination.total} คลัง
               {search && ` (กรองด้วย "${search}")`}
             </CardDescription>
           </CardHeader>
@@ -453,22 +467,22 @@ export default function DepartmentsPage() {
                 <Loader2 className="w-8 h-8 animate-spin mr-3 text-blue-600" />
                 <span className="text-gray-600">กำลังโหลดข้อมูล...</span>
               </div>
-            ) : departments.length === 0 ? (
+            ) : warehouses.length === 0 ? (
               <div className="text-center py-12">
-                <Building2 className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <Warehouse className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  ไม่พบข้อมูลแผนก
+                  ไม่พบข้อมูลคลัง
                 </h3>
                 <p className="text-gray-500 mb-4">
-                  {search || (typeFilter && typeFilter !== 'all') || (activeFilter && activeFilter !== 'all')
-                    ? 'ไม่พบแผนกที่ตรงกับเงื่อนไขการค้นหา'
-                    : 'ยังไม่มีแผนกในระบบ เริ่มต้นด้วยการเพิ่มแผนกแรก'
+                  {search || (typeFilter && typeFilter !== 'all') || (activeFilter && activeFilter !== 'all') || (managerFilter && managerFilter !== 'all')
+                    ? 'ไม่พบคลังที่ตรงกับเงื่อนไขการค้นหา'
+                    : 'ยังไม่มีคลังในระบบ เริ่มต้นด้วยการเพิ่มคลังแรก'
                   }
                 </p>
-                {!(search || (typeFilter && typeFilter !== 'all') || (activeFilter && activeFilter !== 'all')) && (
+                {!(search || (typeFilter && typeFilter !== 'all') || (activeFilter && activeFilter !== 'all') || (managerFilter && managerFilter !== 'all')) && (
                   <Button onClick={() => setCreateDialogOpen(true)}>
                     <Plus className="w-4 h-4 mr-2" />
-                    เพิ่มแผนกแรก
+                    เพิ่มคลังแรก
                   </Button>
                 )}
               </div>
@@ -477,58 +491,71 @@ export default function DepartmentsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ชื่อแผนก</TableHead>
+                      <TableHead>ชื่อคลัง</TableHead>
                       <TableHead>รหัส</TableHead>
                       <TableHead>ประเภท</TableHead>
-                      <TableHead>หัวหน้าแผนก</TableHead>
-                      <TableHead className="text-center">พนักงาน</TableHead>
+                      <TableHead>การควบคุม</TableHead>
+                      <TableHead>ผู้จัดการ</TableHead>
+                      <TableHead className="text-center">สินค้า</TableHead>
                       <TableHead className="text-center">สถานะ</TableHead>
                       <TableHead className="text-center">การดำเนินการ</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {departments.map((department) => (
-                      <TableRow key={department.id} className="hover:bg-gray-50">
+                    {warehouses.map((warehouse) => (
+                      <TableRow key={warehouse.id} className="hover:bg-gray-50">
                         <TableCell>
                           <div>
-                            <p className="font-medium text-gray-900">{department.name}</p>
-                            {department.nameEn && (
-                              <p className="text-sm text-gray-500">{department.nameEn}</p>
-                            )}
-                            {department.location && (
-                              <div className="flex items-center text-xs text-gray-500 mt-1">
-                                <MapPin className="w-3 h-3 mr-1" />
-                                {department.location}
-                              </div>
-                            )}
-                            {department.parentDepartment && (
-                              <div className="flex items-center text-xs text-blue-600 mt-1">
-                                <Building2 className="w-3 h-3 mr-1" />
-                                สังกัด: {department.parentDepartment.name}
-                              </div>
+                            <p className="font-medium text-gray-900">{warehouse.name}</p>
+                            <div className="flex items-center text-xs text-gray-500 mt-1">
+                              <MapPin className="w-3 h-3 mr-1" />
+                              {warehouse.location}
+                            </div>
+                            {warehouse.address && (
+                              <p className="text-xs text-gray-500 mt-1">{warehouse.address}</p>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="font-mono">
-                            {department.departmentCode}
+                            {warehouse.warehouseCode}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge 
-                            className={departmentTypeColors[department.type as keyof typeof departmentTypeColors]}
+                            className={warehouseTypeColors[warehouse.type as keyof typeof warehouseTypeColors]}
                           >
-                            {departmentTypeTranslations[department.type as keyof typeof departmentTypeTranslations]}
+                            {warehouseTypeTranslations[warehouse.type as keyof typeof warehouseTypeTranslations]}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {department.headOfDepartment ? (
+                          <div className="flex flex-wrap gap-1">
+                            {warehouse.hasTemperatureControl && (
+                              <Badge variant="outline" className="text-xs">
+                                <Thermometer className="w-3 h-3 mr-1" />
+                                {warehouse.temperatureRange}
+                              </Badge>
+                            )}
+                            {warehouse.accessControl && (
+                              <Badge variant="outline" className="text-xs">
+                                <Lock className="w-3 h-3 mr-1" />
+                                ควบคุม
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              <Shield className="w-3 h-3 mr-1" />
+                              {securityLevelTranslations[warehouse.securityLevel as keyof typeof securityLevelTranslations]}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {warehouse.manager ? (
                             <div>
                               <p className="text-sm font-medium">
-                                {department.headOfDepartment.firstName} {department.headOfDepartment.lastName}
+                                {warehouse.manager.firstName} {warehouse.manager.lastName}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {department.headOfDepartment.email}
+                                {warehouse.manager.email}
                               </p>
                             </div>
                           ) : (
@@ -537,16 +564,16 @@ export default function DepartmentsPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center text-sm">
-                            <Users className="w-4 h-4 mr-1 text-gray-400" />
-                            <span className="font-medium">{department.userCount}</span>
+                            <Package className="w-4 h-4 mr-1 text-gray-400" />
+                            <span className="font-medium">{warehouse.stockItemCount}</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge 
-                            variant={department.isActive ? "default" : "secondary"}
-                            className={department.isActive ? "bg-green-100 text-green-800 border-green-200" : ""}
+                            variant={warehouse.isActive ? "default" : "secondary"}
+                            className={warehouse.isActive ? "bg-green-100 text-green-800 border-green-200" : ""}
                           >
-                            {department.isActive ? "ใช้งาน" : "ไม่ใช้งาน"}
+                            {warehouse.isActive ? "ใช้งาน" : "ไม่ใช้งาน"}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
@@ -558,19 +585,19 @@ export default function DepartmentsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem 
-                                onClick={() => router.push(`/admin/departments/${department.id}`)}
+                                onClick={() => router.push(`/admin/warehouses/${warehouse.id}`)}
                               >
                                 <Eye className="w-4 h-4 mr-2" />
                                 ดูรายละเอียด
                               </DropdownMenuItem>
                               <DropdownMenuItem 
-                                onClick={() => setEditingDepartment(department)}
+                                onClick={() => setEditingWarehouse(warehouse)}
                               >
                                 <Edit className="w-4 h-4 mr-2" />
                                 แก้ไข
                               </DropdownMenuItem>
                               <DropdownMenuItem 
-                                onClick={() => setDeletingDepartment(department)}
+                                onClick={() => setDeletingWarehouse(warehouse)}
                                 className="text-red-600 focus:text-red-600"
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />
@@ -635,122 +662,38 @@ export default function DepartmentsPage() {
 
       </div>
 
-      {/* Create Department Dialog */}
+      {/* Create Warehouse Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>เพิ่มแผนกใหม่</DialogTitle>
+            <DialogTitle>เพิ่มคลังใหม่</DialogTitle>
             <DialogDescription>
-              กรอกข้อมูลแผนกใหม่ที่ต้องการเพิ่มเข้าระบบ
+              กรอกข้อมูลคลังใหม่ที่ต้องการเพิ่มเข้าระบบ
             </DialogDescription>
           </DialogHeader>
-          <DepartmentForm
+          <WarehouseForm
             onSuccess={handleFormSuccess}
             onCancel={() => setCreateDialogOpen(false)}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Edit Department Dialog */}
-      <Dialog open={!!editingDepartment} onOpenChange={() => setEditingDepartment(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* Edit Warehouse Dialog */}
+      <Dialog open={!!editingWarehouse} onOpenChange={() => setEditingWarehouse(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>แก้ไขข้อมูลแผนก</DialogTitle>
+            <DialogTitle>แก้ไขข้อมูลคลัง</DialogTitle>
             <DialogDescription>
-              แก้ไขข้อมูลแผนก "{editingDepartment?.name}"
+              แก้ไขข้อมูลคลัง "{editingWarehouse?.name}"
             </DialogDescription>
           </DialogHeader>
-          {editingDepartment && (
-            <DepartmentForm
-              department={editingDepartment}
+          {editingWarehouse && (
+            <WarehouseForm
+              warehouse={editingWarehouse}
               onSuccess={handleFormSuccess}
-              onCancel={() => setEditingDepartment(null)}
+              onCancel={() => setEditingWarehouse(null)}
             />
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deletingDepartment} onOpenChange={() => {
-        setDeletingDepartment(null);
-        setDeleteConfirmation('');
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="w-5 h-5" />
-              ยืนยันการลบแผนก
-            </DialogTitle>
-            <DialogDescription>
-              การกระทำนี้ไม่สามารถยกเลิกได้ กรุณาพิจารณาอย่างรอบคอบ
-            </DialogDescription>
-          </DialogHeader>
-          
-          {deletingDepartment && (
-            <div className="space-y-4">
-              <Alert variant="error">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  การลบแผนก "{deletingDepartment.name}" จะส่งผลต่อข้อมูลที่เกี่ยวข้อง เช่น ผู้ใช้งานในแผนก, ใบเบิกยา, และข้อมูลสถิติต่างๆ
-                </AlertDescription>
-              </Alert>
-              
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <h4 className="font-medium text-gray-900">ข้อมูลที่จะได้รับผลกระทบ:</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">พนักงานในแผนก:</span>
-                    <span className="font-medium">{deletingDepartment.userCount} คน</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">ใบเบิกยา:</span>
-                    <span className="font-medium">{deletingDepartment.requisitionCount} ใบ</span>
-                  </div>
-                  {deletingDepartment.childDepartments && deletingDepartment.childDepartments.length > 0 && (
-                    <div className="flex items-center justify-between col-span-2">
-                      <span className="text-gray-600">แผนกย่อย:</span>
-                      <span className="font-medium">{deletingDepartment.childDepartments.length} แผนก</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <p className="text-sm text-gray-900 font-medium">
-                  เพื่อยืนยันการลบ กรุณาพิมพ์ชื่อแผนก:
-                </p>
-                <p className="text-sm font-mono bg-gray-100 p-2 rounded border">
-                  {deletingDepartment.name}
-                </p>
-                <Input
-                  placeholder={`พิมพ์ "${deletingDepartment.name}" เพื่อยืนยัน`}
-                  value={deleteConfirmation}
-                  onChange={(e) => setDeleteConfirmation(e.target.value)}
-                  className={deleteConfirmation === deletingDepartment.name ? "border-green-500" : "border-red-300"}
-                />
-              </div>
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeletingDepartment(null);
-                setDeleteConfirmation('');
-              }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deletingDepartment && handleDeleteDepartment(deletingDepartment)}
-              disabled={!deletingDepartment || deleteConfirmation !== deletingDepartment.name}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              ลบแผนกอย่างถาวร
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
