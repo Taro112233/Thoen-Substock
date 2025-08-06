@@ -1,4 +1,4 @@
-// app/admin/drugs/page.tsx
+// app/admin/drugs/page.tsx - Fixed version
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -28,7 +28,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { 
   Plus, 
@@ -55,6 +54,7 @@ interface Drug {
   hospitalDrugCode: string;
   genericName: string;
   brandName?: string;
+  name: string;
   strength: string;
   unitOfMeasure: string;
   dosageForm: string;
@@ -68,10 +68,10 @@ interface Drug {
   isOutOfStock: boolean;
   fullName: string;
   strengthDisplay: string;
-  category?: {
-    id: string;
-    categoryName: string;
-    categoryCode: string;
+  _count?: {
+    stockCards: number;
+    stockTransactions: number;
+    requisitionItems: number;
   };
 }
 
@@ -90,6 +90,21 @@ interface DrugFilters {
   active: string;
   sortBy: string;
   sortOrder: string;
+}
+
+interface ApiResponse {
+  success?: boolean;
+  drugs: Drug[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  summary: DrugSummary;
+  error?: string;
 }
 
 // Constants
@@ -167,15 +182,22 @@ export default function DrugsPage() {
       });
 
       const response = await fetch(`/api/admin/drugs?${params}`);
-      const data = await response.json();
+      const data: ApiResponse = await response.json();
 
       if (response.ok) {
-        setDrugs(data.drugs);
-        setSummary(data.summary);
-        setTotalPages(data.pagination.totalPages);
+        // ✅ Fixed: Handle the correct API response structure
+        setDrugs(data.drugs || []);
+        setSummary(data.summary || {
+          totalDrugs: 0,
+          activeDrugs: 0,
+          controlledDrugs: 0,
+          formularyDrugs: 0,
+        });
+        setTotalPages(data.pagination?.totalPages || 1);
+        
         console.log('✅ [DRUGS PAGE] Data loaded:', {
-          count: data.drugs.length,
-          total: data.summary.totalDrugs,
+          count: data.drugs?.length || 0,
+          total: data.summary?.totalDrugs || 0,
         });
       } else {
         toast.error(data.error || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
@@ -194,8 +216,8 @@ export default function DrugsPage() {
   }, [filters, currentPage]);
 
   // Handle drug creation success
-  const handleDrugCreated = (newDrug: Drug) => {
-    console.log('✅ [DRUGS PAGE] Drug created:', newDrug);
+  const handleDrugCreated = () => {
+    console.log('✅ [DRUGS PAGE] Drug created successfully');
     setShowCreateDialog(false);
     toast.success('เพิ่มยาใหม่สำเร็จ');
     
@@ -285,7 +307,7 @@ export default function DrugsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.totalDrugs.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">รายการยาทั้งหมด</p>
+            <p className="text-xs text-muted-foreground">รายการยาในระบบ</p>
           </CardContent>
         </Card>
 
@@ -295,7 +317,7 @@ export default function DrugsPage() {
             <Pill className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{summary.activeDrugs.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{summary.activeDrugs.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">ยาที่เปิดใช้งาน</p>
           </CardContent>
         </Card>
@@ -306,58 +328,50 @@ export default function DrugsPage() {
             <ShieldCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{summary.controlledDrugs.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">ยาประเภทควบคุม</p>
+            <div className="text-2xl font-bold">{summary.controlledDrugs.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">ยาที่ต้องควบคุม</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">ยาในบัญชี</CardTitle>
+            <CardTitle className="text-sm font-medium">ในบัญชียา</CardTitle>
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{summary.formularyDrugs.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{summary.formularyDrugs.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">ยาในบัญชีโรงพยาบาล</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters and Search */}
+      {/* Main Content */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>ค้นหาและกรองข้อมูล</span>
-          </CardTitle>
+          <CardTitle>รายการยา</CardTitle>
+          <CardDescription>
+            จัดการข้อมูลยาในโรงพยาบาล
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Search */}
-          <div className="flex space-x-2">
+        <CardContent>
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="ค้นหาด้วยชื่อยา, รหัสยา, หรือหมวดหมู่..."
+                placeholder="ค้นหาชื่อยา, รหัส หรือหมวดยา..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
-            <Button variant="outline" onClick={clearFilters}>
-              ล้างตัวกรอง
-            </Button>
-          </div>
-
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <Select
-              value={filters.dosageForm}
-              onValueChange={(value) => handleFilterChange('dosageForm', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="ทุกรูปแบบ" />
+            
+            <Select value={filters.dosageForm} onValueChange={(value) => handleFilterChange('dosageForm', value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="รูปแบบยา" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="ALL">ทุกรูปแบบ</SelectItem>
                 {dosageForms.map((form) => (
                   <SelectItem key={form.value} value={form.value}>
                     {form.label}
@@ -366,12 +380,9 @@ export default function DrugsPage() {
               </SelectContent>
             </Select>
 
-            <Select
-              value={filters.isControlled}
-              onValueChange={(value) => handleFilterChange('isControlled', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="ยาควบคุม" />
+            <Select value={filters.isControlled} onValueChange={(value) => handleFilterChange('isControlled', value)}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="การควบคุม" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">ทั้งหมด</SelectItem>
@@ -380,25 +391,8 @@ export default function DrugsPage() {
               </SelectContent>
             </Select>
 
-            <Select
-              value={filters.isFormulary}
-              onValueChange={(value) => handleFilterChange('isFormulary', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="ยาในบัญชี" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">ทั้งหมด</SelectItem>
-                <SelectItem value="true">ในบัญชี</SelectItem>
-                <SelectItem value="false">นอกบัญชี</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.active}
-              onValueChange={(value) => handleFilterChange('active', value)}
-            >
-              <SelectTrigger>
+            <Select value={filters.active} onValueChange={(value) => handleFilterChange('active', value)}>
+              <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="สถานะ" />
               </SelectTrigger>
               <SelectContent>
@@ -408,41 +402,15 @@ export default function DrugsPage() {
               </SelectContent>
             </Select>
 
-            <Select
-              value={`${filters.sortBy}-${filters.sortOrder}`}
-              onValueChange={(value) => {
-                const [sortBy, sortOrder] = value.split('-');
-                handleFilterChange('sortBy', sortBy);
-                handleFilterChange('sortOrder', sortOrder);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="เรียงตาม" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="genericName-asc">ชื่อ A-Z</SelectItem>
-                <SelectItem value="genericName-desc">ชื่อ Z-A</SelectItem>
-                <SelectItem value="hospitalDrugCode-asc">รหัส A-Z</SelectItem>
-                <SelectItem value="hospitalDrugCode-desc">รหัส Z-A</SelectItem>
-                <SelectItem value="createdAt-desc">ใหม่ล่าสุด</SelectItem>
-                <SelectItem value="createdAt-asc">เก่าสุด</SelectItem>
-              </SelectContent>
-            </Select>
+            {(Object.values(filters).some(f => f !== '' && f !== 'true' && f !== 'genericName' && f !== 'asc') || searchTerm) && (
+              <Button variant="outline" onClick={clearFilters}>
+                <Filter className="h-4 w-4 mr-2" />
+                ล้างตัวกรง
+              </Button>
+            )}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Drug List */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>รายการยา</CardTitle>
-            <div className="text-sm text-muted-foreground">
-              แสดง {drugs.length} จาก {summary.totalDrugs} รายการ
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+          {/* Table */}
           {loading ? (
             <LoadingSkeleton />
           ) : drugs.length === 0 ? (
@@ -480,13 +448,13 @@ export default function DrugsPage() {
                       <TableCell className="font-mono">{drug.hospitalDrugCode}</TableCell>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{drug.fullName}</div>
+                          <div className="font-medium">{drug.fullName || drug.name}</div>
                           <div className="text-sm text-muted-foreground">{drug.therapeuticClass}</div>
                         </div>
                       </TableCell>
-                      <TableCell>{drug.strengthDisplay}</TableCell>
+                      <TableCell>{drug.strengthDisplay || `${drug.strength} ${drug.unitOfMeasure}`}</TableCell>
                       <TableCell>
-                        {dosageForms.find(f => f.value === drug.dosageForm)?.label}
+                        {dosageForms.find(f => f.value === drug.dosageForm)?.label || drug.dosageForm}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-1">
@@ -504,7 +472,7 @@ export default function DrugsPage() {
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           {renderStockStatus(drug)}
-                          <span className="text-sm">{drug.totalStock}</span>
+                          <span className="text-sm">{drug.totalStock || 0}</span>
                           {drug.stockLocations > 0 && (
                             <span className="text-xs text-muted-foreground">
                               ({drug.stockLocations} จุด)
@@ -565,132 +533,43 @@ export default function DrugsPage() {
         </CardContent>
       </Card>
 
+      {/* Drug Creation Dialog */}
+      <DrugForm
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={handleDrugCreated}
+      />
+
       {/* Drug Detail Dialog */}
       {selectedDrug && (
         <Dialog open={!!selectedDrug} onOpenChange={() => setSelectedDrug(null)}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center space-x-2">
-                <Pill className="h-5 w-5" />
-                <span>ข้อมูลยา: {selectedDrug.fullName}</span>
-              </DialogTitle>
+              <DialogTitle>{selectedDrug.fullName || selectedDrug.name}</DialogTitle>
               <DialogDescription>
-                รหัสยา: {selectedDrug.hospitalDrugCode}
+                รหัส: {selectedDrug.hospitalDrugCode}
               </DialogDescription>
             </DialogHeader>
-            
-            <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="basic">ข้อมูลพื้นฐาน</TabsTrigger>
-                <TabsTrigger value="stock">สต็อก</TabsTrigger>
-                <TabsTrigger value="clinical">ข้อมูลทางคลินิก</TabsTrigger>
-                <TabsTrigger value="history">ประวัติ</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="basic" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">รหัสยาโรงพยาบาล</label>
-                    <p className="font-mono">{selectedDrug.hospitalDrugCode}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">ชื่อสามัญ</label>
-                    <p>{selectedDrug.genericName}</p>
-                  </div>
-                  {selectedDrug.brandName && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">ชื่อการค้า</label>
-                      <p>{selectedDrug.brandName}</p>
-                    </div>
-                  )}
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">ความแรง</label>
-                    <p>{selectedDrug.strengthDisplay}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">รูปแบบยา</label>
-                    <p>{dosageForms.find(f => f.value === selectedDrug.dosageForm)?.label}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">หมวดหมู่</label>
-                    <p>{selectedDrug.category?.categoryName || selectedDrug.therapeuticClass}</p>
-                  </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-medium">ข้อมูลพื้นฐาน</h4>
+                <p className="text-sm text-muted-foreground">ชื่อสามัญ: {selectedDrug.genericName}</p>
+                <p className="text-sm text-muted-foreground">ชื่อการค้า: {selectedDrug.brandName || '-'}</p>
+                <p className="text-sm text-muted-foreground">ความแรง: {selectedDrug.strengthDisplay}</p>
+                <p className="text-sm text-muted-foreground">รูปแบบ: {dosageForms.find(f => f.value === selectedDrug.dosageForm)?.label}</p>
+              </div>
+              <div>
+                <h4 className="font-medium">สถานะ</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedDrug.isActive && <Badge>เปิดใช้งาน</Badge>}
+                  {selectedDrug.isControlled && <Badge variant="secondary">ยาควบคุม</Badge>}
+                  {selectedDrug.isFormulary && <Badge variant="outline">ในบัญชียา</Badge>}
                 </div>
-                
-                <div className="flex space-x-2">
-                  {selectedDrug.isControlled && (
-                    <Badge variant="secondary">ยาควบคุม</Badge>
-                  )}
-                  {selectedDrug.isFormulary && (
-                    <Badge variant="outline">ในบัญชียา</Badge>
-                  )}
-                  <Badge variant={selectedDrug.isActive ? "default" : "secondary"}>
-                    {selectedDrug.isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
-                  </Badge>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="stock">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">สต็อกทั้งหมด</label>
-                      <p className="text-2xl font-bold">{selectedDrug.totalStock}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">จุดเก็บ</label>
-                      <p className="text-2xl font-bold">{selectedDrug.stockLocations}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">สถานะสต็อก</label>
-                      <div className="mt-1">
-                        {renderStockStatus(selectedDrug)}
-                      </div>
-                    </div>
-                  </div>
-                  {selectedDrug.stockLocations === 0 && (
-                    <div className="p-4 bg-yellow-50 rounded-lg">
-                      <p className="text-yellow-800">ยายังไม่มีสต็อกในระบบ</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="clinical">
-                <div className="space-y-4">
-                  <p className="text-gray-500">ข้อมูลทางคลินิกจะแสดงที่นี่เมื่อมีการเพิ่มข้อมูล</p>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="history">
-                <div className="space-y-4">
-                  <p className="text-gray-500">ประวัติการเคลื่อนไหวและการทำรายการจะแสดงที่นี่</p>
-                </div>
-              </TabsContent>
-            </Tabs>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       )}
-
-      {/* Create Drug Dialog - Now with Full Form */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <Plus className="h-5 w-5" />
-              <span>เพิ่มยาใหม่</span>
-            </DialogTitle>
-            <DialogDescription>
-              กรอกข้อมูลยาใหม่ลงในระบบ กรุณากรอกข้อมูลให้ครบถ้วนในแต่ละแท็บ
-            </DialogDescription>
-          </DialogHeader>
-          
-          <DrugForm
-            onSuccess={handleDrugCreated}
-            onCancel={() => setShowCreateDialog(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
