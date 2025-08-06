@@ -1,4 +1,4 @@
-// app/auth/components/RegisterForm.tsx - Updated to handle hospitalCode
+// app/auth/components/RegisterForm.tsx - Clean Version
 "use client";
 
 import { useState, useEffect } from "react";
@@ -12,13 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, User, Mail, Building2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, User, Building2 } from "lucide-react";
 
 interface Hospital {
   id: string;
   name: string;
-  hospitalCode: string; // Fixed: use hospitalCode instead of code
-  status?: string;
+  code: string;
+  nameEn?: string;
   type?: string;
 }
 
@@ -32,7 +32,14 @@ export default function RegisterForm() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loadingHospitals, setLoadingHospitals] = useState(true);
 
-  const form = useForm<RegisterInput>({
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    trigger,
+    formState: { errors, isValid },
+  } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
     mode: "onChange",
     defaultValues: {
@@ -44,36 +51,27 @@ export default function RegisterForm() {
     },
   });
 
-  const { register, handleSubmit, setValue, watch, trigger, formState: { errors, isValid } } = form;
-
-  // Watch all values for debugging
-  const watchedValues = watch();
   const selectedHospitalId = watch("hospitalId");
 
   // Load hospitals
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
-        console.log('🔄 Loading hospitals...');
         const response = await fetch("/api/hospitals");
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Hospitals response:', data);
-          
-          // Handle response as array directly
-          const hospitalsArray = Array.isArray(data) ? data : [];
+          const hospitalsArray = Array.isArray(data) ? data : data.hospitals || [];
           setHospitals(hospitalsArray);
           
           if (hospitalsArray.length === 0) {
             setError("ไม่พบข้อมูลโรงพยาบาลที่สามารถใช้งานได้");
           }
         } else {
-          console.error('❌ Failed to load hospitals:', response.status);
           setError("ไม่สามารถโหลดรายการโรงพยาบาลได้");
         }
       } catch (error) {
-        console.error("❌ Hospital fetch error:", error);
+        console.error("Hospital fetch error:", error);
         setError("เกิดข้อผิดพลาดในการโหลดข้อมูลโรงพยาบาล");
       } finally {
         setLoadingHospitals(false);
@@ -83,25 +81,7 @@ export default function RegisterForm() {
     fetchHospitals();
   }, []);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('🔍 Form Debug:', {
-      values: watchedValues,
-      errors: Object.keys(errors),
-      isValid,
-      hospitalsCount: hospitals.length,
-      isLoading,
-      loadingHospitals,
-    });
-  }, [watchedValues, errors, isValid, hospitals.length, isLoading, loadingHospitals]);
-
   const onSubmit = async (data: RegisterInput) => {
-    console.log('🚀 Submitting registration:', {
-      ...data,
-      password: '[HIDDEN]',
-      confirmPassword: '[HIDDEN]'
-    });
-
     setIsLoading(true);
     setError(null);
     setSuccess(null);
@@ -116,7 +96,6 @@ export default function RegisterForm() {
       });
 
       const result = await response.json();
-      console.log('📥 Registration response:', result);
 
       if (response.ok) {
         setSuccess(result.message || "สมัครสมาชิกสำเร็จ!");
@@ -131,24 +110,19 @@ export default function RegisterForm() {
         }, 2000);
       } else {
         setError(result.error || "เกิดข้อผิดพลาดในการสมัครสมาชิก");
-        
-        if (result.details) {
-          console.log('🔍 Validation errors:', result.details);
-        }
       }
     } catch (err) {
-      console.error('❌ Registration error:', err);
+      console.error('Registration error:', err);
       setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle hospital selection properly
+  // Handle hospital selection
   const handleHospitalSelect = async (value: string) => {
-    console.log('🏥 Hospital selected:', value);
     setValue("hospitalId", value);
-    await trigger("hospitalId"); // Trigger validation
+    await trigger("hospitalId");
   };
 
   // Calculate if form can be submitted
@@ -158,73 +132,63 @@ export default function RegisterForm() {
                    isValid && 
                    selectedHospitalId;
 
+  // Loading state
   if (loadingHospitals) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-        <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
-          <CardContent className="flex items-center justify-center py-8">
-            <div className="flex items-center space-x-4">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-              <span className="text-gray-600">กำลังโหลดข้อมูล...</span>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="w-full max-w-md mx-auto">
+          <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+            <CardContent className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center space-y-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-white" />
+                </div>
+                <span className="text-gray-600 font-medium">กำลังโหลดข้อมูล...</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
-        <CardHeader className="space-y-6 pb-8">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-              <User className="w-8 h-8 text-white" />
-            </div>
-            <div className="text-center">
-              <CardTitle className="text-2xl font-bold text-gray-900">สมัครสมาชิก</CardTitle>
-              <CardDescription className="text-sm text-gray-600 mt-2">
-                สร้างบัญชีใหม่เพื่อเข้าใช้งานระบบ
-              </CardDescription>
-            </div>
+    <div className="w-full max-w-md mx-auto">
+      <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+        <CardHeader className="text-center pb-6">
+          <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+            <User className="w-8 h-8 text-white" />
           </div>
+          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            สมัครสมาชิก
+          </CardTitle>
+          <CardDescription className="text-gray-600">
+            สร้างบัญชีใหม่เพื่อเข้าใช้งานระบบ
+          </CardDescription>
         </CardHeader>
         
-        <CardContent className="space-y-6">
-          {/* Debug Info in Development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="p-3 bg-gray-50 rounded text-xs space-y-1">
-              <div>✅ Form Valid: {isValid ? 'Yes' : 'No'}</div>
-              <div>🏥 Hospitals: {hospitals.length}</div>
-              <div>🔗 Hospital Selected: {selectedHospitalId || 'None'}</div>
-              <div>🚀 Can Submit: {canSubmit ? 'Yes' : 'No'}</div>
-              {Object.keys(errors).length > 0 && (
-                <div className="text-red-600">❌ Errors: {Object.keys(errors).join(', ')}</div>
-              )}
-            </div>
+        <CardContent className="px-8 pb-8 space-y-6">
+          {/* Error Alert */}
+          {error && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-700">{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Success Alert */}
+          {success && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-700">{success}</AlertDescription>
+            </Alert>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Error Alert */}
-            {error && (
-              <Alert variant="error" className="border-red-200 bg-red-50">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-red-800">{error}</AlertDescription>
-              </Alert>
-            )}
-
-            {/* Success Alert */}
-            {success && (
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">{success}</AlertDescription>
-              </Alert>
-            )}
-
-            {/* Hospital Selection - Put First */}
+            {/* Hospital Selection */}
             <div className="space-y-2">
               <Label htmlFor="hospitalId" className="text-sm font-medium text-gray-700">
-                เลือกโรงพยาบาล *
+                หน่วยงาน *
               </Label>
               <Select
                 onValueChange={handleHospitalSelect}
@@ -232,9 +196,9 @@ export default function RegisterForm() {
                 value={selectedHospitalId}
               >
                 <SelectTrigger className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-gray-400" />
-                    <SelectValue placeholder="เลือกโรงพยาบาล" />
+                  <div className="flex items-center">
+                    <Building2 className="mr-2 h-4 w-4 text-gray-500" />
+                    <SelectValue placeholder="เลือกหน่วยงาน" />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
@@ -242,7 +206,9 @@ export default function RegisterForm() {
                     <SelectItem key={hospital.id} value={hospital.id}>
                       <div className="flex flex-col">
                         <span className="font-medium">{hospital.name}</span>
-                        <span className="text-xs text-gray-500">{hospital.hospitalCode}</span>
+                        {hospital.nameEn && (
+                          <span className="text-sm text-gray-500">{hospital.nameEn}</span>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
@@ -258,16 +224,15 @@ export default function RegisterForm() {
               <Label htmlFor="username" className="text-sm font-medium text-gray-700">
                 ชื่อผู้ใช้ *
               </Label>
-              <div className="relative">
-                <Input
-                  {...register("username")}
-                  id="username"
-                  placeholder="กรอกชื่อผู้ใช้"
-                  disabled={isLoading}
-                  className="pl-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                />
-                <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-              </div>
+              <Input
+                {...register("username")}
+                id="username"
+                type="text"
+                placeholder="กรอกชื่อผู้ใช้"
+                disabled={isLoading}
+                className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                autoComplete="username"
+              />
               {errors.username && (
                 <p className="text-sm text-red-500 mt-1">{errors.username.message}</p>
               )}
@@ -278,17 +243,15 @@ export default function RegisterForm() {
               <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                 อีเมล *
               </Label>
-              <div className="relative">
-                <Input
-                  {...register("email")}
-                  id="email"
-                  type="email"
-                  placeholder="กรอกอีเมล"
-                  disabled={isLoading}
-                  className="pl-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                />
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-              </div>
+              <Input
+                {...register("email")}
+                id="email"
+                type="email"
+                placeholder="กรอกอีเมล"
+                disabled={isLoading}
+                className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                autoComplete="email"
+              />
               {errors.email && (
                 <p className="text-sm text-red-500 mt-1">{errors.email.message}</p>
               )}
@@ -307,6 +270,7 @@ export default function RegisterForm() {
                   placeholder="กรอกรหัสผ่าน"
                   disabled={isLoading}
                   className="pr-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  autoComplete="new-password"
                 />
                 <Button
                   type="button"
@@ -342,6 +306,7 @@ export default function RegisterForm() {
                   placeholder="ยืนยันรหัสผ่าน"
                   disabled={isLoading}
                   className="pr-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  autoComplete="new-password"
                 />
                 <Button
                   type="button"
@@ -360,9 +325,7 @@ export default function RegisterForm() {
                 </Button>
               </div>
               {errors.confirmPassword && (
-                <p className="text-sm text-red-500 mt-1">
-                  {errors.confirmPassword.message}
-                </p>
+                <p className="text-sm text-red-500 mt-1">{errors.confirmPassword.message}</p>
               )}
             </div>
 
