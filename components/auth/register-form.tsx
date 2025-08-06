@@ -1,4 +1,4 @@
-// app/auth/components/RegisterForm.tsx - Updated to handle hospitalCode
+// app/auth/components/RegisterForm.tsx - Fixed Version
 "use client";
 
 import { useState, useEffect } from "react";
@@ -17,9 +17,7 @@ import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, User, Mail, Building2 
 interface Hospital {
   id: string;
   name: string;
-  hospitalCode: string; // Fixed: use hospitalCode instead of code
-  status?: string;
-  type?: string;
+  code: string;
 }
 
 export default function RegisterForm() {
@@ -32,7 +30,14 @@ export default function RegisterForm() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loadingHospitals, setLoadingHospitals] = useState(true);
 
-  const form = useForm<RegisterInput>({
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    trigger,
+    formState: { errors, isValid, isSubmitting },
+  } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
     mode: "onChange",
     defaultValues: {
@@ -44,9 +49,7 @@ export default function RegisterForm() {
     },
   });
 
-  const { register, handleSubmit, setValue, watch, trigger, formState: { errors, isValid } } = form;
-
-  // Watch all values for debugging
+  // Watch form values to debug
   const watchedValues = watch();
   const selectedHospitalId = watch("hospitalId");
 
@@ -54,26 +57,22 @@ export default function RegisterForm() {
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
-        console.log('🔄 Loading hospitals...');
+        console.log('🔄 [DEBUG] Loading hospitals...');
         const response = await fetch("/api/hospitals");
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Hospitals response:', data);
+          console.log('✅ [DEBUG] Hospitals loaded:', data);
           
-          // Handle response as array directly
-          const hospitalsArray = Array.isArray(data) ? data : [];
+          // Handle different response structures
+          const hospitalsArray = Array.isArray(data) ? data : data.hospitals || [];
           setHospitals(hospitalsArray);
-          
-          if (hospitalsArray.length === 0) {
-            setError("ไม่พบข้อมูลโรงพยาบาลที่สามารถใช้งานได้");
-          }
         } else {
-          console.error('❌ Failed to load hospitals:', response.status);
+          console.error('❌ [DEBUG] Failed to load hospitals:', response.status);
           setError("ไม่สามารถโหลดรายการโรงพยาบาลได้");
         }
       } catch (error) {
-        console.error("❌ Hospital fetch error:", error);
+        console.error("❌ [DEBUG] Hospital fetch error:", error);
         setError("เกิดข้อผิดพลาดในการโหลดข้อมูลโรงพยาบาล");
       } finally {
         setLoadingHospitals(false);
@@ -83,20 +82,19 @@ export default function RegisterForm() {
     fetchHospitals();
   }, []);
 
-  // Debug logging
+  // Debug form state
   useEffect(() => {
-    console.log('🔍 Form Debug:', {
+    console.log('🔍 [DEBUG] Form state:', {
       values: watchedValues,
-      errors: Object.keys(errors),
-      isValid,
-      hospitalsCount: hospitals.length,
-      isLoading,
-      loadingHospitals,
+      errors: errors,
+      isValid: isValid,
+      isSubmitting: isSubmitting,
+      hospitalsLoaded: hospitals.length,
     });
-  }, [watchedValues, errors, isValid, hospitals.length, isLoading, loadingHospitals]);
+  }, [watchedValues, errors, isValid, isSubmitting, hospitals.length]);
 
   const onSubmit = async (data: RegisterInput) => {
-    console.log('🚀 Submitting registration:', {
+    console.log('🚀 [DEBUG] Form submitted with data:', {
       ...data,
       password: '[HIDDEN]',
       confirmPassword: '[HIDDEN]'
@@ -116,7 +114,7 @@ export default function RegisterForm() {
       });
 
       const result = await response.json();
-      console.log('📥 Registration response:', result);
+      console.log('📥 [DEBUG] Registration response:', result);
 
       if (response.ok) {
         setSuccess(result.message || "สมัครสมาชิกสำเร็จ!");
@@ -133,45 +131,26 @@ export default function RegisterForm() {
         setError(result.error || "เกิดข้อผิดพลาดในการสมัครสมาชิก");
         
         if (result.details) {
-          console.log('🔍 Validation errors:', result.details);
+          console.log('🔍 [DEBUG] Validation errors:', result.details);
         }
       }
     } catch (err) {
-      console.error('❌ Registration error:', err);
+      console.error('❌ [DEBUG] Registration error:', err);
       setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle hospital selection properly
-  const handleHospitalSelect = async (value: string) => {
-    console.log('🏥 Hospital selected:', value);
+  // Handle hospital selection with proper form control
+  const handleHospitalSelect = (value: string) => {
+    console.log('🏥 [DEBUG] Hospital selected:', value);
     setValue("hospitalId", value);
-    await trigger("hospitalId"); // Trigger validation
+    trigger("hospitalId"); // Trigger validation
   };
 
-  // Calculate if form can be submitted
-  const canSubmit = !isLoading && 
-                   !loadingHospitals && 
-                   hospitals.length > 0 && 
-                   isValid && 
-                   selectedHospitalId;
-
-  if (loadingHospitals) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-        <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
-          <CardContent className="flex items-center justify-center py-8">
-            <div className="flex items-center space-x-4">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-              <span className="text-gray-600">กำลังโหลดข้อมูล...</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Check if form can be submitted
+  const canSubmit = !isLoading && !loadingHospitals && hospitals.length > 0;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
@@ -193,13 +172,13 @@ export default function RegisterForm() {
         <CardContent className="space-y-6">
           {/* Debug Info in Development */}
           {process.env.NODE_ENV === 'development' && (
-            <div className="p-3 bg-gray-50 rounded text-xs space-y-1">
-              <div>✅ Form Valid: {isValid ? 'Yes' : 'No'}</div>
-              <div>🏥 Hospitals: {hospitals.length}</div>
-              <div>🔗 Hospital Selected: {selectedHospitalId || 'None'}</div>
-              <div>🚀 Can Submit: {canSubmit ? 'Yes' : 'No'}</div>
+            <div className="p-3 bg-gray-50 rounded text-xs text-gray-600">
+              <div>Form Valid: {isValid ? '✅' : '❌'}</div>
+              <div>Hospitals: {hospitals.length}</div>
+              <div>Loading: {loadingHospitals ? '⏳' : '✅'}</div>
+              <div>Can Submit: {canSubmit ? '✅' : '❌'}</div>
               {Object.keys(errors).length > 0 && (
-                <div className="text-red-600">❌ Errors: {Object.keys(errors).join(', ')}</div>
+                <div>Errors: {Object.keys(errors).join(', ')}</div>
               )}
             </div>
           )}
@@ -221,20 +200,20 @@ export default function RegisterForm() {
               </Alert>
             )}
 
-            {/* Hospital Selection - Put First */}
+            {/* Hospital Selection */}
             <div className="space-y-2">
               <Label htmlFor="hospitalId" className="text-sm font-medium text-gray-700">
                 เลือกโรงพยาบาล *
               </Label>
               <Select
                 onValueChange={handleHospitalSelect}
-                disabled={isLoading}
+                disabled={loadingHospitals || isLoading}
                 value={selectedHospitalId}
               >
                 <SelectTrigger className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-gray-400" />
-                    <SelectValue placeholder="เลือกโรงพยาบาล" />
+                    <SelectValue placeholder={loadingHospitals ? "กำลังโหลด..." : "เลือกโรงพยาบาล"} />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
@@ -242,7 +221,7 @@ export default function RegisterForm() {
                     <SelectItem key={hospital.id} value={hospital.id}>
                       <div className="flex flex-col">
                         <span className="font-medium">{hospital.name}</span>
-                        <span className="text-xs text-gray-500">{hospital.hospitalCode}</span>
+                        <span className="text-xs text-gray-500">{hospital.code}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -370,11 +349,11 @@ export default function RegisterForm() {
             <div className="pt-2">
               <Button 
                 type="submit" 
-                className="w-full h-11 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200" 
-                disabled={!canSubmit}
+                className="w-full h-11 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" 
+                disabled={!canSubmit || isSubmitting}
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? "กำลังสมัครสมาชิก..." : "สมัครสมาชิก"}
+                {loadingHospitals ? "กำลังโหลดข้อมูล..." : "สมัครสมาชิก"}
               </Button>
             </div>
 
