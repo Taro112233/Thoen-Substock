@@ -1,4 +1,4 @@
-// ===== 1. app/api/auth/profile-completion/route.ts - Final Fix =====
+// app/api/auth/profile-completion/route.ts - Fixed with correct error handling
 import { NextRequest, NextResponse } from "next/server";
 import { profileCompletionSchema } from "@/lib/validations/auth";
 import { PrismaClient } from "@prisma/client";
@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
     
     // Validate profile data
     const validatedData = profileCompletionSchema.parse(profileData);
-    console.log('🔍 [DEBUG] Validated profile data:', validatedData);
+    console.log('✅ [DEBUG] Profile data validation passed');
     
-    // ตรวจสอบว่า user มีอยู่จริง
+    // Check if user exists and get their current state
     const existingUser = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -35,6 +35,14 @@ export async function POST(request: NextRequest) {
         hospitalId: true,
         status: true,
         email: true,
+        username: true,
+        isProfileComplete: true,
+        hospital: {
+          select: {
+            name: true,
+            hospitalCode: true
+          }
+        }
       }
     });
     
@@ -46,9 +54,14 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log('✅ [DEBUG] User found:', existingUser);
+    console.log('✅ [DEBUG] User found:', {
+      id: existingUser.id,
+      username: existingUser.username,
+      hospitalName: existingUser.hospital.name,
+      isProfileComplete: existingUser.isProfileComplete
+    });
     
-    // ตรวจสอบว่า department มีอยู่จริงในโรงพยาบาลเดียวกัน (ถ้าเลือก)
+    // Validate department if provided
     let departmentId = null;
     if (validatedData.departmentId && validatedData.departmentId.trim() !== "") {
       const department = await prisma.department.findFirst({
@@ -60,166 +73,183 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           name: true,
+          departmentCode: true
         }
       });
       
-      if (department) {
-        departmentId = department.id;
-        console.log('✅ [DEBUG] Department found:', department);
-      } else {
-        console.log('⚠️ [DEBUG] Department not found, setting to null:', validatedData.departmentId);
-        // ไม่ error แต่จะเซ็ต department เป็น null
-        departmentId = null;
+      if (!department) {
+        console.log('❌ [DEBUG] Department not found or not active:', validatedData.departmentId);
+        return NextResponse.json(
+          { error: "แผนกที่เลือกไม่พร้อมใช้งานหรือไม่อยู่ในโรงพยาบาลเดียวกัน" },
+          { status: 400 }
+        );
       }
+      
+      departmentId = department.id;
+      console.log('✅ [DEBUG] Department validated:', department.name);
+    } else {
+      console.log('ℹ️ [DEBUG] No department selected (optional field)');
     }
     
-    // ตรวจสอบว่า employeeId ซ้ำหรือไม่ (ถ้ามี)
+    // Check if employee ID already exists in the same hospital
     if (validatedData.employeeId) {
-      const existingEmployee = await prisma.user.findFirst({
+      const existingEmployeeId = await prisma.user.findFirst({
         where: {
           employeeId: validatedData.employeeId,
           hospitalId: existingUser.hospitalId,
-          id: { not: userId }, // ยกเว้นตัวเอง
+          id: { not: userId }, // Exclude current user
         },
+        select: { id: true, employeeId: true }
       });
       
-      if (existingEmployee) {
+      if (existingEmployeeId) {
         console.log('❌ [DEBUG] Employee ID already exists:', validatedData.employeeId);
         return NextResponse.json(
-          { error: "รหัสพนักงานนี้มีอยู่ในระบบแล้ว" },
+          { error: "รหัสพนักงานนี้ถูกใช้งานแล้วในโรงพยาบาลนี้" },
           { status: 400 }
         );
       }
     }
     
-    // อัปเดตข้อมูลผู้ใช้ - Fixed all issues
-    const updateData = {
-      firstName: validatedData.firstName,
-      lastName: validatedData.lastName,
-      phoneNumber: validatedData.phoneNumber || null,
-      employeeId: validatedData.employeeId,
-      position: validatedData.position,
-      departmentId: departmentId, // Use verified departmentId or null
-      isProfileComplete: true,
-      updatedAt: new Date(),
-      // อัปเดต display name ด้วยชื่อจริง
-      name: `${validatedData.firstName} ${validatedData.lastName}`,
-    };
-    
-    console.log('🔄 [DEBUG] Updating user with data:', updateData);
-    
+    // Update user with complete profile information
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: updateData,
+      data: {
+        firstName: validatedData.firstName,
+        lastName: validatedData.lastName,
+        phoneNumber: validatedData.phoneNumber,
+        employeeId: validatedData.employeeId,
+        position: validatedData.position,
+        departmentId: departmentId,
+        
+        // Update name with full name
+        name: `${validatedData.firstName} ${validatedData.lastName}`,
+        
+        // Mark profile as complete
+        isProfileComplete: true,
+        
+        // Keep status as PENDING for admin approval
+        // Admin will need to activate the account
+        status: 'PENDING',
+        
+        updatedAt: new Date(),
+      },
       select: {
         id: true,
+        username: true,
         email: true,
         name: true,
         firstName: true,
         lastName: true,
+        phoneNumber: true,
         employeeId: true,
         position: true,
         isProfileComplete: true,
         status: true,
-        role: true,
         hospital: {
           select: {
-            id: true,
             name: true,
-            hospitalCode: true, // Fixed: use hospitalCode instead of code
+            hospitalCode: true
           }
         },
         department: {
           select: {
-            id: true,
             name: true,
-            departmentCode: true, // Fixed: use departmentCode instead of code
+            departmentCode: true
           }
         }
-      },
+      }
     });
     
-    console.log('✅ [DEBUG] Profile updated successfully for user:', updatedUser.id);
-    
-    // TODO: ส่งอีเมลแจ้งผู้ดูแลระบบเพื่ออนุมัติ
-    // await sendAdminNotificationEmail(updatedUser);
+    console.log('✅ [DEBUG] Profile completion successful:', {
+      id: updatedUser.id,
+      username: updatedUser.username,
+      fullName: updatedUser.name,
+      position: updatedUser.position,
+      departmentName: updatedUser.department?.name || 'ไม่ระบุ',
+      hospitalName: updatedUser.hospital.name,
+      status: updatedUser.status,
+      isProfileComplete: updatedUser.isProfileComplete
+    });
+
+    // Log successful registration for audit
+    console.log('📊 [AUDIT] New user registration completed:', {
+      userId: updatedUser.id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      hospitalId: existingUser.hospitalId,
+      hospitalName: updatedUser.hospital.name,
+      fullName: updatedUser.name,
+      position: updatedUser.position,
+      employeeId: updatedUser.employeeId,
+      departmentId: departmentId,
+      departmentName: updatedUser.department?.name || 'ไม่ระบุ',
+      timestamp: new Date().toISOString(),
+      status: 'PENDING_APPROVAL'
+    });
     
     return NextResponse.json({
       success: true,
-      message: "บันทึกข้อมูลส่วนตัวสำเร็จ กรุณารอการอนุมัติจากผู้ดูแลระบบ",
+      message: "สมัครสมาชิกสำเร็จ! รอการอนุมัติจากผู้บริหาร",
+      needsApproval: true,
       user: {
         id: updatedUser.id,
+        username: updatedUser.username,
         email: updatedUser.email,
-        name: updatedUser.name,
-        firstName: updatedUser.firstName,
-        lastName: updatedUser.lastName,
-        employeeId: updatedUser.employeeId,
+        fullName: updatedUser.name,
         position: updatedUser.position,
-        status: updatedUser.status,
-        role: updatedUser.role,
+        employeeId: updatedUser.employeeId,
+        hospitalName: updatedUser.hospital.name,
+        hospitalCode: updatedUser.hospital.hospitalCode,
+        departmentName: updatedUser.department?.name || 'ไม่ระบุ',
         isProfileComplete: updatedUser.isProfileComplete,
-        hospital: updatedUser.hospital,
-        department: updatedUser.department,
-      },
-      needsApproval: updatedUser.status === "PENDING",
+        status: updatedUser.status
+      }
     });
-    
+
   } catch (error) {
-    console.error("❌ [API] Profile completion error:", error);
-    
+    console.error("❌ [DEBUG] Profile completion error:", error);
+
     if (error instanceof ZodError) {
-      console.log('❌ [API] Validation error:', error.issues);
+      const fieldErrors = error.issues.map(err => ({ // Fixed: use issues instead of errors
+        field: err.path.join('.'),
+        message: err.message
+      }));
+
+      console.log('❌ [DEBUG] Validation errors:', fieldErrors);
+
       return NextResponse.json(
         { 
-          error: "ข้อมูลไม่ถูกต้อง", 
-          details: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message
-          }))
+          error: "ข้อมูลที่กรอกไม่ถูกต้อง",
+          details: fieldErrors
         },
         { status: 400 }
       );
     }
-    
-    // Handle specific Prisma errors
-    if (error.code === 'P2002') {
-      const target = error.meta?.target;
-      if (target?.includes('employeeId')) {
-        return NextResponse.json(
-          { error: "รหัสพนักงานนี้มีอยู่ในระบบแล้ว" },
-          { status: 400 }
-        );
+
+    // Handle Prisma unique constraint errors
+    if ((error as any).code === 'P2002') { // Fixed: handle unknown error type
+      const targetField = (error as any).meta?.target;
+      let message = "ข้อมูลซ้ำในระบบ";
+
+      if (targetField?.includes('employeeId')) {
+        message = "รหัสพนักงานนี้ถูกใช้งานแล้วในโรงพยาบาลนี้";
+      } else if (targetField?.includes('phoneNumber')) {
+        message = "เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว";
       }
+
+      return NextResponse.json(
+        { error: message },
+        { status: 400 }
+      );
     }
-    
-    if (error.code === 'P2003') {
-      const constraint = error.meta?.constraint;
-      if (constraint?.includes('departmentId')) {
-        return NextResponse.json(
-          { error: "แผนกที่เลือกไม่ถูกต้อง กรุณาเลือกใหม่หรือไม่เลือกแผนก" },
-          { status: 400 }
-        );
-      }
-    }
-    
-    // Log Prisma errors for debugging
-    if (error.code) {
-      console.log('❌ [API] Prisma error code:', error.code);
-      console.log('❌ [API] Prisma error meta:', error.meta);
-    }
-    
+
     return NextResponse.json(
       { 
         error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์",
-        details: process.env.NODE_ENV === 'development' ? {
-          message: error.message,
-          code: error.code,
-          meta: error.meta
-        } : undefined
+        details: process.env.NODE_ENV === 'development' ? String(error) : undefined
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

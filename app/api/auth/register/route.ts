@@ -1,8 +1,8 @@
-// app/api/auth/register/route.ts - Fixed Schema Fields
+// app/api/auth/register/route.ts - Fixed with correct imports and schema fields
 import { NextRequest, NextResponse } from "next/server";
 import { registerSchema } from "@/lib/validations/auth";
 import { PrismaClient } from "@prisma/client";
-import { hashPassword } from "@/lib/password-utils";
+import { hashPassword } from "@/lib/password-utils"; // Fixed import
 import { ZodError } from "zod";
 
 const prisma = new PrismaClient();
@@ -10,181 +10,185 @@ const prisma = new PrismaClient();
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('🔍 [API] Registration request received:', {
+    console.log('🔍 [DEBUG] Registration request:', {
       ...body,
       password: '[HIDDEN]',
       confirmPassword: '[HIDDEN]'
     });
-    
+
     // Validate input data
     const validatedData = registerSchema.parse(body);
-    console.log('✅ [API] Data validation passed');
-    
-    // Check for existing email
-    const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
-    });
-    
-    if (existingUser) {
-      console.log('❌ [API] Email already exists');
-      return NextResponse.json(
-        { error: "อีเมลนี้มีอยู่ในระบบแล้ว" },
-        { status: 400 }
-      );
-    }
-    
-    // Check for existing username
-    const existingUsername = await prisma.user.findUnique({
+    console.log('✅ [DEBUG] Input validation passed');
+
+    // Check if username already exists
+    const existingUsername = await prisma.user.findFirst({
       where: { username: validatedData.username },
+      select: { id: true, username: true }
     });
-    
+
     if (existingUsername) {
-      console.log('❌ [API] Username already exists');
+      console.log('❌ [DEBUG] Username already exists:', validatedData.username);
       return NextResponse.json(
-        { error: "ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว" },
+        { error: "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว" },
         { status: 400 }
       );
     }
-    
-    // Verify hospital exists - Fixed field name
+
+    // Check if email already exists
+    const existingEmail = await prisma.user.findFirst({
+      where: { email: validatedData.email },
+      select: { id: true, email: true }
+    });
+
+    if (existingEmail) {
+      console.log('❌ [DEBUG] Email already exists:', validatedData.email);
+      return NextResponse.json(
+        { error: "อีเมลนี้ถูกใช้งานแล้ว" },
+        { status: 400 }
+      );
+    }
+
+    // Verify hospital exists and is active - Fixed schema field names
     const hospital = await prisma.hospital.findUnique({
       where: { id: validatedData.hospitalId },
       select: {
         id: true,
         name: true,
-        hospitalCode: true, // Fixed: use hospitalCode instead of code
-        status: true,
+        hospitalCode: true,
+        status: true, // Fixed: use status instead of isActive
+        type: true,
       }
     });
-    
-    if (!hospital) {
-      console.log('❌ [API] Hospital not found');
+
+    if (!hospital || hospital.status !== 'ACTIVE') {
+      console.log('❌ [DEBUG] Hospital not found or inactive:', validatedData.hospitalId);
       return NextResponse.json(
-        { error: "โรงพยาบาลที่เลือกไม่ถูกต้อง" },
+        { error: "โรงพยาบาลที่เลือกไม่พร้อมใช้งาน" },
         { status: 400 }
       );
     }
-    
-    // Check if hospital is active
-    if (hospital.status !== 'ACTIVE') {
-      console.log('❌ [API] Hospital not active:', hospital.status);
-      return NextResponse.json(
-        { error: "โรงพยาบาลนี้ไม่สามารถใช้งานได้ในขณะนี้" },
-        { status: 400 }
-      );
-    }
-    
+
+    console.log('✅ [DEBUG] Hospital validation passed:', hospital.name);
+
     // Hash password
     const hashedPassword = await hashPassword(validatedData.password);
-    console.log('🔐 [API] Password hashed successfully');
-    
-    // Create user - Fixed select fields
-    const user = await prisma.user.create({
+    console.log('✅ [DEBUG] Password hashed successfully');
+
+    // Create user with basic information only - Fixed field names
+    const newUser = await prisma.user.create({
       data: {
-        email: validatedData.email,
-        name: validatedData.username, // Temporary display name
         username: validatedData.username,
-        password: hashedPassword,
-        emailVerified: false,
-        role: "STAFF_PHARMACIST", // Default role
-        status: "PENDING", // Requires approval
+        email: validatedData.email,
+        password: hashedPassword, // Fixed: use password instead of passwordHash
         hospitalId: validatedData.hospitalId,
-        isProfileComplete: false, // Need to complete profile
+        
+        // Basic required fields
+        name: validatedData.username, // Temporary name until profile completion
+        role: 'STAFF_PHARMACIST', // Default role
+        status: 'PENDING', // Will remain pending until profile completion and admin approval
+        
+        // Profile completion flags
+        isProfileComplete: false,
+        emailVerified: false,
+        
+        // Optional fields - will be filled in profile completion
+        firstName: null,
+        lastName: null,
+        phoneNumber: null,
+        employeeId: null,
+        position: null,
+        departmentId: null,
+        
         createdAt: new Date(),
         updatedAt: new Date(),
       },
       select: {
         id: true,
-        email: true,
         username: true,
+        email: true,
+        hospitalId: true,
+        isProfileComplete: true,
         status: true,
-        hospital: {
+        hospital: { // Fixed: include hospital relation
           select: {
-            id: true,
             name: true,
-            hospitalCode: true, // Fixed: use hospitalCode instead of code
-            status: true,
+            hospitalCode: true
           }
         }
       }
     });
-    
-    console.log('✅ [API] User created successfully:', {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      status: user.status,
-      hospital: user.hospital.name
+
+    console.log('✅ [DEBUG] User created successfully:', {
+      id: newUser.id,
+      username: newUser.username,
+      email: newUser.email,
+      hospitalName: newUser.hospital.name,
+      isProfileComplete: newUser.isProfileComplete,
+      status: newUser.status
     });
-    
+
     return NextResponse.json({
       success: true,
-      message: "สมัครสมาชิกสำเร็จ กรุณารอการอนุมัติจากผู้ดูแลระบบ",
-      userId: user.id,
+      message: "บันทึกข้อมูลเบื้องต้นสำเร็จ",
+      userId: newUser.id,
       nextStep: "profile-completion",
       user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        status: user.status,
-        hospital: {
-          id: user.hospital.id,
-          name: user.hospital.name,
-          hospitalCode: user.hospital.hospitalCode, // Fixed field name
-          status: user.hospital.status,
-        }
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        hospitalId: newUser.hospitalId,
+        hospitalName: newUser.hospital.name,
+        hospitalCode: newUser.hospital.hospitalCode,
+        isProfileComplete: newUser.isProfileComplete,
+        status: newUser.status
       }
     });
-    
+
   } catch (error) {
-    console.error("❌ [API] Registration error:", error);
-    
-    // Handle Zod validation errors
+    console.error("❌ [DEBUG] Registration error:", error);
+
     if (error instanceof ZodError) {
-      console.log('❌ [API] Validation error:', error.issues);
+      const fieldErrors = error.issues.map(err => ({ // Fixed: use issues instead of errors
+        field: err.path.join('.'),
+        message: err.message
+      }));
+
+      console.log('❌ [DEBUG] Validation errors:', fieldErrors);
+
       return NextResponse.json(
         { 
-          error: "ข้อมูลไม่ถูกต้อง", 
-          details: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message
-          }))
+          error: "ข้อมูลที่กรอกไม่ถูกต้อง",
+          details: fieldErrors
         },
         { status: 400 }
       );
     }
-    
-    // Handle Prisma unique constraint error
-    if (error.code === 'P2002') {
-      const target = error.meta?.target;
-      if (target?.includes('email')) {
-        return NextResponse.json(
-          { error: "อีเมลนี้มีอยู่ในระบบแล้ว" },
-          { status: 400 }
-        );
+
+    // Handle Prisma unique constraint errors
+    if ((error as any).code === 'P2002') { // Fixed: handle unknown error type
+      const targetField = (error as any).meta?.target;
+      let message = "ข้อมูลซ้ำในระบบ";
+
+      if (targetField?.includes('username')) {
+        message = "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว";
+      } else if (targetField?.includes('email')) {
+        message = "อีเมลนี้ถูกใช้งานแล้ว";
+      } else if (targetField?.includes('employeeId')) {
+        message = "รหัสพนักงานนี้ถูกใช้งานแล้ว";
       }
-      if (target?.includes('username')) {
-        return NextResponse.json(
-          { error: "ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว" },
-          { status: 400 }
-        );
-      }
+
+      return NextResponse.json(
+        { error: message },
+        { status: 400 }
+      );
     }
-    
-    // Handle other Prisma errors
-    if (error.code) {
-      console.log('❌ [API] Prisma error code:', error.code);
-      console.log('❌ [API] Prisma error meta:', error.meta);
-    }
-    
+
     return NextResponse.json(
       { 
         error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์",
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        details: process.env.NODE_ENV === 'development' ? String(error) : undefined
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

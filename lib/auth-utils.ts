@@ -1,79 +1,86 @@
-// lib/auth-utils.ts - ปิดชั่วคราวเพื่อทดสอบ UI
-import { redirect } from "next/navigation";
+// lib/auth-utils.ts - Re-export password utilities for backward compatibility
+export { hashPassword, verifyPassword, validatePasswordStrength, generateSecureToken } from './password-utils';
 
-// Mock functions for testing UI
-export async function getCurrentSession() {
-  return null;
+// Additional auth utilities
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+/**
+ * Get current user from session token
+ */
+export async function getCurrentUser(token: string) {
+  try {
+    // Implementation would depend on your JWT/session strategy
+    // This is a placeholder for the actual implementation
+    return null;
+  } catch (error) {
+    return null;
+  }
 }
 
-export async function getCurrentUser() {
-  return null;
-}
-
-export async function requireAuth() {
-  redirect("/auth/login");
-}
-
-export async function checkUserStatusAndRedirect() {
-  redirect("/auth/login");
-}
-
-export function hasRole(user: any, roles: string | string[]) {
-  return false;
-}
-
-export function isAdmin(user: any) {
-  return false;
-}
-
-export function canApproveUsers(user: any) {
-  return false;
-}
-
-// Position options สำหรับ form
-export const positionOptions = [
-  { value: "PHARMACIST", label: "เภสัชกร" },
-  { value: "NURSE", label: "พยาบาล" },
-  { value: "TECHNICIAN", label: "เทคนิค" },
-  { value: "MANAGER", label: "ผู้จัดการ" },
-  { value: "HEAD", label: "หัวหน้าแผนก" },
-  { value: "ADMIN", label: "ผู้ดูแลระบบ" },
-];
-
-// Role options สำหรับ form
-export const roleOptions = [
-  { value: "PHARMACY_MANAGER", label: "ผู้จัดการเภสัชกรรม" },
-  { value: "SENIOR_PHARMACIST", label: "เภสัชกรอาวุโส" },
-  { value: "STAFF_PHARMACIST", label: "เภสัชกรประจำ" },
-  { value: "DEPARTMENT_HEAD", label: "หัวหน้าแผนก" },
-  { value: "STAFF_NURSE", label: "พยาบาลประจำ" },
-  { value: "PHARMACY_TECHNICIAN", label: "เทคนิคเภสัชกรรม" },
-];
-
-// Helper สำหรับแปลงสถานะเป็นภาษาไทย
-export function translateUserStatus(status: string) {
-  const statusMap: Record<string, string> = {
-    PENDING: "รอการอนุมัติ",
-    ACTIVE: "ใช้งานได้",
-    INACTIVE: "ปิดการใช้งานชั่วคราว",
-    SUSPENDED: "ระงับการใช้งาน",
-    DELETED: "ลบแล้ว",
+/**
+ * Check if user has permission for specific action
+ */
+export function hasPermission(userRole: string, requiredRole: string): boolean {
+  const roleHierarchy = {
+    'HOSPITAL_ADMIN': 7,
+    'PHARMACY_MANAGER': 6,
+    'SENIOR_PHARMACIST': 5,
+    'STAFF_PHARMACIST': 4,
+    'DEPARTMENT_HEAD': 3,
+    'STAFF_NURSE': 2,
+    'PHARMACY_TECHNICIAN': 1
   };
-  
-  return statusMap[status] || status;
+
+  const userLevel = roleHierarchy[userRole as keyof typeof roleHierarchy] || 0;
+  const requiredLevel = roleHierarchy[requiredRole as keyof typeof roleHierarchy] || 0;
+
+  return userLevel >= requiredLevel;
 }
 
-// Helper สำหรับแปลงบทบาทเป็นภาษาไทย
-export function translateUserRole(role: string) {
-  const roleMap: Record<string, string> = {
-    HOSPITAL_ADMIN: "ผู้ดูแลระบบโรงพยาบาล",
-    PHARMACY_MANAGER: "ผู้จัดการเภสัชกรรม",
-    SENIOR_PHARMACIST: "เภสัชกรอาวุโส",
-    STAFF_PHARMACIST: "เภสัชกรประจำ",
-    DEPARTMENT_HEAD: "หัวหน้าแผนก",
-    STAFF_NURSE: "พยาบาลประจำ",
-    PHARMACY_TECHNICIAN: "เทคนิคเภสัชกรรม",
-  };
+/**
+ * Generate username from name and employee ID
+ */
+export function generateUsername(firstName: string, lastName: string, employeeId?: string): string {
+  const nameBase = `${firstName.toLowerCase()}${lastName.toLowerCase()}`
+    .replace(/\s+/g, '')
+    .replace(/[^\w]/g, '');
   
-  return roleMap[role] || role;
+  if (employeeId) {
+    return `${nameBase}_${employeeId}`;
+  }
+  
+  const timestamp = Date.now().toString().slice(-4);
+  return `${nameBase}_${timestamp}`;
+}
+
+/**
+ * Validate user session and hospital context
+ */
+export async function validateSession(userId: string, hospitalId: string) {
+  try {
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+        hospitalId: hospitalId,
+        status: 'ACTIVE'
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        hospitalId: true,
+        departmentId: true,
+        isProfileComplete: true,
+        status: true
+      }
+    });
+
+    return user;
+  } catch (error) {
+    console.error('Session validation error:', error);
+    return null;
+  }
 }

@@ -1,4 +1,4 @@
-// app/auth/components/RegisterForm.tsx - Updated to handle hospitalCode
+// app/auth/components/RegisterForm.tsx - Updated with new step flow
 "use client";
 
 import { useState, useEffect } from "react";
@@ -12,20 +12,18 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, User, Mail, Building2 } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2, Building2, User, Mail, Lock, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 interface Hospital {
   id: string;
   name: string;
-  hospitalCode: string; // Fixed: use hospitalCode instead of code
-  status?: string;
-  type?: string;
+  licenseNumber?: string;
 }
 
 export default function RegisterForm() {
   const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -46,34 +44,29 @@ export default function RegisterForm() {
 
   const { register, handleSubmit, setValue, watch, trigger, formState: { errors, isValid } } = form;
 
-  // Watch all values for debugging
-  const watchedValues = watch();
   const selectedHospitalId = watch("hospitalId");
+  const password = watch("password");
+  const confirmPassword = watch("confirmPassword");
 
   // Load hospitals
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
-        console.log('🔄 Loading hospitals...');
         const response = await fetch("/api/hospitals");
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Hospitals response:', data);
-          
-          // Handle response as array directly
-          const hospitalsArray = Array.isArray(data) ? data : [];
+          const hospitalsArray: Hospital[] = Array.isArray(data) ? data : data.hospitals || [];
           setHospitals(hospitalsArray);
           
           if (hospitalsArray.length === 0) {
             setError("ไม่พบข้อมูลโรงพยาบาลที่สามารถใช้งานได้");
           }
         } else {
-          console.error('❌ Failed to load hospitals:', response.status);
           setError("ไม่สามารถโหลดรายการโรงพยาบาลได้");
         }
       } catch (error) {
-        console.error("❌ Hospital fetch error:", error);
+        console.error("Hospital fetch error:", error);
         setError("เกิดข้อผิดพลาดในการโหลดข้อมูลโรงพยาบาล");
       } finally {
         setLoadingHospitals(false);
@@ -83,25 +76,7 @@ export default function RegisterForm() {
     fetchHospitals();
   }, []);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('🔍 Form Debug:', {
-      values: watchedValues,
-      errors: Object.keys(errors),
-      isValid,
-      hospitalsCount: hospitals.length,
-      isLoading,
-      loadingHospitals,
-    });
-  }, [watchedValues, errors, isValid, hospitals.length, isLoading, loadingHospitals]);
-
   const onSubmit = async (data: RegisterInput) => {
-    console.log('🚀 Submitting registration:', {
-      ...data,
-      password: '[HIDDEN]',
-      confirmPassword: '[HIDDEN]'
-    });
-
     setIsLoading(true);
     setError(null);
     setSuccess(null);
@@ -116,39 +91,29 @@ export default function RegisterForm() {
       });
 
       const result = await response.json();
-      console.log('📥 Registration response:', result);
 
       if (response.ok) {
-        setSuccess(result.message || "สมัครสมาชิกสำเร็จ!");
+        setSuccess("ข้อมูลเบื้องต้นบันทึกสำเร็จ กำลังไปยังขั้นตอนถัดไป...");
         
-        // Redirect after success
+        // Always redirect to profile completion page
         setTimeout(() => {
-          if (result.nextStep === "profile-completion") {
-            router.push(`/auth/profile-completion?userId=${result.userId}`);
-          } else {
-            router.push("/auth/login?message=registration-success");
-          }
-        }, 2000);
+          router.push(`/auth/profile-completion?userId=${result.userId}`);
+        }, 1500);
       } else {
         setError(result.error || "เกิดข้อผิดพลาดในการสมัครสมาชิก");
-        
-        if (result.details) {
-          console.log('🔍 Validation errors:', result.details);
-        }
       }
     } catch (err) {
-      console.error('❌ Registration error:', err);
+      console.error('Registration error:', err);
       setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle hospital selection properly
+  // Handle hospital selection
   const handleHospitalSelect = async (value: string) => {
-    console.log('🏥 Hospital selected:', value);
     setValue("hospitalId", value);
-    await trigger("hospitalId"); // Trigger validation
+    await trigger("hospitalId");
   };
 
   // Calculate if form can be submitted
@@ -158,241 +123,225 @@ export default function RegisterForm() {
                    isValid && 
                    selectedHospitalId;
 
+  // Loading state
   if (loadingHospitals) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-        <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
-          <CardContent className="flex items-center justify-center py-8">
-            <div className="flex items-center space-x-4">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-              <span className="text-gray-600">กำลังโหลดข้อมูล...</span>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="w-full max-w-md mx-auto">
+          <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+            <CardContent className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center space-y-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-white" />
+                </div>
+                <div className="text-center space-y-2">
+                  <h3 className="text-lg font-semibold text-gray-900">กำลังโหลด...</h3>
+                  <p className="text-sm text-gray-600">กำลังเตรียมข้อมูลโรงพยาบาล</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
-        <CardHeader className="space-y-6 pb-8">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="w-full max-w-md mx-auto">
+        <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+          <CardHeader className="space-y-1 text-center pb-6">
+            {/* Step Indicator */}
+            <div className="flex justify-center items-center space-x-4 mb-6">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                  1
+                </div>
+                <span className="text-sm font-medium text-blue-600">ข้อมูลพื้นฐาน</span>
+              </div>
+              <div className="w-8 h-px bg-gray-300"></div>
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-semibold">
+                  2
+                </div>
+                <span className="text-sm text-gray-500">ข้อมูลส่วนตัว</span>
+              </div>
+            </div>
+
+            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mb-4">
               <User className="w-8 h-8 text-white" />
             </div>
-            <div className="text-center">
-              <CardTitle className="text-2xl font-bold text-gray-900">สมัครสมาชิก</CardTitle>
-              <CardDescription className="text-sm text-gray-600 mt-2">
-                สร้างบัญชีใหม่เพื่อเข้าใช้งานระบบ
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-6">
-          {/* Debug Info in Development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="p-3 bg-gray-50 rounded text-xs space-y-1">
-              <div>✅ Form Valid: {isValid ? 'Yes' : 'No'}</div>
-              <div>🏥 Hospitals: {hospitals.length}</div>
-              <div>🔗 Hospital Selected: {selectedHospitalId || 'None'}</div>
-              <div>🚀 Can Submit: {canSubmit ? 'Yes' : 'No'}</div>
-              {Object.keys(errors).length > 0 && (
-                <div className="text-red-600">❌ Errors: {Object.keys(errors).join(', ')}</div>
-              )}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Error Alert */}
+            <CardTitle className="text-2xl font-bold text-gray-900">
+              สมัครสมาชิก
+            </CardTitle>
+            <CardDescription className="text-gray-600">
+              ระบบจัดการสต็อกยาโรงพยาบาล
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="space-y-6">
+            {/* Alerts */}
             {error && (
-              <Alert variant="error" className="border-red-200 bg-red-50">
+              <Alert variant="error">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-red-800">{error}</AlertDescription>
+                <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-
-            {/* Success Alert */}
+            
             {success && (
               <Alert className="border-green-200 bg-green-50">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">{success}</AlertDescription>
+                <AlertDescription className="text-green-800">
+                  {success}
+                </AlertDescription>
               </Alert>
             )}
 
-            {/* Hospital Selection - Put First */}
-            <div className="space-y-2">
-              <Label htmlFor="hospitalId" className="text-sm font-medium text-gray-700">
-                เลือกโรงพยาบาล *
-              </Label>
-              <Select
-                onValueChange={handleHospitalSelect}
-                disabled={isLoading}
-                value={selectedHospitalId}
-              >
-                <SelectTrigger className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-gray-400" />
-                    <SelectValue placeholder="เลือกโรงพยาบาล" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  {hospitals.map((hospital) => (
-                    <SelectItem key={hospital.id} value={hospital.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{hospital.name}</span>
-                        <span className="text-xs text-gray-500">{hospital.hospitalCode}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.hospitalId && (
-                <p className="text-sm text-red-500 mt-1">{errors.hospitalId.message}</p>
-              )}
-            </div>
-
-            {/* Username */}
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm font-medium text-gray-700">
-                ชื่อผู้ใช้ *
-              </Label>
-              <div className="relative">
-                <Input
-                  {...register("username")}
-                  id="username"
-                  placeholder="กรอกชื่อผู้ใช้"
-                  disabled={isLoading}
-                  className="pl-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                />
-                <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              {/* Hospital Selection */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700 flex items-center">
+                  <Building2 className="w-4 h-4 mr-2 text-gray-500" />
+                  หน่วยงาน <span className="text-red-500 ml-1">*</span>
+                </Label>
+                <Select 
+                  onValueChange={handleHospitalSelect}
+                  disabled={isLoading || hospitals.length === 0}
+                >
+                  <SelectTrigger className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="เลือกหน่วยงาน" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hospitals.map((hospital) => (
+                      <SelectItem key={hospital.id} value={hospital.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{hospital.name}</span>
+                          {hospital.licenseNumber && (
+                            <span className="text-xs text-gray-500">
+                              เลขที่อนุญาต: {hospital.licenseNumber}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.hospitalId && (
+                  <p className="text-sm text-red-600 mt-1">{errors.hospitalId.message}</p>
+                )}
               </div>
-              {errors.username && (
-                <p className="text-sm text-red-500 mt-1">{errors.username.message}</p>
-              )}
-            </div>
 
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                อีเมล *
-              </Label>
-              <div className="relative">
+              {/* Username */}
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-sm font-medium text-gray-700 flex items-center">
+                  <User className="w-4 h-4 mr-2 text-gray-500" />
+                  ชื่อผู้ใช้ <span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Input
-                  {...register("email")}
+                  id="username"
+                  type="text"
+                  placeholder="ชื่อผู้ใช้ (3-20 ตัวอักษร)"
+                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  disabled={isLoading}
+                  {...register("username")}
+                />
+                {errors.username && (
+                  <p className="text-sm text-red-600 mt-1">{errors.username.message}</p>
+                )}
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium text-gray-700 flex items-center">
+                  <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                  อีเมล <span className="text-red-500 ml-1">*</span>
+                </Label>
+                <Input
                   id="email"
                   type="email"
-                  placeholder="กรอกอีเมล"
+                  placeholder="อีเมลของคุณ"
+                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                   disabled={isLoading}
-                  className="pl-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  {...register("email")}
                 />
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                {errors.email && (
+                  <p className="text-sm text-red-600 mt-1">{errors.email.message}</p>
+                )}
               </div>
-              {errors.email && (
-                <p className="text-sm text-red-500 mt-1">{errors.email.message}</p>
-              )}
-            </div>
 
-            {/* Password */}
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                รหัสผ่าน *
-              </Label>
-              <div className="relative">
+              {/* Password */}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium text-gray-700 flex items-center">
+                  <Lock className="w-4 h-4 mr-2 text-gray-500" />
+                  รหัสผ่าน <span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Input
-                  {...register("password")}
                   id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="กรอกรหัสผ่าน"
+                  type="password"
+                  placeholder="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)"
+                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                   disabled={isLoading}
-                  className="pr-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  {...register("password")}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={isLoading}
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-500" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-gray-500" />
-                  )}
-                </Button>
+                {errors.password && (
+                  <p className="text-sm text-red-600 mt-1">{errors.password.message}</p>
+                )}
               </div>
-              {errors.password && (
-                <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>
-              )}
-            </div>
 
-            {/* Confirm Password */}
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                ยืนยันรหัสผ่าน *
-              </Label>
-              <div className="relative">
+              {/* Confirm Password */}
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 flex items-center">
+                  <Lock className="w-4 h-4 mr-2 text-gray-500" />
+                  ยืนยันรหัสผ่าน <span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Input
-                  {...register("confirmPassword")}
                   id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
+                  type="password"
                   placeholder="ยืนยันรหัสผ่าน"
+                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                   disabled={isLoading}
-                  className="pr-10 h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  {...register("confirmPassword")}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={isLoading}
-                  tabIndex={-1}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-500" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-gray-500" />
-                  )}
-                </Button>
+                {errors.confirmPassword && (
+                  <p className="text-sm text-red-600 mt-1">{errors.confirmPassword.message}</p>
+                )}
               </div>
-              {errors.confirmPassword && (
-                <p className="text-sm text-red-500 mt-1">
-                  {errors.confirmPassword.message}
-                </p>
-              )}
-            </div>
 
-            {/* Submit Button */}
-            <div className="pt-2">
+              {/* Submit Button */}
               <Button 
                 type="submit" 
-                className="w-full h-11 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200" 
+                className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 disabled={!canSubmit}
               >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? "กำลังสมัครสมาชิก..." : "สมัครสมาชิก"}
+                {isLoading ? (
+                  <div className="flex items-center">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    กำลังดำเนินการ...
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <span>ต่อไป</span>
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </div>
+                )}
               </Button>
-            </div>
+            </form>
 
             {/* Login Link */}
-            <div className="text-center pt-4">
-              <Button
-                type="button"
-                variant="link"
-                onClick={() => router.push("/auth/login")}
-                disabled={isLoading}
-                className="text-gray-600 hover:text-blue-600 font-medium"
-              >
-                มีบัญชีแล้ว? เข้าสู่ระบบ
-              </Button>
+            <div className="text-center pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                มีบัญชีอยู่แล้ว?{" "}
+                <Link 
+                  href="/auth/login" 
+                  className="text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors"
+                >
+                  เข้าสู่ระบบ
+                </Link>
+              </p>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
