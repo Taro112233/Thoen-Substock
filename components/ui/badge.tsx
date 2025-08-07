@@ -47,7 +47,7 @@ const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         whileHover={{ scale: 1.05 }}
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
         {...props}
       />
     )
