@@ -1,5 +1,5 @@
-// prisma/seed.ts - Enhanced Seed Script with Master Data
-import { PrismaClient } from "@prisma/client";
+// prisma/seed.ts - Enhanced Seed Script with Master Data (FIXED)
+import { PrismaClient, PersonnelHierarchy } from "@prisma/client";
 import { hashPassword } from "../lib/password-utils";
 
 const prisma = new PrismaClient();
@@ -76,7 +76,37 @@ async function main() {
     console.log("✅ Created hospital:", hospital2.name);
 
     // ================================
-    // MASTER DATA - PERSONNEL TYPES
+    // CREATE SYSTEM USER FIRST (ไม่มี PersonnelType)
+    // ================================
+    console.log("👤 Creating system developer user...");
+
+    const hashedDevPassword = await hashPassword("dev123");
+    const devUser = await prisma.user.upsert({
+      where: { email: "dev@system.local" },
+      update: {},
+      create: {
+        email: "dev@system.local",
+        username: "developer",
+        name: "System Developer",
+        firstName: "System",
+        lastName: "Developer", 
+        phoneNumber: "0800000000",
+        employeeId: "DEV001",
+        position: "System Developer",
+        role: "DEVELOPER",
+        status: "ACTIVE",
+        hospitalId: hospital.id,
+        personnelTypeId: null, // ยังไม่มี PersonnelType
+        isProfileComplete: true,
+        emailVerified: true,
+        password: hashedDevPassword,
+      },
+    });
+
+    console.log("✅ Created developer user:", devUser.email);
+
+    // ================================
+    // MASTER DATA - PERSONNEL TYPES (ใช้ devUser.id แทน "system")
     // ================================
     console.log("🎯 Creating Personnel Types (Master Data)...");
 
@@ -85,7 +115,7 @@ async function main() {
         typeCode: "DEV",
         typeName: "นักพัฒนา",
         typeNameEn: "Developer", 
-        hierarchy: "DEVELOPER",
+        hierarchy: PersonnelHierarchy.DEVELOPER, // ใช้ enum จาก Prisma
         levelOrder: 1,
         canManageHospitals: true,
         canManageWarehouses: true,
@@ -102,7 +132,7 @@ async function main() {
         typeCode: "DIR",
         typeName: "ผู้อำนวยการ",
         typeNameEn: "Director",
-        hierarchy: "DIRECTOR", 
+        hierarchy: PersonnelHierarchy.DIRECTOR, 
         levelOrder: 2,
         canManageHospitals: false,
         canManageWarehouses: true,
@@ -119,7 +149,7 @@ async function main() {
         typeCode: "GRP_HEAD",
         typeName: "หัวหน้ากลุ่มงาน",
         typeNameEn: "Group Head",
-        hierarchy: "GROUP_HEAD",
+        hierarchy: PersonnelHierarchy.GROUP_HEAD,
         levelOrder: 3, 
         canManageHospitals: false,
         canManageWarehouses: false,
@@ -136,7 +166,7 @@ async function main() {
         typeCode: "STAFF",
         typeName: "พนักงาน",
         typeNameEn: "Staff",
-        hierarchy: "STAFF",
+        hierarchy: PersonnelHierarchy.STAFF,
         levelOrder: 4,
         canManageHospitals: false,
         canManageWarehouses: false,
@@ -152,7 +182,7 @@ async function main() {
         typeCode: "STU",
         typeName: "นักศึกษา",
         typeNameEn: "Student",
-        hierarchy: "STUDENT",
+        hierarchy: PersonnelHierarchy.STUDENT,
         levelOrder: 5,
         canManageHospitals: false,
         canManageWarehouses: false,
@@ -166,23 +196,36 @@ async function main() {
       }
     ];
 
-    // Create Developer-level Personnel Type (Global)
-    const devPersonnelType = await prisma.personnelType.upsert({
-      where: { 
-        hospitalId_typeCode: {
+    // สร้าง PersonnelTypes ใช้ devUser.id แทน "system"
+    const createdPersonnelTypes: any[] = [];
+    
+    for (const personnelType of personnelTypes) {
+      const created = await prisma.personnelType.upsert({
+        where: { 
+          hospitalId_typeCode: {
+            hospitalId: hospital.id,
+            typeCode: personnelType.typeCode
+          }
+        },
+        update: {},
+        create: {
+          ...personnelType,
           hospitalId: hospital.id,
-          typeCode: "DEV"
+          createdBy: devUser.id // ใช้ devUser.id แทน "system"
         }
-      },
-      update: {},
-      create: {
-        ...personnelTypes[0],
-        hospitalId: hospital.id,
-        createdBy: "system" // จะ update ทีหลังเมื่อมี user
-      }
+      });
+      createdPersonnelTypes.push(created);
+      console.log(`✅ Created personnel type: ${personnelType.typeName}`);
+    }
+
+    // อัพเดท devUser ให้มี personnelTypeId
+    const devPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "DEV");
+    await prisma.user.update({
+      where: { id: devUser.id },
+      data: { personnelTypeId: devPersonnelType.id }
     });
 
-    console.log("✅ Created Developer personnel type");
+    console.log("✅ Updated developer user with personnel type");
 
     // ================================
     // MASTER DATA - DRUG FORMS
@@ -266,7 +309,7 @@ async function main() {
           ...form,
           hospitalId: hospital.id,
           isSystemDefault: true,
-          createdBy: devPersonnelType.createdBy
+          createdBy: devUser.id
         }
       });
       console.log(`✅ Created drug form: ${form.formName}`);
@@ -338,7 +381,7 @@ async function main() {
           ...group,
           hospitalId: hospital.id,
           isSystemDefault: true,
-          createdBy: devPersonnelType.createdBy
+          createdBy: devUser.id
         }
       });
       console.log(`✅ Created drug group: ${group.groupNameTh}`);
@@ -440,7 +483,7 @@ async function main() {
           ...type,
           hospitalId: hospital.id,
           isSystemDefault: true,
-          createdBy: devPersonnelType.createdBy
+          createdBy: devUser.id
         }
       });
       console.log(`✅ Created drug type: ${type.typeNameTh}`);
@@ -545,7 +588,7 @@ async function main() {
           ...storage,
           hospitalId: hospital.id,
           isSystemDefault: true,
-          createdBy: devPersonnelType.createdBy
+          createdBy: devUser.id
         }
       });
       console.log(`✅ Created storage condition: ${storage.storageNameTh}`);
@@ -627,7 +670,7 @@ async function main() {
           departmentCode: dept.departmentCode,
           name: dept.name,
           nameEn: dept.nameEn,
-          type: dept.type,
+          type: dept.type as any,
           location: dept.location,
           phone: dept.phone,
           email: dept.email,
@@ -659,7 +702,8 @@ async function main() {
         securityLevel: "HIGH",
         accessControl: true,
         cctv: true,
-        alarm: true
+        alarm: true,
+        requireApproval: true
       },
       {
         warehouseCode: "EMERG_STORE",
@@ -684,8 +728,7 @@ async function main() {
         securityLevel: "MAXIMUM",
         accessControl: true,
         cctv: true,
-        alarm: true,
-        requireApproval: true
+        alarm: true
       },
       {
         warehouseCode: "COLD_STORE", 
@@ -714,6 +757,7 @@ async function main() {
         update: {},
         create: {
           ...warehouse,
+          type: warehouse.type as any,
           hospitalId: hospital.id,
           isActive: true
         }
@@ -722,65 +766,13 @@ async function main() {
     }
 
     // ================================
-    // CREATE USERS WITH PERSONNEL TYPES
+    // CREATE ADDITIONAL USERS
     // ================================
-    console.log("👥 Creating Users with Personnel Types...");
-
-    // สร้าง Personnel Types สำหรับโรงพยาบาลนี้ด้วย
-    for (const personnelType of personnelTypes.slice(1)) { // Skip DEV (already created)
-      await prisma.personnelType.upsert({
-        where: {
-          hospitalId_typeCode: {
-            hospitalId: hospital.id,
-            typeCode: personnelType.typeCode
-          }
-        },
-        update: {},
-        create: {
-          ...personnelType,
-          hospitalId: hospital.id,
-          createdBy: devPersonnelType.createdBy
-        }
-      });
-    }
-
-    // สร้าง Developer User
-    const hashedDevPassword = await hashPassword("dev123");
-    const devUser = await prisma.user.upsert({
-      where: { email: "dev@system.local" },
-      update: {},
-      create: {
-        email: "dev@system.local",
-        username: "developer",
-        name: "System Developer",
-        firstName: "System",
-        lastName: "Developer", 
-        phoneNumber: "0800000000",
-        employeeId: "DEV001",
-        position: "System Developer",
-        role: "DEVELOPER",
-        status: "ACTIVE",
-        hospitalId: hospital.id,
-        personnelTypeId: devPersonnelType.id,
-        isProfileComplete: true,
-        emailVerified: true,
-        password: hashedDevPassword,
-      },
-    });
-
-    // Update devPersonnelType createdBy
-    await prisma.personnelType.update({
-      where: { id: devPersonnelType.id },
-      data: { createdBy: devUser.id }
-    });
-
-    console.log("✅ Created developer user:", devUser.email);
+    console.log("👥 Creating Additional Users...");
 
     // สร้าง Director User
     const hashedDirectorPassword = await hashPassword("director123");
-    const directorPersonnelType = await prisma.personnelType.findFirst({
-      where: { hospitalId: hospital.id, typeCode: "DIR" }
-    });
+    const directorPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "DIR");
 
     const directorUser = await prisma.user.upsert({
       where: { email: "director@lampang-hospital.go.th" },
@@ -811,9 +803,7 @@ async function main() {
     const pharmDept = await prisma.department.findFirst({ 
       where: { departmentCode: "PHARM", hospitalId: hospital.id } 
     });
-    const groupHeadPersonnelType = await prisma.personnelType.findFirst({
-      where: { hospitalId: hospital.id, typeCode: "GRP_HEAD" }
-    });
+    const groupHeadPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "GRP_HEAD");
     
     const pharmUser = await prisma.user.upsert({
       where: { email: "pharm@lampang-hospital.go.th" },
@@ -845,9 +835,7 @@ async function main() {
     const icuDept = await prisma.department.findFirst({ 
       where: { departmentCode: "ICU", hospitalId: hospital.id } 
     });
-    const staffPersonnelType = await prisma.personnelType.findFirst({
-      where: { hospitalId: hospital.id, typeCode: "STAFF" }
-    });
+    const staffPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "STAFF");
     
     const staffUser = await prisma.user.upsert({
       where: { email: "nurse@lampang-hospital.go.th" },
@@ -876,9 +864,7 @@ async function main() {
 
     // สร้าง Student User ตัวอย่าง
     const hashedStudentPassword = await hashPassword("student123");
-    const studentPersonnelType = await prisma.personnelType.findFirst({
-      where: { hospitalId: hospital.id, typeCode: "STU" }
-    });
+    const studentPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "STU");
     
     const studentUser = await prisma.user.upsert({
       where: { email: "student@lampang-hospital.go.th" },
@@ -905,20 +891,74 @@ async function main() {
 
     console.log("✅ Created student user:", studentUser.email);
 
+    // ================================
+    // CREATE ADDITIONAL TEST USERS FOR HOSPITAL 2
+    // ================================
+    console.log("👥 Creating Users for Hospital 2...");
+
+    // สร้าง PersonnelTypes สำหรับโรงพยาบาลที่ 2
+    const hospital2PersonnelTypes: any[] = [];
+    for (const personnelType of personnelTypes) {
+      const created = await prisma.personnelType.upsert({
+        where: { 
+          hospitalId_typeCode: {
+            hospitalId: hospital2.id,
+            typeCode: personnelType.typeCode
+          }
+        },
+        update: {},
+        create: {
+          ...personnelType,
+          hospitalId: hospital2.id,
+          createdBy: devUser.id
+        }
+      });
+      hospital2PersonnelTypes.push(created);
+    }
+
+    // สร้าง Director สำหรับโรงพยาบาลที่ 2
+    const hashedDirector2Password = await hashPassword("director2123");
+    const director2PersonnelType = hospital2PersonnelTypes.find(pt => pt.typeCode === "DIR");
+
+    const director2User = await prisma.user.upsert({
+      where: { email: "director@thoen-hospital.go.th" },
+      update: {},
+      create: {
+        email: "director@thoen-hospital.go.th",
+        username: "director2",
+        name: "ผู้อำนวยการโรงพยาบาลเถิน",
+        firstName: "ผู้อำนวยการ",
+        lastName: "โรงพยาบาลเถิน",
+        phoneNumber: "054-231-234",
+        employeeId: "DIR002", 
+        position: "ผู้อำนวยการโรงพยาบาลเถิน",
+        role: "DIRECTOR",
+        status: "ACTIVE",
+        hospitalId: hospital2.id,
+        personnelTypeId: director2PersonnelType?.id,
+        isProfileComplete: true,
+        emailVerified: true,
+        password: hashedDirector2Password,
+      },
+    });
+
+    console.log("✅ Created director user for hospital 2:", director2User.email);
+
     console.log("\n🎉 Enhanced database seed completed successfully!");
     console.log("\n📋 Test accounts:");
     console.log("🔧 Developer: dev@system.local / dev123 (ACTIVE)");
-    console.log("👨‍💼 Director: director@lampang-hospital.go.th / director123 (ACTIVE)");
+    console.log("👨‍💼 Director (Lampang): director@lampang-hospital.go.th / director123 (ACTIVE)");
+    console.log("👨‍💼 Director (Thoen): director@thoen-hospital.go.th / director2123 (ACTIVE)");
     console.log("👩‍⚕️ Pharmacy Head: pharm@lampang-hospital.go.th / pharm123 (ACTIVE)"); 
     console.log("👩‍⚕️ Nurse: nurse@lampang-hospital.go.th / staff123 (PENDING)");
     console.log("🎓 Student: student@lampang-hospital.go.th / student123 (PENDING)");
     
     console.log("\n🏥 Hospitals:");
-    console.log("🏢 โรงพยาบาลลำปาง (DEMO001)");
-    console.log("🏢 โรงพยาบาลเถิน (DEMO002)");
+    console.log("🏢 โรงพยาบาลลำปาง (DEMO001) - 5 users");
+    console.log("🏢 โรงพยาบาลเถิน (DEMO002) - 1 user");
     
     console.log("\n🎯 Master Data Created:");
-    console.log("👥 Personnel Types: Developer, Director, Group Head, Staff, Student");
+    console.log("👥 Personnel Types: Developer, Director, Group Head, Staff, Student (×2 hospitals)");
     console.log("💊 Drug Forms: Tablet, Capsule, Injection, Syrup, Cream, Suppository");
     console.log("🧬 Drug Groups: Antibiotic, Analgesic, Antihistamine, Antiviral, Cardiovascular");
     console.log("⚠️ Drug Types: High Alert, Narcotic, Controlled, Psychotropic, Refer, Dangerous");
@@ -930,10 +970,11 @@ async function main() {
     
     console.log("\n📝 Next steps:");
     console.log("1. Run: pnpm dev");
-    console.log("2. Build Admin Panel UI");
-    console.log("3. Test master data management");
+    console.log("2. Login as dev@system.local / dev123");
+    console.log("3. Test Admin Panel at /admin");
     console.log("4. Director can approve pending users");
     console.log("5. Group Head can manage drug master data");
+    console.log("6. Start building API endpoints");
 
   } catch (error) {
     console.error("❌ Seed error:", error);

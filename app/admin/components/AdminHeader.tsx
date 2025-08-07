@@ -103,7 +103,6 @@ export default function AdminHeader() {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">ศูนย์จัดการข้อมูลหลัก</h1>
-              <p className="text-gray-600 mt-1">Admin Panel - Hospital Pharmacy Management System</p>
             </div>
           </div>
 
@@ -196,7 +195,6 @@ export default function AdminHeader() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center space-x-3 px-3 py-2 hover:bg-gray-50">
                   <div className="text-right hidden md:block">
-                    <p className="text-sm text-gray-600">ผู้ใช้งาน</p>
                     <p className="font-semibold text-gray-900">{mockCurrentUser.name}</p>
                   </div>
                   <HierarchyBadge hierarchy={mockCurrentUser.hierarchy} size="sm" />
