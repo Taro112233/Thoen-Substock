@@ -1,8 +1,9 @@
 // prisma/schemas/auth.prisma
-// Authentication and User Management Schema (Enhanced with Approval System)
+// Authentication and User Management Schema (Enhanced with Master Data Relations)
 // ระบบจัดการผู้ใช้และการยืนยันตัวตนสำหรับ Hospital Pharmacy System
 
 enum Role {
+  DEVELOPER           // นักพัฒนา - สิทธิ์สูงสุด (ใหม่)
   HOSPITAL_ADMIN      // ผู้ดูแลระบบโรงพยาบาล - สิทธิ์เต็ม
   PHARMACY_MANAGER    // ผู้จัดการเภสัชกรรม - จัดการสต็อกและอนุมัติ
   SENIOR_PHARMACIST   // เภสัชกรอาวุโส - จัดการสต็อกและจ่ายยา
@@ -10,6 +11,10 @@ enum Role {
   DEPARTMENT_HEAD     // หัวหน้าแผนก - เบิกยาและจัดการงบประมาณ
   STAFF_NURSE         // พยาบาลประจำ - เบิกยาพื้นฐาน
   PHARMACY_TECHNICIAN // เทคนิคเภสัชกรรม - รับสต็อกและจัดระเบียบ
+  DIRECTOR            // ผู้อำนวยการ (ใหม่)
+  GROUP_HEAD          // หัวหน้ากลุ่มงาน (ใหม่)  
+  STAFF               // พนักงาน (ใหม่)
+  STUDENT             // นักศึกษา (ใหม่)
 }
 
 enum UserStatus {
@@ -43,6 +48,10 @@ model User {
   // บทบาทและสิทธิ์
   role          Role
   status        UserStatus  @default(PENDING)
+  
+  // ความสัมพันธ์กับ Personnel Type (Master Data)
+  personnelTypeId String?
+  personnelType PersonnelType? @relation(fields: [personnelTypeId], references: [id], onDelete: SetNull)
   
   // ความสัมพันธ์กับโรงพยาบาล
   hospitalId    String
@@ -162,6 +171,21 @@ model User {
   approver                User?  @relation("UserApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
   rejecter                User?  @relation("UserRejecter", fields: [rejectedBy], references: [id], onDelete: SetNull)
   
+  // ================================
+  // MASTER DATA MANAGEMENT RELATIONS
+  // ================================
+  
+  // Master Data Creation/Management
+  personnelTypesCreated   PersonnelType[] // Personnel types ที่สร้าง
+  drugFormsCreated        DrugForm[]      // Drug forms ที่สร้าง
+  drugGroupsCreated       DrugGroup[]     // Drug groups ที่สร้าง
+  drugTypesCreated        DrugType[]      // Drug types ที่สร้าง
+  drugStorageCreated      DrugStorage[]   // Drug storage conditions ที่สร้าง
+  
+  @@index([hospitalId])
+  @@index([role])
+  @@index([status])
+  @@index([personnelTypeId])
   @@map("users")
 }
 

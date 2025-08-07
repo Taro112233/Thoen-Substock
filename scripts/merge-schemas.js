@@ -1,6 +1,6 @@
 // scripts/merge-schemas.js
-// Enhanced Prisma Schema Merger with Duplicate Detection
-// ป้องกันการ merge models ซ้ำและตรวจสอบ relations
+// Enhanced Prisma Schema Merger with Master Data Support
+// ป้องกันการ merge models ซ้ำและตรวจสอบ relations สำหรับ Admin Master Data
 
 const fs = require('fs');
 const path = require('path');
@@ -24,17 +24,18 @@ datasource db {
 
 `;
 
-// Schema file order for proper dependency resolution
+// Schema file order for proper dependency resolution (Updated with new files)
 const SCHEMA_ORDER = {
-  'shared-enums.prisma': 0,      // ต้อง load ก่อนทุกไฟล์
-  'auth.prisma': 1,
-  'hospital-core.prisma': 2,
-  'inventory.prisma': 3,
-  'requisitions.prisma': 4,
-  'suppliers.prisma': 5,
-  'analytics.prisma': 6,
-  'audit.prisma': 7,
-  'notifications.prisma': 8
+  'shared-enums.prisma': 0,          // ต้อง load ก่อนทุกไฟล์
+  'admin-master-data.prisma': 1,     // Master Data ต้องมาก่อน core models
+  'auth.prisma': 2,                  // User management
+  'hospital-core.prisma': 3,         // Hospital, Department, Warehouse, Drug
+  'inventory.prisma': 4,             // Stock management
+  'requisitions.prisma': 5,          // Requisition system
+  'suppliers.prisma': 6,             // Supplier management
+  'analytics.prisma': 7,             // Analytics and reporting
+  'audit.prisma': 8,                 // Audit and compliance
+  'notifications.prisma': 9          // Notifications
 };
 
 function extractModelsAndEnums(content) {
@@ -78,11 +79,61 @@ function validateRelations(content) {
     console.log(`📊 Found ${relations.length} relation fields`);
   }
   
+  // Validate Master Data specific relations
+  const masterDataModels = ['PersonnelType', 'DrugForm', 'DrugGroup', 'DrugType', 'DrugStorage'];
+  const masterDataRelations = relations.filter(r => masterDataModels.includes(r.targetModel));
+  
+  if (masterDataRelations.length > 0) {
+    console.log(`🎯 Found ${masterDataRelations.length} master data relations`);
+  }
+  
   return relationErrors;
 }
 
+function validateMasterDataStructure(content) {
+  console.log('🎯 Validating master data structure...');
+  
+  const requiredMasterDataModels = [
+    'PersonnelType',
+    'DrugForm', 
+    'DrugGroup',
+    'DrugType',
+    'DrugStorage'
+  ];
+  
+  const missingModels = [];
+  
+  requiredMasterDataModels.forEach(model => {
+    if (!content.includes(`model ${model}`)) {
+      missingModels.push(model);
+    }
+  });
+  
+  if (missingModels.length > 0) {
+    console.warn(`⚠️  Warning: Missing master data models: ${missingModels.join(', ')}`);
+  } else {
+    console.log('✅ All required master data models found');
+  }
+  
+  // Check for proper enum definitions
+  const requiredEnums = ['PersonnelHierarchy'];
+  const missingEnums = [];
+  
+  requiredEnums.forEach(enumName => {
+    if (!content.includes(`enum ${enumName}`)) {
+      missingEnums.push(enumName);
+    }
+  });
+  
+  if (missingEnums.length > 0) {
+    console.warn(`⚠️  Warning: Missing required enums: ${missingEnums.join(', ')}`);
+  }
+  
+  return { missingModels, missingEnums };
+}
+
 function mergeSchemas() {
-  console.log('🔄 Merging Prisma schemas...');
+  console.log('🔄 Merging Prisma schemas with Master Data support...');
   
   // Check if schemas directory exists
   if (!fs.existsSync(SCHEMAS_DIR)) {
@@ -108,7 +159,8 @@ function mergeSchemas() {
   
   console.log(`📁 Found ${schemaFiles.length} schema files:`);
   schemaFiles.forEach((file, index) => {
-    console.log(`  ${index + 1}. ${file}`);
+    const order = SCHEMA_ORDER[file] || '∞';
+    console.log(`  ${index + 1}. ${file} (order: ${order})`);
   });
   
   if (schemaFiles.length === 0) {
@@ -157,7 +209,7 @@ function mergeSchemas() {
     models.forEach(model => definedModels.add(model));
     enums.forEach(enumName => definedEnums.add(enumName));
     
-    // Add section header
+    // Add section header with enhanced information
     const sectionName = file
       .replace('.prisma', '')
       .toUpperCase()
@@ -165,10 +217,21 @@ function mergeSchemas() {
     
     mergedContent += `\n// ==========================================\n`;
     mergedContent += `// ${sectionName}\n`;
+    
+    // Add special annotations for master data
+    if (file === 'admin-master-data.prisma') {
+      mergedContent += `// 🎯 Master Data Management Models\n`;
+      mergedContent += `// For Admin Panel Data Management\n`;
+    } else if (file === 'shared-enums.prisma') {
+      mergedContent += `// 🔧 Shared Enums - Foundation Layer\n`;
+    }
+    
     mergedContent += `// ==========================================\n\n`;
     mergedContent += content + '\n';
     
-    console.log(`✅ Merged ${file}: ${models.size} models, ${enums.size} enums`);
+    // Enhanced logging with master data indicators
+    const masterDataIndicator = file.includes('master-data') ? '🎯 ' : '';
+    console.log(`✅ ${masterDataIndicator}Merged ${file}: ${models.size} models, ${enums.size} enums`);
   });
   
   // Write the merged schema
@@ -178,6 +241,9 @@ function mergeSchemas() {
     
     // Validate relations
     validateRelations(mergedContent);
+    
+    // Validate master data structure
+    validateMasterDataStructure(mergedContent);
     
     return mergedContent;
   } catch (error) {
@@ -205,14 +271,22 @@ function validateMerge() {
       throw new Error('No models found in merged schema');
     }
     
-    // Check for required models
-    const requiredModels = ['User', 'Hospital', 'Drug', 'StockCard'];
+    // Check for required models including master data
+    const requiredModels = [
+      'User', 'Hospital', 'Drug', 'StockCard',
+      'PersonnelType', 'DrugForm', 'DrugGroup', 'DrugType', 'DrugStorage'
+    ];
     const modelNames = modelMatches.map(match => match.replace('model ', ''));
     
+    const missingRequiredModels = [];
     for (const required of requiredModels) {
       if (!modelNames.includes(required)) {
-        console.warn(`⚠️  Warning: Required model '${required}' not found`);
+        missingRequiredModels.push(required);
       }
+    }
+    
+    if (missingRequiredModels.length > 0) {
+      console.warn(`⚠️  Warning: Required models not found: ${missingRequiredModels.join(', ')}`);
     }
     
     // Check for generator and datasource
@@ -224,6 +298,25 @@ function validateMerge() {
       throw new Error('Datasource block not found');
     }
     
+    // Check for admin panel specific requirements
+    const adminRequirements = [
+      'PersonnelHierarchy',
+      'DEVELOPER',
+      'DIRECTOR',
+      'GROUP_HEAD'
+    ];
+    
+    const missingAdminFeatures = [];
+    for (const requirement of adminRequirements) {
+      if (!content.includes(requirement)) {
+        missingAdminFeatures.push(requirement);
+      }
+    }
+    
+    if (missingAdminFeatures.length > 0) {
+      console.warn(`⚠️  Warning: Admin panel features missing: ${missingAdminFeatures.join(', ')}`);
+    }
+    
     // Check for common relation issues
     const potentialIssues = [];
     
@@ -232,9 +325,16 @@ function validateMerge() {
       potentialIssues.push('Missing opposite relation fields detected');
     }
     
+    // Check for Master Data relation integrity
+    if (content.includes('DrugForm') && !content.includes('drugFormId')) {
+      potentialIssues.push('DrugForm relation may be missing in Drug model');
+    }
+    
     if (potentialIssues.length > 0) {
       console.warn('⚠️  Potential issues found:');
       potentialIssues.forEach(issue => console.warn(`   - ${issue}`));
+    } else {
+      console.log('✅ No potential relation issues found');
     }
     
     console.log('✅ Schema validation passed');
@@ -247,7 +347,7 @@ function validateMerge() {
 
 function showUsage() {
   console.log(`
-📚 Hospital Pharmacy Schema Merger v2.0
+📚 Hospital Pharmacy Schema Merger v2.1 - Master Data Edition
 
 Usage:
   node scripts/merge-schemas.js [--check-only]
@@ -258,9 +358,16 @@ Options:
 
 This script merges all .prisma files from prisma/schemas/ into prisma/schema.prisma
 
+🎯 New Features:
+- ✅ Master Data Models (Personnel, Drug Forms, Groups, Types, Storage)
+- ✅ Admin Panel Support with Role Hierarchy
+- ✅ Enhanced Validation for Master Data Relations
+- ✅ Developer > Director > Group Head > Staff > Student Hierarchy
+
 Features:
 - ✅ Duplicate model/enum detection
 - ✅ Relation validation
+- ✅ Master Data structure validation
 - ✅ Dependency-aware file ordering
 - ✅ Comprehensive error reporting
 
@@ -274,6 +381,7 @@ After merging, run:
   pnpm db:generate  # Generate Prisma client
   pnpm db:push      # Push to development database
   pnpm db:migrate   # Create migration for production
+  pnpm db:seed      # Seed master data
 `);
 }
 
@@ -304,18 +412,35 @@ if (require.main === module) {
     console.log(`
 🎉 Schema merge completed successfully!
 
+🎯 Master Data Models Ready:
+  - PersonnelType (Role hierarchy management)
+  - DrugForm (Tablet, Capsule, Injection, etc.)
+  - DrugGroup (Antibiotic, Analgesic, etc.)
+  - DrugType (High Alert, Narcotic, Controlled)
+  - DrugStorage (Room temp, Refrigerated, Frozen)
+
 Next steps:
   1. pnpm db:generate  # Generate Prisma client
   2. pnpm db:push      # Push to database (development)
-  3. pnpm db:studio    # Open Prisma Studio (optional)
+  3. pnpm db:seed      # Seed with master data
+  4. pnpm dev          # Start development server
 
 For production:
   pnpm db:migrate      # Create and apply migration
 
-💡 Tips:
-  - Use 'node scripts/merge-schemas.js --check-only' to validate without merging
+💡 Admin Panel Features:
+  - Hospital management (Developer level)
+  - Department/Warehouse management (Director level)  
+  - Personnel type management (Director level)
+  - Drug master data management (Group Head level)
+  - Role-based permissions system
+  - Hierarchical approval workflow
+
+🛠️  Troubleshooting:
+  - Use 'node scripts/merge-schemas.js --check-only' to validate
   - Check prisma/schema.prisma for any remaining relation issues
   - Run 'prisma format' if needed to clean up formatting
+  - Ensure all master data relations are properly defined
 `);
     
   } catch (error) {
@@ -323,7 +448,9 @@ For production:
     console.log('\n🛠️  Troubleshooting:');
     console.log('  1. Check for duplicate models in different schema files');
     console.log('  2. Ensure all relations have proper opposite fields');
-    console.log('  3. Verify file syntax with: prisma format');
+    console.log('  3. Verify master data models are properly structured');
+    console.log('  4. Check role hierarchy definitions');
+    console.log('  5. Verify file syntax with: prisma format');
     process.exit(1);
   }
 }

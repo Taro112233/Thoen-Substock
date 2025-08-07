@@ -1,0 +1,336 @@
+// prisma/schemas/admin-master-data.prisma
+// Admin Master Data Management Schema
+// ระบบจัดการข้อมูลหลักสำหรับ Admin Panel
+
+// ================================
+// PERSONNEL TYPES & ROLES
+// ================================
+
+enum PersonnelHierarchy {
+  DEVELOPER           // นักพัฒนา - สิทธิ์สูงสุด
+  DIRECTOR            // ผู้อำนวยการ
+  GROUP_HEAD          // หัวหน้ากลุ่มงาน
+  STAFF               // พนักงาน
+  STUDENT             // นักศึกษา
+}
+
+// ประเภทบุคลากรที่ Admin สามารถจัดการได้
+model PersonnelType {
+  id              String              @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  hospital        Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลประเภทบุคลากร
+  typeCode        String              // รหัสประเภท เช่น DIR, GRP_HEAD, STAFF, STU
+  typeName        String              // ชื่อประเภท เช่น ผู้อำนวยการ
+  typeNameEn      String?             // ชื่อภาษาอังกฤษ
+  
+  // ระดับในลำดับชั้น
+  hierarchy       PersonnelHierarchy
+  levelOrder      Int                 // ลำดับระดับ (1=สูงสุด)
+  
+  // สิทธิ์และความสามารถ
+  canManageHospitals      Boolean     @default(false) // จัดการโรงพยาบาลได้
+  canManageWarehouses     Boolean     @default(false) // จัดการคลังได้
+  canManageDepartments    Boolean     @default(false) // จัดการแผนกได้
+  canManagePersonnel      Boolean     @default(false) // จัดการประเภทบุคลากรได้
+  canManageDrugs          Boolean     @default(false) // จัดการยาได้
+  canManageMasterData     Boolean     @default(false) // จัดการข้อมูลหลักได้
+  canViewReports          Boolean     @default(true)  // ดูรายงาน
+  canApproveUsers         Boolean     @default(false) // อนุมัติผู้ใช้
+  
+  // รายละเอียด
+  description     String?
+  responsibilities Json?              // หน้าที่ความรับผิดชอบ (array)
+  
+  // การตั้งค่า
+  maxSubordinates Int?                // จำนวนลูกน้องสูงสุด
+  defaultDepartmentType String?       // ประเภทแผนกเริ่มต้น
+  
+  // สถานะ
+  isActive        Boolean             @default(true)
+  isSystemDefault Boolean             @default(false) // ประเภทเริ่มต้นของระบบ
+  
+  // การสร้าง/แก้ไข
+  createdBy       String
+  creator         User                @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  
+  // Audit fields
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  @@unique([hospitalId, typeCode])
+  @@index([hospitalId, hierarchy])
+  @@index([isActive])
+  @@map("personnel_types")
+}
+
+// ================================
+// DRUG MASTER DATA
+// ================================
+
+// รูปแบบยา
+model DrugForm {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์ (Global หรือ Hospital-specific)
+  hospitalId      String?     // null = Global, มีค่า = Hospital-specific
+  hospital        Hospital?   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลรูปแบบยา
+  formCode        String      // รหัสรูปแบบ เช่น TAB, CAP, INJ
+  formName        String      // ชื่อรูปแบบ เช่น ยาเม็ด
+  formNameEn      String?     // ชื่อภาษาอังกฤษ
+  
+  // คำอธิบาย
+  description     String?
+  
+  // การจัดกลุ่ม
+  category        String?     // หมวดหมู่ เช่น ORAL, INJECTION, TOPICAL
+  
+  // คุณสมบัติเฉพาะ
+  requiresSpecialStorage Boolean @default(false) // ต้องการการเก็บพิเศษ
+  isControlledForm Boolean   @default(false)     // รูปแบบที่ควบคุม
+  
+  // การใช้งาน
+  usageInstructions String?  // วิธีใช้ทั่วไป
+  commonStrengths Json?       // ความแรงที่ใช้บ่อย (array)
+  standardUnits   Json?       // หน่วยมาตรฐาน (array)
+  
+  // สถานะ
+  isActive        Boolean     @default(true)
+  isSystemDefault Boolean     @default(false)
+  
+  // การจัดเรียง
+  sortOrder       Int         @default(0)
+  
+  // การสร้าง/แก้ไข
+  createdBy       String?
+  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  drugs           Drug[]      @relation("DrugFormRelation")
+  
+  @@unique([hospitalId, formCode])
+  @@index([hospitalId])
+  @@index([category])
+  @@index([isActive])
+  @@map("drug_forms")
+}
+
+// กลุ่มยา
+model DrugGroup {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String?     // null = Global, มีค่า = Hospital-specific
+  hospital        Hospital?   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลกลุ่มยา
+  groupCode       String      // รหัสกลุ่ม เช่น ANTI, ANALG
+  groupName       String      // ชื่อกลุ่ม เช่น Antibiotic
+  groupNameTh     String?     // ชื่อไทย เช่น ยาปฏิชีวนะ
+  
+  // คำอธิบาย
+  description     String?
+  indication      String?     // ข้อบ่งใช้
+  
+  // การจัดหมวดหมู่
+  therapeuticClass String?    // หมวดยาตามการรักษา
+  pharmacologicalClass String? // หมวดยาตามเภสัชวิทยา
+  
+  // โครงสร้างแบบ hierarchy
+  parentGroupId   String?
+  parentGroup     DrugGroup?  @relation("DrugGroupHierarchy", fields: [parentGroupId], references: [id], onDelete: SetNull)
+  childGroups     DrugGroup[] @relation("DrugGroupHierarchy")
+  
+  // การตั้งค่าความปลอดภัย
+  requiresMonitoring Boolean  @default(false) // ต้องติดตามการใช้
+  hasInteractions Boolean     @default(false) // มีปฏิกิริยา
+  riskLevel       String      @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  
+  // สถานะ
+  isActive        Boolean     @default(true)
+  isSystemDefault Boolean     @default(false)
+  
+  // การจัดเรียง
+  sortOrder       Int         @default(0)
+  level           Int         @default(0) // ระดับของ hierarchy
+  
+  // การสร้าง/แก้ไข
+  createdBy       String?
+  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  drugs           Drug[]      @relation("DrugGroupRelation")
+  
+  @@unique([hospitalId, groupCode])
+  @@index([hospitalId])
+  @@index([therapeuticClass])
+  @@index([parentGroupId])
+  @@index([isActive])
+  @@map("drug_groups")
+}
+
+// ประเภทยา (Drug Types)
+model DrugType {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String?
+  hospital        Hospital?   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลประเภทยา
+  typeCode        String      // รหัสประเภท เช่น HIGH_ALERT, NARCOTIC, REFER
+  typeName        String      // ชื่อประเภท
+  typeNameTh      String?     // ชื่อไทย
+  
+  // คุณสมบัติความปลอดภัย
+  isHighAlert     Boolean     @default(false)  // ยา High Alert
+  isNarcotic      Boolean     @default(false)  // ยาเสพติด
+  isControlled    Boolean     @default(false)  // ยาควบคุม
+  isPsychotropic  Boolean     @default(false)  // ยาจิตเวช
+  isDangerous     Boolean     @default(false)  // ยาอันตราย
+  isRefer         Boolean     @default(false)  // ยา Refer
+  
+  // ข้อกำหนดพิเศษ
+  requiresWitness Boolean     @default(false)  // ต้องมีพยาน
+  requiresApproval Boolean    @default(false)  // ต้องอนุมัติ
+  requiresDoubleLock Boolean  @default(false)  // ต้องเก็บแบบ double lock
+  maxDispenseQty  Int?                         // จำนวนจ่ายสูงสุด
+  
+  // การจัดเก็บ
+  specialStorage  Json?       // ข้อกำหนดการเก็บพิเศษ
+  
+  // การติดตาม
+  auditRequired   Boolean     @default(false)  // ต้องมี audit trail
+  reportingRequired Boolean   @default(false)  // ต้องรายงาน
+  
+  // คำอธิบาย
+  description     String?
+  precautions     String?     // ข้อควรระวัง
+  warnings        String?     // คำเตือน
+  
+  // สีและไอคอนสำหรับ UI
+  color           String?     // สีแสดงใน UI
+  iconName        String?     // ชื่อไอคอน
+  
+  // สถานะ
+  isActive        Boolean     @default(true)
+  isSystemDefault Boolean     @default(false)
+  
+  // การจัดเรียง
+  sortOrder       Int         @default(0)
+  
+  // การสร้าง/แก้ไข
+  createdBy       String?
+  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  
+  // Audit fields
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  drugs           Drug[]      @relation("DrugTypeRelation")
+  
+  @@unique([hospitalId, typeCode])
+  @@index([hospitalId])
+  @@index([isHighAlert])
+  @@index([isNarcotic])
+  @@index([isActive])
+  @@map("drug_types")
+}
+
+// การเก็บรักษายา
+model DrugStorage {
+  id              String      @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String?
+  hospital        Hospital?   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลการเก็บ
+  storageCode     String      // รหัสการเก็บ เช่น RT, FRIDGE, FREEZE
+  storageName     String      // ชื่อการเก็บ
+  storageNameTh   String?     // ชื่อไทย
+  
+  // เงื่อนไขการเก็บ
+  temperatureMin  Decimal?    // อุณหภูมิต่ำสุด (°C)
+  temperatureMax  Decimal?    // อุณหภูมิสูงสุด (°C)
+  humidityMin     Decimal?    // ความชื้นต่ำสุด (%)
+  humidityMax     Decimal?    // ความชื้นสูงสุด (%)
+  
+  // ข้อกำหนดพิเศษ
+  requiresRefrigeration Boolean @default(false)  // ต้องแช่เย็น
+  requiresFreezing    Boolean   @default(false)  // ต้องแช่แข็ง
+  protectFromLight    Boolean   @default(false)  // ป้องกันแสง
+  protectFromMoisture Boolean   @default(false)  // ป้องกันความชื้น
+  requiresInertGas    Boolean   @default(false)  // ต้องใช้แก๊สเฉื่อย
+  
+  // คำแนะนำ
+  storageInstructions String?
+  handlingPrecautions String?
+  
+  // การตรวจสอบ
+  monitoringRequired Boolean   @default(false)   // ต้องติดตามสภาพ
+  checkFrequency     String?   // ความถี่ตรวจสอบ
+  
+  // สีและการแสดงผล
+  color              String?   // สีแสดงใน UI
+  iconName           String?   // ชื่อไอคอน
+  
+  // สถานะ
+  isActive           Boolean   @default(true)
+  isSystemDefault    Boolean   @default(false)
+  
+  // การจัดเรียง
+  sortOrder          Int       @default(0)
+  
+  // การสร้าง/แก้ไข
+  createdBy          String?
+  creator            User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  
+  // Audit fields
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  // Relations
+  drugs              Drug[]    @relation("DrugStorageRelation")
+  
+  @@unique([hospitalId, storageCode])
+  @@index([hospitalId])
+  @@index([requiresRefrigeration])
+  @@index([isActive])
+  @@map("drug_storage_conditions")
+}
+
+// ================================
+// EXTENDED HOSPITAL MODEL
+// ================================
+
+// เพิ่ม relations สำหรับ master data ใน Hospital model
+// (ไฟล์นี้จะ extend hospital-core.prisma)
+
+// ================================
+// EXTENDED USER MODEL
+// ================================
+
+// เพิ่ม relations สำหรับ master data management ใน User model
+// (ไฟล์นี้จะ extend auth.prisma)
+
+// ================================
+// EXTENDED DRUG MODEL
+// ================================
+
+// เพิ่ม relations สำหรับ master data ใน Drug model  
+// (ไฟล์นี้จะ extend hospital-core.prisma)
