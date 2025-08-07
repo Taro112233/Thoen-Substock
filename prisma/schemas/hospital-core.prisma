@@ -1,5 +1,5 @@
 // prisma/schemas/hospital-core.prisma
-// Hospital Core Management Schema
+// Hospital Core Management Schema (Fixed Relations)
 // ระบบจัดการโรงพยาบาลและแผนกหลักสำหรับ Hospital Pharmacy System
 
 enum HospitalStatus {
@@ -120,6 +120,19 @@ model Hospital {
   drugCategories  DrugCategory[]
   drugInteractions DrugInteraction[]
   drugAllergens   DrugAllergen[]
+  
+  // ================================
+  // MASTER DATA RELATIONS (Fixed) 
+  // ================================
+  
+  // Personnel & Admin Relations
+  personnelTypes  PersonnelType[]
+  
+  // Drug Master Data Relations
+  drugForms       DrugForm[]
+  drugGroups      DrugGroup[]
+  drugTypes       DrugType[]
+  drugStorage     DrugStorage[]
   
   @@index([hospitalCode])
   @@index([status])
@@ -400,6 +413,26 @@ model Drug {
   barcode         String?         // บาร์โค้ด
   qrCode          String?         // QR โค้ด
   
+  // ================================
+  // MASTER DATA RELATIONS (Fixed)
+  // ================================
+  
+  // Drug Form Relation
+  drugFormId      String?
+  drugForm        DrugForm?       @relation("DrugFormRelation", fields: [drugFormId], references: [id], onDelete: SetNull)
+  
+  // Drug Group Relation
+  drugGroupId     String?
+  drugGroup       DrugGroup?      @relation("DrugGroupRelation", fields: [drugGroupId], references: [id], onDelete: SetNull)
+  
+  // Drug Type Relation
+  drugTypeId      String?
+  drugType        DrugType?       @relation("DrugTypeRelation", fields: [drugTypeId], references: [id], onDelete: SetNull)
+  
+  // Drug Storage Relation
+  drugStorageId   String?
+  drugStorage     DrugStorage?    @relation("DrugStorageRelation", fields: [drugStorageId], references: [id], onDelete: SetNull)
+  
   // Audit fields
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -435,6 +468,10 @@ model Drug {
   @@index([isControlled])
   @@index([isFormulary])
   @@index([barcode])
+  @@index([drugFormId])
+  @@index([drugGroupId])
+  @@index([drugTypeId])
+  @@index([drugStorageId])
   @@map("drugs")
 }
 

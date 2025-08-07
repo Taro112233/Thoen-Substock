@@ -1,5 +1,5 @@
 // prisma/schemas/admin-master-data.prisma
-// Admin Master Data Management Schema
+// Admin Master Data Management Schema (Fixed Relations)
 // ระบบจัดการข้อมูลหลักสำหรับ Admin Panel
 
 // ================================
@@ -55,11 +55,18 @@ model PersonnelType {
   
   // การสร้าง/แก้ไข
   createdBy       String
-  creator         User                @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  creator         User                @relation("PersonnelTypeCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   
   // Audit fields
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
+  
+  // ================================
+  // RELATIONS
+  // ================================
+  
+  // Users ที่ใช้ PersonnelType นี้
+  users           User[]              @relation("UserPersonnelType")
   
   @@unique([hospitalId, typeCode])
   @@index([hospitalId, hierarchy])
@@ -108,7 +115,7 @@ model DrugForm {
   
   // การสร้าง/แก้ไข
   createdBy       String?
-  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator         User?       @relation("DrugFormCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt       DateTime    @default(now())
@@ -165,7 +172,7 @@ model DrugGroup {
   
   // การสร้าง/แก้ไข
   createdBy       String?
-  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator         User?       @relation("DrugGroupCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt       DateTime    @default(now())
@@ -234,7 +241,7 @@ model DrugType {
   
   // การสร้าง/แก้ไข
   createdBy       String?
-  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator         User?       @relation("DrugTypeCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt       DateTime    @default(now())
@@ -298,7 +305,7 @@ model DrugStorage {
   
   // การสร้าง/แก้ไข
   createdBy          String?
-  creator            User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator            User?     @relation("DrugStorageCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt          DateTime  @default(now())
@@ -313,24 +320,3 @@ model DrugStorage {
   @@index([isActive])
   @@map("drug_storage_conditions")
 }
-
-// ================================
-// EXTENDED HOSPITAL MODEL
-// ================================
-
-// เพิ่ม relations สำหรับ master data ใน Hospital model
-// (ไฟล์นี้จะ extend hospital-core.prisma)
-
-// ================================
-// EXTENDED USER MODEL
-// ================================
-
-// เพิ่ม relations สำหรับ master data management ใน User model
-// (ไฟล์นี้จะ extend auth.prisma)
-
-// ================================
-// EXTENDED DRUG MODEL
-// ================================
-
-// เพิ่ม relations สำหรับ master data ใน Drug model  
-// (ไฟล์นี้จะ extend hospital-core.prisma)

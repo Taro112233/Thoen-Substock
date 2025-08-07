@@ -2,11 +2,40 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { z } from "zod";
+
+interface ProfileFormData {
+  firstName: string;
+  lastName: string;
+  position: string;
+  phoneNumber: string;
+  hospitalId: string;
+  departmentId?: string;
+}
+
+interface PositionOption {
+  value: string;
+  label: string;
+}
+
+const positionOptions: PositionOption[] = [
+  { value: "doctor", label: "แพทย์" },
+  { value: "nurse", label: "พยาบาล" },
+  { value: "pharmacist", label: "เภสัชกร" },
+  { value: "staff", label: "เจ้าหน้าที่" }
+];
+
+const profileSchema = z.object({
+  firstName: z.string().min(1, "กรุณากรอกชื่อ"),
+  lastName: z.string().min(1, "กรุณากรอกนามสกุล"),
+  position: z.string().min(1, "กรุณาเลือกตำแหน่ง"),
+  phoneNumber: z.string().length(10, "กรุณากรอกเบอร์โทรศัพท์ 10 หลัก"),
+  hospitalId: z.string().min(1, "กรุณาเลือกหน่วยงาน"),
+  departmentId: z.string().optional(),
+});
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { profileSchema, ProfileFormData } from "@/lib/validations/auth";
-import { positionOptions } from "@/lib/auth-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -177,7 +206,7 @@ export default function ProfileForm() {
                   <SelectValue placeholder="เลือกตำแหน่ง" />
                 </SelectTrigger>
                 <SelectContent>
-                  {positionOptions.map((option) => (
+                  {positionOptions.map((option: PositionOption) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>

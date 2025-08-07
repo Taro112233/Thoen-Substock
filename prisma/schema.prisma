@@ -1,6 +1,6 @@
 // This file is auto-generated. Do not edit manually.
 // Edit files in prisma/schemas/ directory instead.
-// Last generated: 2025-08-07T04:37:34.757Z
+// Last generated: 2025-08-07T13:17:44.979Z
 
 generator client {
   provider = "prisma-client-js"
@@ -20,7 +20,7 @@ datasource db {
 // ==========================================
 
 // prisma/schemas/admin-master-data.prisma
-// Admin Master Data Management Schema
+// Admin Master Data Management Schema (Fixed Relations)
 // ระบบจัดการข้อมูลหลักสำหรับ Admin Panel
 
 // ================================
@@ -76,11 +76,18 @@ model PersonnelType {
   
   // การสร้าง/แก้ไข
   createdBy       String
-  creator         User                @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  creator         User                @relation("PersonnelTypeCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   
   // Audit fields
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
+  
+  // ================================
+  // RELATIONS
+  // ================================
+  
+  // Users ที่ใช้ PersonnelType นี้
+  users           User[]              @relation("UserPersonnelType")
   
   @@unique([hospitalId, typeCode])
   @@index([hospitalId, hierarchy])
@@ -129,7 +136,7 @@ model DrugForm {
   
   // การสร้าง/แก้ไข
   createdBy       String?
-  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator         User?       @relation("DrugFormCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt       DateTime    @default(now())
@@ -186,7 +193,7 @@ model DrugGroup {
   
   // การสร้าง/แก้ไข
   createdBy       String?
-  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator         User?       @relation("DrugGroupCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt       DateTime    @default(now())
@@ -255,7 +262,7 @@ model DrugType {
   
   // การสร้าง/แก้ไข
   createdBy       String?
-  creator         User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator         User?       @relation("DrugTypeCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt       DateTime    @default(now())
@@ -319,7 +326,7 @@ model DrugStorage {
   
   // การสร้าง/แก้ไข
   createdBy          String?
-  creator            User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  creator            User?     @relation("DrugStorageCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   
   // Audit fields
   createdAt          DateTime  @default(now())
@@ -335,33 +342,12 @@ model DrugStorage {
   @@map("drug_storage_conditions")
 }
 
-// ================================
-// EXTENDED HOSPITAL MODEL
-// ================================
-
-// เพิ่ม relations สำหรับ master data ใน Hospital model
-// (ไฟล์นี้จะ extend hospital-core.prisma)
-
-// ================================
-// EXTENDED USER MODEL
-// ================================
-
-// เพิ่ม relations สำหรับ master data management ใน User model
-// (ไฟล์นี้จะ extend auth.prisma)
-
-// ================================
-// EXTENDED DRUG MODEL
-// ================================
-
-// เพิ่ม relations สำหรับ master data ใน Drug model  
-// (ไฟล์นี้จะ extend hospital-core.prisma)
-
 // ==========================================
 // AUTH
 // ==========================================
 
 // prisma/schemas/auth.prisma
-// Authentication and User Management Schema (Enhanced with Master Data Relations)
+// Authentication and User Management Schema (Fixed Relations)
 // ระบบจัดการผู้ใช้และการยืนยันตัวตนสำหรับ Hospital Pharmacy System
 
 enum Role {
@@ -411,9 +397,9 @@ model User {
   role          Role
   status        UserStatus  @default(PENDING)
   
-  // ความสัมพันธ์กับ Personnel Type (Master Data)
+  // ความสัมพันธ์กับ Personnel Type (Master Data) - Fixed relation name
   personnelTypeId String?
-  personnelType PersonnelType? @relation(fields: [personnelTypeId], references: [id], onDelete: SetNull)
+  personnelType PersonnelType? @relation("UserPersonnelType", fields: [personnelTypeId], references: [id], onDelete: SetNull)
   
   // ความสัมพันธ์กับโรงพยาบาล
   hospitalId    String
@@ -534,15 +520,15 @@ model User {
   rejecter                User?  @relation("UserRejecter", fields: [rejectedBy], references: [id], onDelete: SetNull)
   
   // ================================
-  // MASTER DATA MANAGEMENT RELATIONS
+  // MASTER DATA MANAGEMENT RELATIONS - Fixed relation names
   // ================================
   
   // Master Data Creation/Management
-  personnelTypesCreated   PersonnelType[] // Personnel types ที่สร้าง
-  drugFormsCreated        DrugForm[]      // Drug forms ที่สร้าง
-  drugGroupsCreated       DrugGroup[]     // Drug groups ที่สร้าง
-  drugTypesCreated        DrugType[]      // Drug types ที่สร้าง
-  drugStorageCreated      DrugStorage[]   // Drug storage conditions ที่สร้าง
+  personnelTypesCreated   PersonnelType[] @relation("PersonnelTypeCreator")
+  drugFormsCreated        DrugForm[]      @relation("DrugFormCreator")
+  drugGroupsCreated       DrugGroup[]     @relation("DrugGroupCreator")
+  drugTypesCreated        DrugType[]      @relation("DrugTypeCreator")
+  drugStorageCreated      DrugStorage[]   @relation("DrugStorageCreator")
   
   @@index([hospitalId])
   @@index([role])
@@ -702,7 +688,7 @@ model LoginAttempt {
 // ==========================================
 
 // prisma/schemas/hospital-core.prisma
-// Hospital Core Management Schema
+// Hospital Core Management Schema (Fixed Relations)
 // ระบบจัดการโรงพยาบาลและแผนกหลักสำหรับ Hospital Pharmacy System
 
 enum HospitalStatus {
@@ -823,6 +809,19 @@ model Hospital {
   drugCategories  DrugCategory[]
   drugInteractions DrugInteraction[]
   drugAllergens   DrugAllergen[]
+  
+  // ================================
+  // MASTER DATA RELATIONS (Fixed) 
+  // ================================
+  
+  // Personnel & Admin Relations
+  personnelTypes  PersonnelType[]
+  
+  // Drug Master Data Relations
+  drugForms       DrugForm[]
+  drugGroups      DrugGroup[]
+  drugTypes       DrugType[]
+  drugStorage     DrugStorage[]
   
   @@index([hospitalCode])
   @@index([status])
@@ -1103,6 +1102,26 @@ model Drug {
   barcode         String?         // บาร์โค้ด
   qrCode          String?         // QR โค้ด
   
+  // ================================
+  // MASTER DATA RELATIONS (Fixed)
+  // ================================
+  
+  // Drug Form Relation
+  drugFormId      String?
+  drugForm        DrugForm?       @relation("DrugFormRelation", fields: [drugFormId], references: [id], onDelete: SetNull)
+  
+  // Drug Group Relation
+  drugGroupId     String?
+  drugGroup       DrugGroup?      @relation("DrugGroupRelation", fields: [drugGroupId], references: [id], onDelete: SetNull)
+  
+  // Drug Type Relation
+  drugTypeId      String?
+  drugType        DrugType?       @relation("DrugTypeRelation", fields: [drugTypeId], references: [id], onDelete: SetNull)
+  
+  // Drug Storage Relation
+  drugStorageId   String?
+  drugStorage     DrugStorage?    @relation("DrugStorageRelation", fields: [drugStorageId], references: [id], onDelete: SetNull)
+  
   // Audit fields
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -1138,6 +1157,10 @@ model Drug {
   @@index([isControlled])
   @@index([isFormulary])
   @@index([barcode])
+  @@index([drugFormId])
+  @@index([drugGroupId])
+  @@index([drugTypeId])
+  @@index([drugStorageId])
   @@map("drugs")
 }
 

@@ -1,5 +1,5 @@
 // prisma/schemas/auth.prisma
-// Authentication and User Management Schema (Enhanced with Master Data Relations)
+// Authentication and User Management Schema (Fixed Relations)
 // ระบบจัดการผู้ใช้และการยืนยันตัวตนสำหรับ Hospital Pharmacy System
 
 enum Role {
@@ -49,9 +49,9 @@ model User {
   role          Role
   status        UserStatus  @default(PENDING)
   
-  // ความสัมพันธ์กับ Personnel Type (Master Data)
+  // ความสัมพันธ์กับ Personnel Type (Master Data) - Fixed relation name
   personnelTypeId String?
-  personnelType PersonnelType? @relation(fields: [personnelTypeId], references: [id], onDelete: SetNull)
+  personnelType PersonnelType? @relation("UserPersonnelType", fields: [personnelTypeId], references: [id], onDelete: SetNull)
   
   // ความสัมพันธ์กับโรงพยาบาล
   hospitalId    String
@@ -172,15 +172,15 @@ model User {
   rejecter                User?  @relation("UserRejecter", fields: [rejectedBy], references: [id], onDelete: SetNull)
   
   // ================================
-  // MASTER DATA MANAGEMENT RELATIONS
+  // MASTER DATA MANAGEMENT RELATIONS - Fixed relation names
   // ================================
   
   // Master Data Creation/Management
-  personnelTypesCreated   PersonnelType[] // Personnel types ที่สร้าง
-  drugFormsCreated        DrugForm[]      // Drug forms ที่สร้าง
-  drugGroupsCreated       DrugGroup[]     // Drug groups ที่สร้าง
-  drugTypesCreated        DrugType[]      // Drug types ที่สร้าง
-  drugStorageCreated      DrugStorage[]   // Drug storage conditions ที่สร้าง
+  personnelTypesCreated   PersonnelType[] @relation("PersonnelTypeCreator")
+  drugFormsCreated        DrugForm[]      @relation("DrugFormCreator")
+  drugGroupsCreated       DrugGroup[]     @relation("DrugGroupCreator")
+  drugTypesCreated        DrugType[]      @relation("DrugTypeCreator")
+  drugStorageCreated      DrugStorage[]   @relation("DrugStorageCreator")
   
   @@index([hospitalId])
   @@index([role])

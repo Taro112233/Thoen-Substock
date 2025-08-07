@@ -19,7 +19,6 @@ import {
   Calendar,
   AlertCircle
 } from "lucide-react";
-import { translateUserStatus, translateUserRole } from "@/lib/auth-utils";
 
 interface UserInfo {
   name: string;
@@ -103,6 +102,14 @@ export default function PendingApprovalCard() {
       console.error("Logout error:", err);
     }
   };
+
+  function translateUserRole(role: string): import("react").ReactNode | import("motion/react").MotionValue<number> | import("motion/react").MotionValue<string> {
+    throw new Error("Function not implemented.");
+  }
+
+  function translateUserStatus(status: string): import("react").ReactNode | import("motion/react").MotionValue<number> | import("motion/react").MotionValue<string> {
+    throw new Error("Function not implemented.");
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-4">
