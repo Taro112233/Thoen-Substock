@@ -1,5 +1,5 @@
 // prisma/seed.ts - Enhanced Seed Script with Master Data (FIXED)
-import { PrismaClient, PersonnelHierarchy } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../lib/password-utils";
 
 const prisma = new PrismaClient();
@@ -110,12 +110,31 @@ async function main() {
     // ================================
     console.log("🎯 Creating Personnel Types (Master Data)...");
 
-    const personnelTypes = [
+    type PersonnelHierarchy = "DEVELOPER" | "DIRECTOR" | "GROUP_HEAD" | "STAFF" | "STUDENT";
+    
+    const personnelTypes: Array<{
+      typeCode: string;
+      typeName: string;
+      typeNameEn: string;
+      hierarchy: PersonnelHierarchy;
+      levelOrder: number;
+      canManageHospitals: boolean;
+      canManageWarehouses: boolean;
+      canManageDepartments: boolean;
+      canManagePersonnel: boolean;
+      canManageDrugs: boolean;
+      canManageMasterData: boolean;
+      canViewReports: boolean;
+      canApproveUsers: boolean;
+      description: string;
+      isSystemDefault?: boolean;
+      maxSubordinates?: number;
+    }> = [
       {
         typeCode: "DEV",
         typeName: "นักพัฒนา",
         typeNameEn: "Developer", 
-        hierarchy: PersonnelHierarchy.DEVELOPER, // ใช้ enum จาก Prisma
+        hierarchy: "DEVELOPER",
         levelOrder: 1,
         canManageHospitals: true,
         canManageWarehouses: true,
@@ -132,7 +151,7 @@ async function main() {
         typeCode: "DIR",
         typeName: "ผู้อำนวยการ",
         typeNameEn: "Director",
-        hierarchy: PersonnelHierarchy.DIRECTOR, 
+        hierarchy: "DIRECTOR", 
         levelOrder: 2,
         canManageHospitals: false,
         canManageWarehouses: true,
@@ -149,7 +168,7 @@ async function main() {
         typeCode: "GRP_HEAD",
         typeName: "หัวหน้ากลุ่มงาน",
         typeNameEn: "Group Head",
-        hierarchy: PersonnelHierarchy.GROUP_HEAD,
+        hierarchy: "GROUP_HEAD",
         levelOrder: 3, 
         canManageHospitals: false,
         canManageWarehouses: false,
@@ -166,7 +185,7 @@ async function main() {
         typeCode: "STAFF",
         typeName: "พนักงาน",
         typeNameEn: "Staff",
-        hierarchy: PersonnelHierarchy.STAFF,
+        hierarchy: "STAFF",
         levelOrder: 4,
         canManageHospitals: false,
         canManageWarehouses: false,
@@ -182,7 +201,7 @@ async function main() {
         typeCode: "STU",
         typeName: "นักศึกษา",
         typeNameEn: "Student",
-        hierarchy: PersonnelHierarchy.STUDENT,
+        hierarchy: "STUDENT",
         levelOrder: 5,
         canManageHospitals: false,
         canManageWarehouses: false,
@@ -704,31 +723,6 @@ async function main() {
         cctv: true,
         alarm: true,
         requireApproval: true
-      },
-      {
-        warehouseCode: "EMERG_STORE",
-        name: "คลังยาฉุกเฉิน",
-        type: "EMERGENCY", 
-        location: "ห้องฉุกเฉิน",
-        area: 15.0,
-        capacity: 500,
-        securityLevel: "STANDARD",
-        accessControl: true
-      },
-      {
-        warehouseCode: "CONTROLLED",
-        name: "คลังยาควบคุม",
-        type: "CONTROLLED",
-        location: "ชั้น B1 ห้องพิเศษ",
-        area: 25.0,
-        capacity: 1000,
-        hasTemperatureControl: true,
-        minTemperature: 20,
-        maxTemperature: 25,
-        securityLevel: "MAXIMUM",
-        accessControl: true,
-        cctv: true,
-        alarm: true
       },
       {
         warehouseCode: "COLD_STORE", 
