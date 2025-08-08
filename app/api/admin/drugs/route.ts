@@ -6,30 +6,25 @@ import { z } from 'zod';
 
 const prisma = new PrismaClient();
 
-// Enhanced validation schema - เพิ่ม name field
+// Enhanced validation schema
 const createDrugSchema = z.object({
   // ข้อมูลพื้นฐาน
   hospitalDrugCode: z.string().min(1, 'รหัสยาโรงพยาบาลจำเป็น').max(20, 'รหัสยาต้องไม่เกิน 20 ตัวอักษร'),
+  name: z.string().min(1, 'ชื่อยาจำเป็น'),
   genericName: z.string().min(1, 'ชื่อสามัญจำเป็น'),
   brandName: z.string().optional(),
-  name: z.string().min(1, 'ชื่อยาจำเป็น'), // ⭐ เพิ่ม field นี้
   
   // ข้อมูลเภสัชกรรม
   strength: z.string().min(1, 'ความแรงยาจำเป็น'),
-  dosageForm: z.enum([
-    'TABLET', 'CAPSULE', 'INJECTION', 'SYRUP', 'CREAM', 'OINTMENT',
-    'DROPS', 'SPRAY', 'SUPPOSITORY', 'PATCH', 'POWDER', 'SOLUTION', 'OTHER'
-  ]),
-  unitOfMeasure: z.string().min(1, 'หน่วยวัดจำเป็น'),
+  dosageForm: z.string().min(1, 'รูปแบบยาจำเป็น'),
+  unit: z.string().min(1, 'หน่วยวัดจำเป็น'),
   
   // การจำแนกประเภท
   therapeuticClass: z.string().min(1, 'หมวดยาจำเป็น'),
   pharmacologicalClass: z.string().optional(),
-  // drugCategoryId: z.string().uuid().optional(), // ปิดชั่วคราว
   
   // สถานะและการควบคุม
   isControlled: z.boolean().default(false),
-  controlledLevel: z.enum(['NONE', 'CATEGORY_1', 'CATEGORY_2', 'CATEGORY_3', 'CATEGORY_4', 'CATEGORY_5']).default('NONE'),
   isDangerous: z.boolean().default(false),
   isHighAlert: z.boolean().default(false),
   isFormulary: z.boolean().default(true),
@@ -37,7 +32,7 @@ const createDrugSchema = z.object({
   
   // การเก็บรักษา
   storageCondition: z.string().default('ปกติ'),
-  requiresColdStorage: z.boolean().default(false),
+  requiresColdChain: z.boolean().default(false),
   
   // ข้อมูลทางคลินิก
   indications: z.string().optional(),
@@ -48,10 +43,7 @@ const createDrugSchema = z.object({
   warnings: z.string().optional(),
   
   // ข้อมูลคลังและต้นทุน
-  standardCost: z.number().min(0, 'ต้นทุนมาตรฐานต้องเป็นจำนวนบวก'),
-  currentCost: z.number().min(0, 'ต้นทุนปัจจุบันต้องเป็นจำนวนบวก'),
-  reorderPoint: z.number().int().min(0, 'จุดสั่งซื้อใหม่ต้องเป็นจำนวนเต็มบวก'),
-  maxStockLevel: z.number().int().min(1, 'สต็อกสูงสุดต้องมากกว่า 0'),
+  unitCost: z.number().min(0, 'ต้นทุนต้องเป็นจำนวนบวก'),
   notes: z.string().optional(),
 });
 
@@ -79,7 +71,7 @@ export async function GET(request: NextRequest) {
       isControlled: searchParams.get('isControlled'),
       isFormulary: searchParams.get('isFormulary'),
       active: searchParams.get('active'),
-      sortBy: searchParams.get('sortBy') || 'genericName',
+      sortBy: searchParams.get('sortBy') || 'name',
       sortOrder: searchParams.get('sortOrder') || 'asc',
       page: parseInt(searchParams.get('page') || '1'),
       limit: parseInt(searchParams.get('limit') || '20'),
@@ -95,14 +87,11 @@ export async function GET(request: NextRequest) {
     // Add filters
     if (queryParams.search) {
       where.OR = [
+        { name: { contains: queryParams.search, mode: 'insensitive' } },
         { genericName: { contains: queryParams.search, mode: 'insensitive' } },
         { brandName: { contains: queryParams.search, mode: 'insensitive' } },
         { hospitalDrugCode: { contains: queryParams.search, mode: 'insensitive' } },
       ];
-    }
-    
-    if (queryParams.categoryId) {
-      where.drugCategoryId = queryParams.categoryId;
     }
     
     if (queryParams.dosageForm) {
@@ -202,8 +191,8 @@ export async function POST(request: NextRequest) {
     const validatedData = createDrugSchema.parse(body);
     console.log('🔍 [DRUGS API] Validated data:', {
       hospitalDrugCode: validatedData.hospitalDrugCode,
+      name: validatedData.name,
       genericName: validatedData.genericName,
-      name: validatedData.name, // ⭐ แสดง name ด้วย
       dosageForm: validatedData.dosageForm
     });
     
@@ -222,12 +211,6 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // ⭐ สร้าง name อัตโนมัติหากไม่ได้ระบุ
-    const drugName = validatedData.name || 
-      (validatedData.brandName 
-        ? `${validatedData.genericName} (${validatedData.brandName})`
-        : validatedData.genericName);
-    
     // Generate QR Code data
     const qrData = {
       hospitalId,
@@ -240,7 +223,6 @@ export async function POST(request: NextRequest) {
     const newDrug = await prisma.drug.create({
       data: {
         ...validatedData,
-        name: drugName, // ⭐ เพิ่ม name ที่สร้างขึ้น
         hospitalId,
         qrCode: JSON.stringify(qrData),
         isActive: true,
@@ -265,19 +247,19 @@ export async function POST(request: NextRequest) {
       summary: {
         id: newDrug.id,
         code: newDrug.hospitalDrugCode,
-        name: newDrug.name, // ⭐ ใช้ name จริง
-        strengthDisplay: `${newDrug.strength} ${newDrug.unitOfMeasure}`,
+        name: newDrug.name,
+        strengthDisplay: `${newDrug.strength} ${newDrug.unit}`,
       },
       message: `สร้างข้อมูลยา "${newDrug.name}" สำเร็จ`,
     }, { status: 201 });
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.log('❌ [DRUGS API] Validation error:', error.errors);
+      console.log('❌ [DRUGS API] Validation error:', error.issues);
       return NextResponse.json(
         { 
           error: 'ข้อมูลไม่ถูกต้อง',
-          details: error.errors.map(err => ({
+          details: error.issues.map((err: any) => ({
             field: err.path.join('.'),
             message: err.message,
           }))

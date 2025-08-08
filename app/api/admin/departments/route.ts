@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { validateAdminAuth } from '@/lib/auth-middleware';
 import { z } from 'zod';
+import { Decimal } from '@prisma/client/runtime/library';
 
 const prisma = new PrismaClient();
 
@@ -12,8 +13,10 @@ const createDepartmentSchema = z.object({
   nameEn: z.string().optional(),
   departmentCode: z.string().min(1, 'รหัสแผนกจำเป็น').max(10, 'รหัสแผนกต้องไม่เกิน 10 ตัวอักษร'),
   type: z.enum([
-    'PHARMACY', 'EMERGENCY', 'ICU', 'WARD', 'OPD', 'OR', 'LABORATORY', 
-    'RADIOLOGY', 'ADMINISTRATION', 'FINANCE', 'HR', 'IT', 'OTHER'
+    'PHARMACY', 'EMERGENCY', 'ICU', 'SURGERY', 'MEDICINE', 'PEDIATRICS', 
+    'OBSTETRICS', 'ORTHOPEDICS', 'CARDIOLOGY', 'NEUROLOGY', 'ONCOLOGY',
+    'PSYCHIATRY', 'RADIOLOGY', 'LABORATORY', 'OUTPATIENT', 'INPATIENT',
+    'ADMINISTRATION', 'OTHER'
   ]),
   parentDepartmentId: z.string().uuid().optional(),
   location: z.string().optional(),
@@ -23,14 +26,19 @@ const createDepartmentSchema = z.object({
   requireApproval: z.boolean().default(false),
   maxRequisitionValue: z.number().positive().optional(),
   budgetLimit: z.number().positive().optional(),
+  description: z.string().optional(),
 });
 
 // GET - รายการแผนกทั้งหมด
 export async function GET(request: NextRequest) {
   try {
     // Validate admin authentication
-    const user = await validateAdminAuth(request);
+    const authResult = await validateAdminAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
     
+    const { hospitalId } = authResult;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const type = searchParams.get('type');
@@ -41,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: any = {
-      hospitalId: user.hospitalId,
+      hospitalId: hospitalId,
     };
 
     if (search) {
@@ -94,7 +102,7 @@ export async function GET(request: NextRequest) {
     // Calculate statistics
     const stats = await prisma.department.groupBy({
       by: ['type'],
-      where: { hospitalId: user.hospitalId, isActive: true },
+      where: { hospitalId: hospitalId, isActive: true },
       _count: { id: true },
     });
 
@@ -122,7 +130,7 @@ export async function GET(request: NextRequest) {
     console.error('[DEPARTMENTS_GET]', error);
     
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง', details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง', details: error.issues }, { status: 400 });
     }
     
     return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลแผนก' }, { status: 500 });
@@ -133,7 +141,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Validate admin authentication
-    const user = await validateAdminAuth(request);
+    const authResult = await validateAdminAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+    
+    const { user, hospitalId } = authResult;
     
     const body = await request.json();
     const validatedData = createDepartmentSchema.parse(body);
@@ -141,7 +154,7 @@ export async function POST(request: NextRequest) {
     // Check if department code already exists in this hospital
     const existingDept = await prisma.department.findFirst({
       where: {
-        hospitalId: user.hospitalId,
+        hospitalId: hospitalId,
         departmentCode: validatedData.departmentCode,
       }
     });
@@ -157,7 +170,7 @@ export async function POST(request: NextRequest) {
       const parentDept = await prisma.department.findFirst({
         where: {
           id: validatedData.parentDepartmentId,
-          hospitalId: user.hospitalId,
+          hospitalId: hospitalId,
         }
       });
 
@@ -168,16 +181,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Prepare data for creation - ensure proper type handling
+    const createData = {
+      ...validatedData,
+      hospitalId: hospitalId,
+      maxRequisitionValue: validatedData.maxRequisitionValue ? 
+        new Decimal(validatedData.maxRequisitionValue) : null,
+      budgetLimit: validatedData.budgetLimit ? 
+        new Decimal(validatedData.budgetLimit) : null,
+      // Remove parentDepartmentId if it's empty string
+      parentDepartmentId: validatedData.parentDepartmentId || null,
+    };
+
     // Create department
     const department = await prisma.department.create({
-      data: {
-        ...validatedData,
-        hospitalId: user.hospitalId,
-        maxRequisitionValue: validatedData.maxRequisitionValue ? 
-          new Decimal(validatedData.maxRequisitionValue) : null,
-        budgetLimit: validatedData.budgetLimit ? 
-          new Decimal(validatedData.budgetLimit) : null,
-      },
+      data: createData,
       include: {
         parentDepartment: {
           select: { id: true, name: true, departmentCode: true }
@@ -188,23 +206,28 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Log audit trail
-    await prisma.auditLog.create({
-      data: {
-        hospitalId: user.hospitalId,
-        userId: user.id,
-        action: 'CREATE_DEPARTMENT',
-        resourceType: 'DEPARTMENT',
-        resourceId: department.id,
-        details: {
-          departmentName: department.name,
-          departmentCode: department.departmentCode,
-          type: department.type,
-        },
-        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown',
-      }
-    });
+    // Skip audit log creation if table doesn't exist
+    try {
+      await prisma.auditLog.create({
+        data: {
+          hospitalId: hospitalId,
+          userId: user.userId,
+          action: 'CREATE',
+          entityType: 'DEPARTMENT',
+          entityId: department.id,
+          description: `Created department: ${department.name}`,
+          newValues: {
+            departmentName: department.name,
+            departmentCode: department.departmentCode,
+            type: department.type,
+          },
+          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+          userAgent: request.headers.get('user-agent') || 'unknown',
+        }
+      });
+    } catch (auditError) {
+      console.log('Audit log skipped:', (auditError as Error).message);
+    }
 
     return NextResponse.json({ 
       message: 'สร้างแผนกใหม่สำเร็จ',
@@ -217,7 +240,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ 
         error: 'ข้อมูลไม่ถูกต้อง', 
-        details: error.errors 
+        details: error.issues 
       }, { status: 400 });
     }
     

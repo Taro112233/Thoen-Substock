@@ -41,8 +41,12 @@ const createWarehouseSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     // Validate admin authentication
-    const user = await validateAdminAuth(request);
+    const auth = await validateAdminAuth(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
     
+    const { user, hospitalId } = auth;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const type = searchParams.get('type');
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: any = {
-      hospitalId: user.hospitalId,
+      hospitalId: hospitalId,
     };
 
     if (search) {
@@ -116,11 +120,11 @@ export async function GET(request: NextRequest) {
     const [stats, totalValue] = await Promise.all([
       prisma.warehouse.groupBy({
         by: ['type'],
-        where: { hospitalId: user.hospitalId, isActive: true },
+        where: { hospitalId: hospitalId, isActive: true },
         _count: { id: true },
       }),
       prisma.warehouse.aggregate({
-        where: { hospitalId: user.hospitalId, isActive: true },
+        where: { hospitalId: hospitalId, isActive: true },
         _sum: { totalValue: true }
       })
     ]);
@@ -146,7 +150,7 @@ export async function GET(request: NextRequest) {
           ...acc,
           [stat.type]: stat._count.id
         }), {}),
-        totalValue: totalValue._sum.totalValue?.toNumber() || 0,
+        totalValue: Number(totalValue._sum.totalValue) || 0, // Fixed: Convert Decimal to number
         totalWarehouses: total,
       },
     });
@@ -155,10 +159,15 @@ export async function GET(request: NextRequest) {
     console.error('[WAREHOUSES_GET]', error);
     
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง', details: error.errors }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'ข้อมูลไม่ถูกต้อง', 
+        details: error.issues // Fixed: use 'issues' instead of 'errors'
+      }, { status: 400 });
     }
     
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลคลัง' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'เกิดข้อผิดพลาดในการดึงข้อมูลคลัง' 
+    }, { status: 500 });
   }
 }
 
@@ -168,8 +177,13 @@ export async function POST(request: NextRequest) {
     console.log('[WAREHOUSES_POST] Starting warehouse creation...');
     
     // Validate admin authentication
-    const user = await validateAdminAuth(request);
-    console.log('[WAREHOUSES_POST] User authenticated:', user.id);
+    const auth = await validateAdminAuth(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+    
+    const { user, hospitalId } = auth;
+    console.log('[WAREHOUSES_POST] User authenticated:', user.userId);
     
     const body = await request.json();
     console.log('[WAREHOUSES_POST] Request body:', body);
@@ -180,7 +194,7 @@ export async function POST(request: NextRequest) {
     // Check if warehouse code already exists in this hospital
     const existingWarehouse = await prisma.warehouse.findFirst({
       where: {
-        hospitalId: user.hospitalId,
+        hospitalId: hospitalId,
         warehouseCode: validatedData.warehouseCode,
       }
     });
@@ -199,7 +213,7 @@ export async function POST(request: NextRequest) {
       const manager = await prisma.user.findFirst({
         where: {
           id: validatedData.managerId,
-          hospitalId: user.hospitalId,
+          hospitalId: hospitalId,
           status: 'ACTIVE',  // Fixed: Use status instead of isActive
         }
       });
@@ -247,7 +261,7 @@ export async function POST(request: NextRequest) {
     const warehouse = await prisma.warehouse.create({
       data: {
         ...validatedData,
-        hospitalId: user.hospitalId,
+        hospitalId: hospitalId,
         area: validatedData.area ? new Decimal(validatedData.area) : null,
         capacity: validatedData.capacity ? new Decimal(validatedData.capacity) : null,
         minTemperature: validatedData.minTemperature ? new Decimal(validatedData.minTemperature) : null,
@@ -256,8 +270,7 @@ export async function POST(request: NextRequest) {
         maxHumidity: validatedData.maxHumidity ? new Decimal(validatedData.maxHumidity) : null,
         totalValue: new Decimal(0), // เริ่มต้นที่ 0
         isActive: true,
-        createdBy: user.id,
-        updatedBy: user.id,
+        // Fixed: Remove createdBy and updatedBy as they don't exist in the schema
       },
       include: {
         manager: {
@@ -277,11 +290,12 @@ export async function POST(request: NextRequest) {
     try {
       await prisma.auditLog.create({
         data: {
-          hospitalId: user.hospitalId,
-          userId: user.id,
-          action: 'CREATE_WAREHOUSE',
-          resourceType: 'WAREHOUSE',
-          resourceId: warehouse.id,
+          hospitalId: hospitalId,
+          userId: user.userId,
+          action: 'CREATE', // Fixed: use valid AuditAction
+          entityType: 'WAREHOUSE',
+          entityId: warehouse.id,
+          description: `Created warehouse: ${warehouse.name}`, // Fixed: add required description field
           details: {
             warehouseName: warehouse.name,
             warehouseCode: warehouse.warehouseCode,
@@ -294,7 +308,7 @@ export async function POST(request: NextRequest) {
       });
       console.log('[WAREHOUSES_POST] Audit log created');
     } catch (auditError) {
-      console.log('[WAREHOUSES_POST] Audit log skipped (table might not exist):', auditError.message);
+      console.log('[WAREHOUSES_POST] Audit log skipped (table might not exist):', String(auditError)); // Fixed: Convert error to string safely
     }
 
     return NextResponse.json({ 
@@ -306,16 +320,16 @@ export async function POST(request: NextRequest) {
     console.error('[WAREHOUSES_POST] Error', error);
     
     if (error instanceof z.ZodError) {
-      console.log('[WAREHOUSES_POST] Validation error:', error.errors);
+      console.log('[WAREHOUSES_POST] Validation error:', error.issues); // Fixed: use 'issues' instead of 'errors'
       return NextResponse.json({ 
         error: 'ข้อมูลไม่ถูกต้อง', 
-        details: error.errors 
+        details: error.issues // Fixed: use 'issues' instead of 'errors'
       }, { status: 400 });
     }
     
     return NextResponse.json({ 
       error: 'เกิดข้อผิดพลาดในการสร้างคลัง',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? String(error) : undefined // Fixed: Convert error to string safely
     }, { status: 500 });
   }
 }

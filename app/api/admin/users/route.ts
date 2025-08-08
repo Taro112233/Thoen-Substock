@@ -58,10 +58,10 @@ export async function GET(request: NextRequest) {
       where: whereClause,
       include: {
         hospital: {
-          select: { name: true, code: true }
+          select: { name: true, hospitalCode: true }
         },
         department: {
-          select: { name: true, code: true }
+          select: { name: true, departmentCode: true }
         }
       },
       orderBy: { createdAt: 'desc' },
@@ -157,10 +157,10 @@ export async function POST(request: NextRequest) {
       },
       include: {
         hospital: {
-          select: { name: true, code: true }
+          select: { name: true, hospitalCode: true }
         },
         department: {
-          select: { name: true, code: true }
+          select: { name: true, departmentCode: true }
         }
       }
     });
@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'ข้อมูลไม่ถูกต้อง', details: error.errors }, 
+        { error: 'ข้อมูลไม่ถูกต้อง', details: error.issues }, 
         { status: 400 }
       );
     }
@@ -218,10 +218,10 @@ export async function PUT(request: NextRequest) {
       },
       include: {
         hospital: {
-          select: { name: true, code: true }
+          select: { name: true, hospitalCode: true }
         },
         department: {
-          select: { name: true, code: true }
+          select: { name: true, departmentCode: true }
         }
       }
     });
@@ -237,7 +237,7 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'ข้อมูลไม่ถูกต้อง', details: error.errors }, 
+        { error: 'ข้อมูลไม่ถูกต้อง', details: error.issues }, 
         { status: 400 }
       );
     }

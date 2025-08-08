@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 const approveUserSchema = z.object({
   userId: z.string().uuid('รหัสผู้ใช้ไม่ถูกต้อง'),
   action: z.enum(['approve', 'reject'], {
-    errorMap: () => ({ message: 'การดำเนินการต้องเป็น approve หรือ reject' })
+    message: 'การดำเนินการต้องเป็น approve หรือ reject'
   }),
   reason: z.string().optional(),
   assignRole: z.enum([
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           error: 'ข้อมูลไม่ถูกต้อง', 
-          details: error.errors.map(e => e.message)
+          details: error.issues.map((e: any) => e.message)
         },
         { status: 400 }
       );

@@ -23,10 +23,10 @@ async function getAuthenticatedUser(request: NextRequest) {
         where: { id: userId },
         include: {
           hospital: {
-            select: { id: true, name: true, code: true }
+            select: { id: true, name: true, hospitalCode: true } // Fixed: use hospitalCode instead of code
           },
           department: {
-            select: { id: true, name: true, code: true }
+            select: { id: true, name: true, departmentCode: true } // Fixed: use departmentCode instead of code
           }
         }
       });
@@ -48,10 +48,10 @@ async function getAuthenticatedUser(request: NextRequest) {
       where: { id: tokenUser.id },
       include: {
         hospital: {
-          select: { id: true, name: true, hospitalCode: true }
+          select: { id: true, name: true, hospitalCode: true } // Fixed: use hospitalCode instead of code
         },
         department: {
-          select: { id: true, name: true, departmentCode: true }
+          select: { id: true, name: true, departmentCode: true } // Fixed: use departmentCode instead of code
         }
       }
     });
