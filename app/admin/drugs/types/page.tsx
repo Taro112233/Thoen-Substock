@@ -17,8 +17,164 @@ import {
   ArrowRight,
   Edit,
   Trash2,
-  Settings
+  Settings,
+  Snowflake,
+  Thermometer,
+  Sun,
+  Droplets,
+  Gauge
 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+
+// Enhanced Storage Conditions Type
+interface StorageCondition {
+  id: number;
+  code: string;
+  name: string;
+  nameEn: string;
+  temp: string;
+  humidity: string;
+  icon: string;
+  count: number;
+  storageName: string;
+  storageNameTh: string;
+  storageCode: string;
+  storageInstructions: string;
+  requiresFreezing: boolean;
+  requiresRefrigeration: boolean;
+  protectFromLight: boolean;
+  protectFromMoisture: boolean;
+  monitoringRequired: boolean;
+  color: string;
+  drugCount: number;
+  temperatureMin: number;
+  temperatureMax: number;
+  humidityMax?: number;
+}
+
+// Mock data สำหรับ storage conditions
+const mockStorageConditions: StorageCondition[] = [
+  {
+    id: 1,
+    code: 'FREEZER',
+    name: 'Freezer Storage',
+    nameEn: 'Freezer Storage',
+    temp: '≤ -10°C',
+    humidity: '≤ 60%',
+    icon: '❄️',
+    count: 15,
+    storageName: 'Freezer Storage',
+    storageNameTh: 'การเก็บแช่แข็ง',
+    storageCode: 'FREEZER',
+    storageInstructions: 'เก็บในตู้แช่แข็งที่อุณหภูมิไม่เกิน -10°C ห้ามละลาย',
+    requiresFreezing: true,
+    requiresRefrigeration: false,
+    protectFromLight: true,
+    protectFromMoisture: true,
+    monitoringRequired: true,
+    color: '#3b82f6',
+    drugCount: 25,
+    temperatureMin: -20,
+    temperatureMax: -10,
+    humidityMax: 60
+  },
+  {
+    id: 2,
+    code: 'COLD',
+    name: 'Refrigerated Storage',
+    nameEn: 'Refrigerated Storage',
+    temp: '2-8°C',
+    humidity: '≤ 70%',
+    icon: '🧊',
+    count: 42,
+    storageName: 'Refrigerated Storage',
+    storageNameTh: 'การเก็บในตู้เย็น',
+    storageCode: 'COLD',
+    storageInstructions: 'เก็บในตู้เย็นที่อุณหภูมิ 2-8°C ห้ามแช่แข็ง',
+    requiresFreezing: false,
+    requiresRefrigeration: true,
+    protectFromLight: true,
+    protectFromMoisture: false,
+    monitoringRequired: true,
+    color: '#06b6d4',
+    drugCount: 78,
+    temperatureMin: 2,
+    temperatureMax: 8,
+    humidityMax: 70
+  },
+  {
+    id: 3,
+    code: 'ROOM',
+    name: 'Room Temperature',
+    nameEn: 'Room Temperature',
+    temp: '15-30°C',
+    humidity: '≤ 75%',
+    icon: '🏠',
+    count: 156,
+    storageName: 'Room Temperature',
+    storageNameTh: 'อุณหภูมิห้อง',
+    storageCode: 'ROOM',
+    storageInstructions: 'เก็บที่อุณหภูมิห้อง 15-30°C ในที่แห้ง',
+    requiresFreezing: false,
+    requiresRefrigeration: false,
+    protectFromLight: false,
+    protectFromMoisture: true,
+    monitoringRequired: false,
+    color: '#10b981',
+    drugCount: 425,
+    temperatureMin: 15,
+    temperatureMax: 30,
+    humidityMax: 75
+  },
+  {
+    id: 4,
+    code: 'DARK',
+    name: 'Light Protected',
+    nameEn: 'Light Protected',
+    temp: '15-25°C',
+    humidity: '≤ 60%',
+    icon: '🌙',
+    count: 32,
+    storageName: 'Light Protected',
+    storageNameTh: 'ป้องกันแสง',
+    storageCode: 'DARK',
+    storageInstructions: 'เก็บในที่มืด ห่างจากแสงแดดและแสงสว่าง',
+    requiresFreezing: false,
+    requiresRefrigeration: false,
+    protectFromLight: true,
+    protectFromMoisture: false,
+    monitoringRequired: false,
+    color: '#8b5cf6',
+    drugCount: 89,
+    temperatureMin: 15,
+    temperatureMax: 25,
+    humidityMax: 60
+  },
+  {
+    id: 5,
+    code: 'DRY',
+    name: 'Dry Storage',
+    nameEn: 'Dry Storage',
+    temp: '20-25°C',
+    humidity: '≤ 50%',
+    icon: '🏜️',
+    count: 18,
+    storageName: 'Dry Storage',
+    storageNameTh: 'การเก็บแห้ง',
+    storageCode: 'DRY',
+    storageInstructions: 'เก็บในที่แห้ง ความชื้นต่ำ พร้อมสารดูดความชื้น',
+    requiresFreezing: false,
+    requiresRefrigeration: false,
+    protectFromLight: false,
+    protectFromMoisture: true,
+    monitoringRequired: true,
+    color: '#f59e0b',
+    drugCount: 67,
+    temperatureMin: 20,
+    temperatureMax: 25,
+    humidityMax: 50
+  }
+];
 
 // Mock data สำหรับ drug types
 const mockDrugTypes = [
@@ -124,6 +280,7 @@ const mockDrugTypes = [
   }
 ];
 
+// Helper functions
 const getTypeIcon = (type: any) => {
   if (type.isNarcotic) return <Skull className="w-4 h-4" />;
   if (type.isHighAlert) return <AlertTriangle className="w-4 h-4" />;
@@ -132,7 +289,65 @@ const getTypeIcon = (type: any) => {
   return <Shield className="w-4 h-4" />;
 };
 
+const getStorageIcon = (storage: StorageCondition) => {
+  if (storage.requiresFreezing) return <Snowflake className="w-4 h-4" />;
+  if (storage.requiresRefrigeration) return <Thermometer className="w-4 h-4" />;
+  if (storage.protectFromLight) return <Sun className="w-4 h-4" />;
+  if (storage.protectFromMoisture) return <Droplets className="w-4 h-4" />;
+  return <Shield className="w-4 h-4" />;
+};
+
 export default function DrugTypesPage() {
+  // Storage columns definition
+  const storageColumns = [
+    {
+      key: 'storageCode' as keyof StorageCondition,
+      title: 'รหัส',
+      render: (value: string) => (
+        <div className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+          {value}
+        </div>
+      )
+    },
+    {
+      key: 'storageNameTh' as keyof StorageCondition,
+      title: 'ชื่อเงื่อนไข',
+      render: (value: string, row: StorageCondition) => (
+        <div className="flex items-center space-x-2">
+          <div style={{ color: row.color }}>
+            {getStorageIcon(row)}
+          </div>
+          <div>
+            <div className="font-medium">{value}</div>
+            <div className="text-sm text-gray-500">{row.storageName}</div>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'storageInstructions' as keyof StorageCondition,
+      title: 'คำแนะนำ',
+      render: (value: string) => (
+        <div className="max-w-xs">
+          <p className="text-sm text-gray-600 truncate" title={value}>
+            {value}
+          </p>
+        </div>
+      )
+    },
+    {
+      key: 'drugCount' as keyof StorageCondition,
+      title: 'จำนวนยา',
+      render: (value: number) => (
+        <div className="text-center">
+          <div className="text-lg font-semibold">{value}</div>
+          <div className="text-xs text-gray-500">ยา</div>
+        </div>
+      )
+    }
+  ];
+
+  // Drug type columns definition
   const drugTypeColumns = [
     {
       key: 'typeCode' as const,
@@ -295,7 +510,32 @@ export default function DrugTypesPage() {
         />
       </div>
 
-      {/* Data Table */}
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <QuickActionCard
+          title="เพิ่มประเภทใหม่"
+          description="สร้างประเภทยาใหม่สำหรับการจัดการ"
+          icon={<Plus className="w-5 h-5" />}
+          href="/admin/drugs/types/new"
+          color="blue"
+        />
+        <QuickActionCard
+          title="ตั้งค่าความปลอดภัย"
+          description="กำหนดข้อกำหนดและระดับความปลอดภัย"
+          icon={<Shield className="w-5 h-5" />}
+          href="/admin/drugs/types/security"
+          color="orange"
+        />
+        <QuickActionCard
+          title="Audit & Reporting"
+          description="จัดการการตรวจสอบและรายงาน"
+          icon={<Settings className="w-5 h-5" />}
+          href="/admin/drugs/types/audit"
+          color="purple"
+        />
+      </div>
+
+      {/* Storage Conditions Data Table */}
       <DataTable
         title="เงื่อนไขการเก็บรักษาทั้งหมด"
         description="รายการเงื่อนไขการเก็บรักษายาและการควบคุมสิ่งแวดล้อม"
@@ -307,6 +547,22 @@ export default function DrugTypesPage() {
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             เพิ่มเงื่อนไขใหม่
+          </Button>
+        }
+      />
+
+      {/* Drug Types Data Table */}
+      <DataTable
+        title="ประเภทยาทั้งหมด"
+        description="รายการประเภทยาและข้อกำหนดความปลอดภัย"
+        data={mockDrugTypes}
+        columns={drugTypeColumns}
+        searchKeys={['typeName', 'typeNameTh', 'typeCode', 'description']}
+        rowActions={rowActions}
+        actions={
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            เพิ่มประเภทยา
           </Button>
         }
       />
@@ -456,50 +712,6 @@ export default function DrugTypesPage() {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <QuickActionCard
-          title="เพิ่มประเภทใหม่"
-          description="สร้างประเภทยาใหม่สำหรับการจัดการ"
-          icon={<Plus className="w-5 h-5" />}
-          href="/admin/drugs/types/new"
-          color="blue"
-        />
-        <QuickActionCard
-          title="ตั้งค่าความปลอดภัย"
-          description="กำหนดข้อกำหนดและระดับความปลอดภัย"
-          icon={<Shield className="w-5 h-5" />}
-          href="/admin/drugs/types/security"
-          color="orange"
-        />
-        <QuickActionCard
-          title="Audit & Reporting"
-          description="จัดการการตรวจสอบและรายงาน"
-          icon={<Settings className="w-5 h-5" />}
-          href="/admin/drugs/types/audit"
-          color="purple"
-        />
-      </div>
-
-      {/* Data Table */}
-      <DataTable
-        title="ประเภทยาทั้งหมด"
-        description="รายการประเภทยาและข้อกำหนดความปลอดภัย"
-        data={mockDrugTypes}
-        columns={drugTypeColumns}
-        searchKeys={['typeName', 'typeNameTh', 'typeCode', 'description']}
-        rowActions={rowActions}
-        actions={
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            เพิ่มประเภทยา
-          </Button>
-        }
-      />
 
       {/* Security Requirements Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

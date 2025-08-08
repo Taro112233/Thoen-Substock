@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,12 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, Building2, Phone, Mail, MapPin, DollarSign } from 'lucide-react';
 
+// Department type enum
+const DEPARTMENT_TYPES = [
+  'PHARMACY', 'EMERGENCY', 'ICU', 'WARD', 'OPD', 'OR', 'LABORATORY', 
+  'RADIOLOGY', 'ADMINISTRATION', 'FINANCE', 'HR', 'IT', 'OTHER'
+] as const;
+
 // Form validation schema
 const departmentFormSchema = z.object({
   name: z.string().min(1, 'ชื่อแผนกจำเป็น').max(100, 'ชื่อแผนกต้องไม่เกิน 100 ตัวอักษร'),
@@ -28,11 +34,8 @@ const departmentFormSchema = z.object({
     .min(1, 'รหัสแผนกจำเป็น')
     .max(10, 'รหัสแผนกต้องไม่เกิน 10 ตัวอักษร')
     .regex(/^[A-Z0-9_-]+$/, 'รหัสแผนกต้องเป็นตัวอักษรพิมพ์ใหญ่ ตัวเลข หรือ - _ เท่านั้น'),
-  type: z.enum([
-    'PHARMACY', 'EMERGENCY', 'ICU', 'WARD', 'OPD', 'OR', 'LABORATORY', 
-    'RADIOLOGY', 'ADMINISTRATION', 'FINANCE', 'HR', 'IT', 'OTHER'
-  ], { 
-    errorMap: () => ({ message: 'กรุณาเลือกประเภทแผนก' })
+  type: z.enum(DEPARTMENT_TYPES, {
+    message: 'กรุณาเลือกประเภทแผนก'
   }),
   parentDepartmentId: z.string().uuid().optional().or(z.literal('')),
   location: z.string().max(200, 'ตำแหน่งที่ตั้งต้องไม่เกิน 200 ตัวอักษร').optional(),
@@ -88,7 +91,7 @@ const departmentTypeOptions = [
   { value: 'HR', label: 'ทรัพยากรบุคคล', icon: '👥' },
   { value: 'IT', label: 'เทคโนโลยีสารสนเทศ', icon: '💻' },
   { value: 'OTHER', label: 'อื่นๆ', icon: '📁' },
-];
+] as const;
 
 export default function DepartmentForm({ department, onSuccess, onCancel }: DepartmentFormProps) {
   const [loading, setLoading] = useState(false);
@@ -109,7 +112,7 @@ export default function DepartmentForm({ department, onSuccess, onCancel }: Depa
     reset,
     formState: { errors, isValid },
   } = useForm<DepartmentFormData>({
-    resolver: zodResolver(departmentFormSchema),
+    resolver: zodResolver(departmentFormSchema) as any,
     defaultValues: {
       name: department?.name || '',
       nameEn: department?.nameEn || '',
@@ -151,7 +154,7 @@ export default function DepartmentForm({ department, onSuccess, onCancel }: Depa
     fetchParentDepartments();
   }, [department]);
 
-  const onSubmit = async (data: DepartmentFormData) => {
+  const onSubmit: SubmitHandler<DepartmentFormData> = async (data: DepartmentFormData) => {
     try {
       setLoading(true);
       setError(null);
