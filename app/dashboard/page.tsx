@@ -1,11 +1,10 @@
-// app/dashboard/page.tsx - Improved Version with Delayed Login Redirect
+// app/dashboard/page.tsx - Version without initial authentication check
 'use client';
 
 import { useCurrentUser } from '@/lib/client-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useEffect, useState } from 'react';
 import { 
   User, 
   Building2, 
@@ -24,29 +23,6 @@ import {
 
 export default function DashboardPage() {
   const { user, loading, error, logout, isAdmin } = useCurrentUser();
-  const [showLoginRedirect, setShowLoginRedirect] = useState(false);
-  const [countdown, setCountdown] = useState(30);
-
-  // จัดการ delay และ countdown สำหรับ login redirect
-  useEffect(() => {
-    if (!loading && !error && !user) {
-      // เริ่ม countdown ทันที
-      setShowLoginRedirect(true);
-      
-      const countdownInterval = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(countdownInterval);
-            window.location.href = '/auth/login';
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(countdownInterval);
-    }
-  }, [loading, error, user]);
 
   if (loading) {
     return (
@@ -92,56 +68,13 @@ export default function DashboardPage() {
     );
   }
 
-  if (!user && showLoginRedirect) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-100">
-        <div className="text-center p-8 max-w-lg">
-          <div className="relative mb-8">
-            <div className="w-24 h-24 bg-gradient-to-r from-orange-400 to-amber-500 rounded-full flex items-center justify-center mx-auto shadow-xl">
-              <Lock className="w-12 h-12 text-white" />
-            </div>
-            <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-              <Clock className="w-4 h-4 text-white" />
-            </div>
-          </div>
-          
-          <h2 className="text-3xl font-bold text-gray-800 mb-4">ต้องเข้าสู่ระบบ</h2>
-          <p className="text-gray-600 mb-6 text-lg leading-relaxed">
-            คุณยังไม่ได้เข้าสู่ระบบ กำลังนำไปหน้าเข้าสู่ระบบใน
-          </p>
-          
-          <div className="bg-white rounded-lg p-6 shadow-lg mb-6">
-            <div className="text-6xl font-bold text-orange-500 mb-2">{countdown}</div>
-            <p className="text-gray-600">วินาที</p>
-          </div>
-
-          <div className="space-y-3">
-            <Button 
-              onClick={() => window.location.href = '/auth/login'}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-lg font-medium w-full"
-            >
-              เข้าสู่ระบบทันที
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowLoginRedirect(false);
-                setCountdown(3);
-              }}
-              className="w-full"
-            >
-              ยกเลิก
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // ถ้าไม่มี user ให้ redirect ไปหน้า login
   if (!user) {
-    return null; // This shouldn't happen, but just in case
+    window.location.href = '/auth/login';
+    return null;
   }
 
+  // ถ้ามี user แล้ว แสดง authenticated dashboard
   const roleTranslations = {
     HOSPITAL_ADMIN: 'ผู้ดูแลระบบโรงพยาบาล',
     PHARMACY_MANAGER: 'ผู้จัดการเภสัชกรรม',

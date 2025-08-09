@@ -78,6 +78,30 @@ export default function AdminHeader() {
     }
   };
 
+  // ฟังก์ชันออกจากระบบ
+  const handleLogout = async () => {
+    try {
+      // เรียก API logout
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include', // ส่ง cookies ไปด้วย
+      });
+
+      if (response.ok) {
+        // Redirect ไปหน้า login
+        window.location.href = '/auth/login';
+      } else {
+        console.error('Logout failed:', await response.text());
+        // ถึงแม้ API ล้มเหลว ก็ให้ออกจากระบบอยู่ดี
+        window.location.href = '/auth/login';
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // ถ้าเกิด error ก็ให้ redirect อยู่ดี
+      window.location.href = '/auth/login';
+    }
+  };
+
   return (
     <header className="bg-white shadow-sm border-b sticky top-0 z-40">
       <div className="px-4 sm:px-6 lg:px-8">
@@ -93,8 +117,8 @@ export default function AdminHeader() {
             {/* Title - Responsive */}
             <div>
               <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">
-                <span className="hidden sm:inline">Warehouse</span>
-                <span className="sm:hidden">Warehouse</span>
+                <span className="hidden sm:inline">ศูนย์จัดการข้อมูลหลัก</span>
+                <span className="sm:hidden">จัดการข้อมูล</span>
               </h1>
               <p className="hidden md:block text-xs text-gray-500">Master Data Management</p>
             </div>
@@ -237,7 +261,10 @@ export default function AdminHeader() {
                 </div>
                 
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50">
+                <DropdownMenuItem 
+                  className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>ออกจากระบบ</span>
                 </DropdownMenuItem>
