@@ -54,18 +54,29 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
 )
 Avatar.displayName = "Avatar"
 
-// แก้ไข components/ui/avatar.tsx - เพิ่ม alt prop
+// แก้ไข AvatarImage เพื่อรองรับ Next.js Image component
+interface AvatarImageProps extends Omit<React.ComponentProps<typeof Image>, "ref"> {
+  className?: string
+  alt: string
+  src: string
+  width?: number
+  height?: number
+}
 
-const AvatarImage = (
-  { className, alt = "", src, ...props }: Omit<React.ComponentProps<typeof Image>, "ref"> 
-) => (
+const AvatarImage = React.forwardRef<
+  React.ElementRef<typeof Image>,
+  AvatarImageProps
+>(({ className, alt, src, width = 40, height = 40, ...props }, ref) => (
   <Image
+    ref={ref}
     className={cn("aspect-square h-full w-full object-cover", className)}
     alt={alt}
     src={src}
+    width={width}
+    height={height}
     {...props}
   />
-)
+))
 AvatarImage.displayName = "AvatarImage"
 
 const AvatarFallback = React.forwardRef<

@@ -1,4 +1,4 @@
-// app/admin/components/AdminHeader.tsx
+// app/components/AdminHeader.tsx
 'use client';
 
 import { useState } from 'react';
@@ -18,18 +18,13 @@ import {
   User, 
   LogOut, 
   Bell, 
-  Search,
-  Menu,
   Home,
   Shield,
-  HelpCircle,
   Monitor,
-  Smartphone,
-  Sun,
-  Moon,
-  Globe
+  Globe,
+  ChevronDown
 } from 'lucide-react';
-import HierarchyBadge from './HierarchyBadge';
+import HierarchyBadge from '../admin/components/HierarchyBadge';
 import Link from 'next/link';
 
 interface NotificationItem {
@@ -46,28 +41,28 @@ export default function AdminHeader() {
       id: 1, 
       message: 'ระบบจะปิดปรับปรุงในวันอาทิตย์ที่ 15 ก.ค. เวลา 02:00-04:00', 
       type: 'info',
-      timestamp: '2 ชั่วโมงที่แล้ว',
+      timestamp: '2 ชม.',
       read: false
     },
     { 
       id: 2, 
-      message: 'มีการเพิ่มโรงพยาบาลใหม่ 2 แห่ง: โรงพยาบาลแม่ทะ และ โรงพยาบาลงาว', 
+      message: 'มีการเพิ่มโรงพยาบาลใหม่ 2 แห่ง', 
       type: 'success',
-      timestamp: '4 ชั่วโมงที่แล้ว',
+      timestamp: '4 ชม.',
       read: false
     },
     { 
       id: 3, 
-      message: 'รายงานการใช้งานระบบประจำเดือนมิถุนายนพร้อมแล้ว', 
+      message: 'รายงานการใช้งานระบบประจำเดือนพร้อมแล้ว', 
       type: 'info',
-      timestamp: '1 วันที่แล้ว',
+      timestamp: '1 วัน',
       read: true
     },
     { 
       id: 4, 
       message: 'พบการเข้าถึงระบบผิดปกติจาก IP 192.168.1.100', 
       type: 'warning',
-      timestamp: '2 วันที่แล้ว',
+      timestamp: '2 วัน',
       read: false
     }
   ]);
@@ -83,70 +78,62 @@ export default function AdminHeader() {
     }
   };
 
-  const getNotificationColor = (type: string) => {
-    switch(type) {
-      case 'success': return 'text-green-600 bg-green-50';
-      case 'warning': return 'text-orange-600 bg-orange-50';
-      case 'error': return 'text-red-600 bg-red-50';
-      default: return 'text-blue-600 bg-blue-50';
-    }
-  };
-
   return (
-    <header className="bg-white shadow-lg border-b sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
+    <header className="bg-white shadow-sm border-b sticky top-0 z-40">
+      <div className="px-4 sm:px-6 lg:px-8">
+        {/* Main header row */}
+        <div className="flex items-center justify-between h-14 md:h-16">
           {/* Left Section */}
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-lg">
-              <Settings className="h-8 w-8 text-white" />
+          <div className="flex items-center space-x-3">
+            {/* Compact Logo */}
+            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg shadow-md">
+              <Settings className="h-5 w-5 md:h-6 md:w-6 text-white" />
             </div>
+            
+            {/* Title - Responsive */}
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">ศูนย์จัดการข้อมูลหลัก</h1>
+              <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">
+                <span className="hidden sm:inline">Warehouse</span>
+                <span className="sm:hidden">Warehouse</span>
+              </h1>
+              <p className="hidden md:block text-xs text-gray-500">Master Data Management</p>
             </div>
           </div>
 
           {/* Right Section */}
-          <div className="flex items-center space-x-4">
-            {/* Quick Access Buttons */}
-            <div className="hidden md:flex items-center space-x-2">
+          <div className="flex items-center space-x-2 md:space-x-3">
+            {/* Quick Actions - Desktop only */}
+            <div className="hidden lg:flex items-center space-x-1">
               <Link href="/dashboard">
                 <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                  <Home className="h-4 w-4 mr-2" />
-                  หน้าหลัก
+                  <Home className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">หน้าหลัก</span>
                 </Button>
               </Link>
-              
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                <Search className="h-4 w-4" />
-              </Button>
-
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                <HelpCircle className="h-4 w-4" />
-              </Button>
             </div>
 
-            {/* System Status */}
-            <div className="hidden lg:flex items-center space-x-2">
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                ระบบปกติ
-              </Badge>
+            {/* Mobile Home Button */}
+            <div className="lg:hidden">
+              <Link href="/dashboard">
+                <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 p-2">
+                  <Home className="h-4 w-4" />
+                </Button>
+              </Link>
             </div>
 
             {/* Notifications */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="relative">
-                  <Bell className="h-5 w-5" />
+                <Button variant="ghost" size="sm" className="relative p-2">
+                  <Bell className="h-4 w-4 md:h-5 md:w-5" />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+                    <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-medium">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-96">
+              <DropdownMenuContent align="end" className="w-80 md:w-96">
                 <DropdownMenuLabel className="flex items-center justify-between">
                   <span>การแจ้งเตือน</span>
                   <Badge variant="secondary" className="text-xs">
@@ -155,7 +142,7 @@ export default function AdminHeader() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 
-                <div className="max-h-80 overflow-y-auto">
+                <div className="max-h-72 overflow-y-auto">
                   {notifications.map((notification) => (
                     <DropdownMenuItem 
                       key={notification.id} 
@@ -164,17 +151,17 @@ export default function AdminHeader() {
                       }`}
                     >
                       <div className="flex items-start space-x-2 w-full">
-                        <span className="text-lg mt-0.5">{getNotificationIcon(notification.type)}</span>
+                        <span className="text-base mt-0.5">{getNotificationIcon(notification.type)}</span>
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm leading-relaxed ${
                             !notification.read ? 'font-medium' : 'text-gray-700'
                           }`}>
                             {notification.message}
                           </p>
-                          <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center justify-between mt-1.5">
                             <span className="text-xs text-gray-500">{notification.timestamp}</span>
                             {!notification.read && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                             )}
                           </div>
                         </div>
@@ -184,8 +171,8 @@ export default function AdminHeader() {
                 </div>
                 
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-center text-blue-600 font-medium">
-                  ดูการแจ้งเตือนทั้งหมด
+                <DropdownMenuItem className="text-center text-blue-600 font-medium justify-center">
+                  ดูทั้งหมด
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -193,18 +180,20 @@ export default function AdminHeader() {
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-3 px-3 py-2 hover:bg-gray-50">
-                  <div className="text-right hidden md:block">
-                    <p className="font-semibold text-gray-900">{mockCurrentUser.name}</p>
+                <Button variant="ghost" className="flex items-center space-x-2 px-2 py-1.5 h-auto hover:bg-gray-50">
+                  {/* User Icon แทน Avatar */}
+                  <div className="h-7 w-7 md:h-8 md:w-8 bg-gray-100 rounded-full flex items-center justify-center">
+                    <User className="h-4 w-4 md:h-5 md:w-5 text-gray-600" />
                   </div>
-                  <HierarchyBadge hierarchy={mockCurrentUser.hierarchy} size="sm" />
+                  
+                  <ChevronDown className="h-3 w-3 text-gray-500 hidden md:block" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuContent align="end" className="w-56 md:w-64">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">{mockCurrentUser.name}</p>
-                    <p className="text-xs text-gray-500">{mockCurrentUser.email}</p>
+                    <p className="text-sm font-medium">{mockCurrentUser.name.split(' ')[0]}</p>
+                    <p className="text-xs text-gray-500 truncate">{mockCurrentUser.email}</p>
                     <div className="flex items-center space-x-2 mt-2">
                       <HierarchyBadge hierarchy={mockCurrentUser.hierarchy} size="sm" />
                       <Badge variant="outline" className="text-xs">
@@ -236,19 +225,14 @@ export default function AdminHeader() {
                   <Globe className="mr-2 h-4 w-4" />
                   <span>ภาษา: ไทย</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Sun className="mr-2 h-4 w-4" />
-                  <span>โหมดสี: สว่าง</span>
-                </DropdownMenuItem>
                 
                 <DropdownMenuSeparator />
                 
-                {/* System Info */}
+                {/* System Info - Compact */}
                 <div className="px-2 py-2">
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <p>เซสชั่น: {new Date().toLocaleTimeString('th-TH')}</p>
-                    <p>เวอร์ชั่น: 2.0.1</p>
-                    <p>สถานะ: <span className="text-green-600">เชื่อมต่อแล้ว</span></p>
+                  <div className="text-xs text-gray-500 space-y-0.5">
+                    <p>เซสชั่น: {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p>เวอร์ชั่น: 2.0.1 • <span className="text-green-600">เชื่อมต่อแล้ว</span></p>
                   </div>
                 </div>
                 
@@ -259,33 +243,7 @@ export default function AdminHeader() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* Mobile Menu Button */}
-            <Button variant="ghost" size="sm" className="md:hidden">
-              <Menu className="h-5 w-5" />
-            </Button>
           </div>
-        </div>
-      </div>
-
-      {/* Mobile Quick Actions Bar */}
-      <div className="md:hidden border-t bg-gray-50 px-4 py-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm" className="text-xs">
-                <Home className="h-3 w-3 mr-1" />
-                หน้าหลัก
-              </Button>
-            </Link>
-            <Button variant="ghost" size="sm" className="text-xs">
-              <Search className="h-3 w-3 mr-1" />
-              ค้นหา
-            </Button>
-          </div>
-          <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
-            ระบบปกติ
-          </Badge>
         </div>
       </div>
     </header>

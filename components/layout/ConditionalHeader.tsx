@@ -2,7 +2,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import AdminHeader from '@/app/admin/components/AdminHeader';
+import AdminHeader from '@/app/components/AdminHeader';
 
 export default function ConditionalHeader() {
   const pathname = usePathname();

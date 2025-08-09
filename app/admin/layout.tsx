@@ -1,6 +1,6 @@
 // app/admin/layout.tsx
 import { ReactNode } from 'react';
-import AdminHeader from './components/AdminHeader';
+import AdminHeader from '../components/AdminHeader';
 import PermissionGuard from './components/PermissionGuard';
 
 interface AdminLayoutProps {
