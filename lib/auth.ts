@@ -1,106 +1,176 @@
 // lib/auth.ts
-import { betterAuth } from "better-auth";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { PrismaClient } from "@prisma/client";
+// ระบบ JWT Authentication แบบ Simple & Clean
 
-const prisma = new PrismaClient();
+import jwt from 'jsonwebtoken';
+import { cookies } from 'next/headers';
+import { prisma } from '@/lib/prisma';
+import { NextRequest } from 'next/server';
 
-export const auth = betterAuth({
-  database: prismaAdapter(prisma, {
-    provider: "postgresql",
-  }),
-  
-  // เปิดใช้งาน email และ password
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: false, // ปิดเพื่อให้ workflow ง่ายขึ้น
-  },
-  
-  // การตั้งค่า session
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 วัน
-    updateAge: 60 * 60 * 24, // อัปเดตทุก 1 วัน
-  },
-  
-  // การตั้งค่า JWT
-  jwt: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 วัน
-  },
-  
-  // Custom user model fields
-  user: {
-    additionalFields: {
-      username: {
-        type: "string",
-        required: true,
-        unique: true,
-      },
-      firstName: {
-        type: "string",
-        required: false,
-      },
-      lastName: {
-        type: "string",
-        required: false,
-      },
-      phoneNumber: {
-        type: "string",
-        required: false,
-      },
-      position: {
-        type: "string",
-        required: false,
-      },
-      hospitalId: {
-        type: "string",
-        required: true,
-      },
-      departmentId: {
-        type: "string", 
-        required: false,
-      },
-      role: {
-        type: "string",
-        required: true,
-        defaultValue: "STAFF_NURSE",
-      },
-      status: {
-        type: "string",
-        required: true,
-        defaultValue: "PENDING",
-      },
-      isProfileComplete: {
-        type: "boolean",
-        required: true,
-        defaultValue: false,
-      },
-    },
-  },
-  
-  // Hooks สำหรับ custom logic
-  hooks: {
-    after: [
-      {
-        matcher: (context) => {
-          return context.path === "/sign-up" && context.method === "POST";
-        },
-        handler: async (context) => {
-          // Auto login หลังจากสมัครสำเร็จ
-          if (context.returned?.user) {
-            // จะถูกจัดการใน frontend
-            console.log("User registered:", context.returned.user.id);
-          }
-        },
-      },
-    ],
-  },
-  
-  // Rate limiting
-  rateLimit: {
-    window: 60, // 1 นาที
-    max: 10, // สูงสุด 10 attempts
-  },
-});
+// JWT Configuration
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
+const JWT_EXPIRES_IN = '7d';
+const COOKIE_NAME = 'auth-token';
 
-export type Session = typeof auth.$Infer.Session;
-export type User = typeof auth.$Infer.User;
+// Types
+export interface JWTPayload {
+  id: string;
+  email: string;
+  role: string;
+  hospitalId: string;
+  departmentId?: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  hospitalId: string;
+  departmentId?: string | null;
+}
+
+/**
+ * สร้าง JWT Token
+ */
+export function createToken(user: any): string {
+  const payload: JWTPayload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    hospitalId: user.hospitalId,
+    departmentId: user.departmentId
+  };
+
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN
+  });
+}
+
+/**
+ * ตรวจสอบ JWT Token
+ */
+export function verifyToken(token: string): JWTPayload | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return decoded;
+  } catch (error) {
+    console.error('❌ Invalid token:', error);
+    return null;
+  }
+}
+
+/**
+ * Set Auth Cookie
+ */
+export async function setAuthCookie(token: string) {
+  const cookieStore = await cookies();
+  
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+    path: '/'
+  });
+}
+
+/**
+ * Clear Auth Cookie
+ */
+export async function clearAuthCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_NAME);
+}
+
+/**
+ * Get Current User from Request
+ */
+export async function getCurrentUser(request?: NextRequest): Promise<AuthUser | null> {
+  try {
+    const cookieStore = await cookies();
+    
+    // 1. Check cookie
+    const authCookie = cookieStore.get(COOKIE_NAME);
+    if (!authCookie?.value) {
+      console.log('❌ No auth cookie found');
+      return null;
+    }
+
+    // 2. Verify token
+    const payload = verifyToken(authCookie.value);
+    if (!payload) {
+      console.log('❌ Invalid token');
+      return null;
+    }
+
+    // 3. Get user from database
+    const user = await prisma.user.findUnique({
+      where: { 
+        id: payload.id,
+        status: 'ACTIVE' // ตรวจสอบว่า user ยัง active อยู่
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        hospitalId: true,
+        departmentId: true
+      }
+    });
+
+    if (!user) {
+      console.log('❌ User not found or inactive');
+      return null;
+    }
+
+    console.log('✅ User authenticated:', user.id);
+    return user;
+
+  } catch (error) {
+    console.error('❌ Auth error:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if user has required role
+ */
+export function hasRole(user: AuthUser | null, allowedRoles: string[]): boolean {
+  if (!user) return false;
+  return allowedRoles.includes(user.role);
+}
+
+/**
+ * Check if user can approve other users
+ */
+export async function canApproveUsers(user: AuthUser | null): Promise<boolean> {
+  if (!user) return false;
+
+  // Admin roles that can approve
+  const adminRoles = [
+    'DEVELOPER',
+    'HOSPITAL_ADMIN', 
+    'PHARMACY_MANAGER',
+    'DIRECTOR'
+  ];
+
+  // Check role-based permission
+  if (adminRoles.includes(user.role)) {
+    return true;
+  }
+
+  // Check personnel type permission (if exists)
+  const userData = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: {
+      personnelType: {
+        select: { canApproveUsers: true }
+      }
+    }
+  });
+
+  return userData?.personnelType?.canApproveUsers || false;
+}
