@@ -1,4 +1,4 @@
-// app/auth/profile-completion/page.tsx - Updated with final registration step
+// app/auth/profile-completion/page.tsx - Fixed: Remove circular JSON stringify
 "use client";
 
 import { useState, useEffect } from "react";
@@ -50,6 +50,24 @@ export default function ProfileCompletionPage() {
 
   const watchedValues = watch();
   const selectedDepartmentId = watch("departmentId");
+
+  // Safe JSON stringify function that handles circular references
+  const safeStringify = (obj: any) => {
+    try {
+      // Create a clean object with only the values we want to display
+      const cleanObj = {
+        firstName: obj.firstName || '',
+        lastName: obj.lastName || '',
+        phoneNumber: obj.phoneNumber || '',
+        employeeId: obj.employeeId || '',
+        position: obj.position || '',
+        departmentId: obj.departmentId || ''
+      };
+      return JSON.stringify(cleanObj, null, 2);
+    } catch (error) {
+      return 'Unable to display form values (circular reference)';
+    }
+  };
 
   // Check if userId exists and get user info
   useEffect(() => {
@@ -420,7 +438,7 @@ export default function ProfileCompletionPage() {
             </Button>
           </form>
 
-          {/* Development Debug Info */}
+          {/* Development Debug Info - Fixed to avoid circular JSON */}
           {process.env.NODE_ENV === 'development' && (
             <details className="mt-4">
               <summary className="cursor-pointer text-xs text-gray-500">Debug Info</summary>
@@ -429,8 +447,12 @@ export default function ProfileCompletionPage() {
                 <div>🆔 User ID: {userId || 'Missing'}</div>
                 <div>🏥 Hospital ID: {userHospitalId || 'Loading...'}</div>
                 <div>🏢 Departments: {departments.length}</div>
-                <div>📝 Form Values: {JSON.stringify(watchedValues, null, 2)}</div>
-                <div>❌ Errors: {Object.keys(errors).length > 0 ? JSON.stringify(errors, null, 2) : 'None'}</div>
+                <div>📝 Form Values: <pre className="mt-1 p-2 bg-white rounded border text-xs overflow-auto max-h-32">{safeStringify(watchedValues)}</pre></div>
+                <div>❌ Errors: {Object.keys(errors).length > 0 ? (
+                  <pre className="mt-1 p-2 bg-red-50 rounded border text-xs overflow-auto max-h-32">
+                    {Object.entries(errors).map(([key, error]) => `${key}: ${error?.message}`).join('\n')}
+                  </pre>
+                ) : 'None'}</div>
                 <div>🔄 Loading States: Departments={loadingDepartments}, Submit={isLoading}</div>
               </div>
             </details>
