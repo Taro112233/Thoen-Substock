@@ -1,7 +1,7 @@
-// lib/client-auth.tsx - Enhanced version แก้ปัญหา token sync
+// lib/client-auth.ts - Fixed with Hospital Support
 'use client';
 
-import React, { useState, useEffect, useContext, createContext, ReactNode, useCallback } from 'react';
+import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 
 export interface User {
   id: string;
@@ -32,6 +32,14 @@ export interface User {
   };
 }
 
+// Updated LoginCredentials interface to support hospital selection
+interface LoginCredentials {
+  identifier: string; // email or username
+  password: string;
+  hospitalId?: string; // Add hospital support
+  rememberMe?: boolean; // Add remember me support
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -39,19 +47,12 @@ interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
-  forceRefresh: () => Promise<void>; // เพิ่มฟังก์ชัน force refresh
   isAdmin: boolean;
   isPharmacist: boolean;
   canManageUsers: boolean;
   canManageInventory: boolean;
   canDispense: boolean;
   canRequisition: boolean;
-}
-
-export interface LoginCredentials {
-  identifier: string; // email or username
-  password: string;
-  rememberMe?: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,11 +65,7 @@ export const roleTranslations = {
   STAFF_PHARMACIST: 'เภสัชกรประจำ',
   DEPARTMENT_HEAD: 'หัวหน้าแผนก',
   STAFF_NURSE: 'พยาบาลประจำ',
-  PHARMACY_TECHNICIAN: 'เทคนิคเภสัชกรรม',
-  // Admin roles
-  DEVELOPER: 'นักพัฒนาระบบ',
-  DIRECTOR: 'ผู้อำนวยการ',
-  GROUP_HEAD: 'หัวหน้ากลุ่ม'
+  PHARMACY_TECHNICIAN: 'เทคนิคเภสัชกรรม'
 } as const;
 
 export const statusTranslations = {
@@ -86,7 +83,7 @@ function hasRole(userRole: string | undefined, allowedRoles: string[]): boolean 
 }
 
 function isAdmin(userRole: string | undefined): boolean {
-  return hasRole(userRole, ['HOSPITAL_ADMIN', 'PHARMACY_MANAGER', 'DEVELOPER', 'DIRECTOR', 'GROUP_HEAD']);
+  return hasRole(userRole, ['HOSPITAL_ADMIN', 'PHARMACY_MANAGER']);
 }
 
 function isPharmacist(userRole: string | undefined): boolean {
@@ -99,7 +96,7 @@ function isPharmacist(userRole: string | undefined): boolean {
 }
 
 function canManageUsers(userRole: string | undefined): boolean {
-  return hasRole(userRole, ['HOSPITAL_ADMIN', 'PHARMACY_MANAGER', 'DEVELOPER', 'DIRECTOR']);
+  return hasRole(userRole, ['HOSPITAL_ADMIN', 'PHARMACY_MANAGER']);
 }
 
 function canManageInventory(userRole: string | undefined): boolean {
@@ -134,102 +131,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Enhanced fetch function with retry and force refresh capability
-  const fetchCurrentUser = useCallback(async (forceRefresh = false): Promise<User | null> => {
+  const fetchCurrentUser = async (): Promise<User | null> => {
     try {
-      const url = forceRefresh ? '/api/auth/me?refresh=true' : '/api/auth/me';
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      // เมื่อ force refresh ให้บังคับไม่ใช้ cache
-      if (forceRefresh) {
-        headers['Cache-Control'] = 'no-cache';
-        headers['Pragma'] = 'no-cache';
-      }
-
-      console.log('🔍 [AUTH] Fetching user data:', { forceRefresh });
-
-      const response = await fetch(url, {
-        method: 'GET',
+      const response = await fetch('/api/auth/me', {
         credentials: 'include',
-        headers,
-        cache: forceRefresh ? 'no-store' : 'default',
       });
       
-      console.log('🔍 [AUTH] Response:', { 
-        status: response.status, 
-        ok: response.ok,
-        forceRefresh 
-      });
-
       if (response.ok) {
         const data = await response.json();
-        console.log('🔍 [AUTH] User found:', {
-          hasUser: !!data.user,
-          userId: data.user?.id,
-          userName: data.user?.name
-        });
         return data.user;
       } else if (response.status === 401) {
         // Not authenticated
-        console.log('🔍 [AUTH] User not authenticated');
         return null;
       } else {
-        throw new Error(`HTTP ${response.status}: ไม่สามารถดึงข้อมูลผู้ใช้ได้`);
+        throw new Error('ไม่สามารถดึงข้อมูลผู้ใช้ได้');
       }
     } catch (err) {
-      console.error('Fetch current user error:', err);
       throw new Error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
     }
-  }, []);
+  };
 
   const login = async (credentials: LoginCredentials): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log('🔍 [AUTH] Login attempt:', { identifier: credentials.identifier });
+      console.log('🔍 [AUTH] Login attempt:', {
+        identifier: credentials.identifier,
+        hospitalId: credentials.hospitalId,
+        hasPassword: !!credentials.password,
+        rememberMe: credentials.rememberMe
+      });
+
+      // Transform credentials to match API format
+      const loginData = {
+        username: credentials.identifier, // API expects 'username'
+        password: credentials.password,
+        hospitalId: credentials.hospitalId,
+        rememberMe: credentials.rememberMe || false
+      };
 
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(credentials),
+        body: JSON.stringify(loginData),
         credentials: 'include',
       });
 
       const data = await response.json();
 
-      console.log('🔍 [AUTH] Login response:', {
-        ok: response.ok,
-        status: response.status,
-        hasUser: !!data.user
-      });
-
       if (response.ok) {
         setUser(data.user);
         
-        // เพิ่ม delay เล็กน้อยเพื่อให้ cookie ถูก set ก่อน redirect
-        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('✅ [AUTH] Login successful, redirecting...');
         
-        // Redirect based on user status พร้อม from parameter
-        if (data.needsApproval || data.user.status === 'PENDING') {
-          window.location.href = '/auth/pending-approval?from=login';
-        } else if (data.needsProfileCompletion || !data.user.isProfileComplete) {
-          window.location.href = '/auth/register/profile?from=login';
+        // Redirect based on user status
+        if (data.user.status === 'PENDING') {
+          window.location.href = '/auth/pending-approval';
         } else if (data.user.status === 'ACTIVE') {
-          window.location.href = '/dashboard?from=login';
+          window.location.href = data.redirectUrl || '/dashboard';
         } else {
           throw new Error('บัญชีผู้ใช้ไม่สามารถเข้าใช้งานได้');
         }
       } else {
-        throw new Error(data.error || 'การเข้าสู่ระบบไม่สำเร็จ');
+        throw new Error(data.error || data.message || 'การเข้าสู่ระบบไม่สำเร็จ');
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
-      setError(errorMessage);
+      console.error('❌ [AUTH] Login error:', err);
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ');
       throw err;
     } finally {
       setLoading(false);
@@ -246,7 +217,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout error:', err);
     } finally {
       setUser(null);
-      setError(null);
       window.location.href = '/auth/login';
     }
   };
@@ -264,89 +234,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Force refresh function - สำหรับกรณี token มีแต่ state ไม่ sync
-  const forceRefresh = async (): Promise<void> => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('🔍 [AUTH] Force refreshing auth state...');
-      const userData = await fetchCurrentUser(true);
-      setUser(userData);
-      
-      if (userData) {
-        console.log('🔍 [AUTH] Force refresh successful:', userData.name);
-      } else {
-        console.log('🔍 [AUTH] Force refresh: no user found');
-      }
-    } catch (err) {
-      console.error('Force refresh error:', err);
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการรีเฟรช');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Enhanced initial auth check
+  // Initial auth check
   useEffect(() => {
-    let mounted = true;
-
     const initAuth = async () => {
       try {
-        // ตรวจสอบว่ามาจากหน้า login หรือไม่
-        const urlParams = new URLSearchParams(window.location.search);
-        const fromLogin = urlParams.get('from') === 'login';
-        
-        console.log('🔍 [AUTH] Initial auth check:', { fromLogin });
-
-        // ถ้ามาจาก login ให้ force refresh
-        const userData = await fetchCurrentUser(fromLogin);
-        
-        if (mounted) {
-          setUser(userData);
-          
-          // ล้าง URL parameter หลังจาก load เสร็จ
-          if (fromLogin && userData) {
-            const newUrl = window.location.pathname;
-            window.history.replaceState({}, '', newUrl);
-          }
-        }
+        const userData = await fetchCurrentUser();
+        setUser(userData);
       } catch (err) {
-        if (mounted) {
-          console.warn('Initial auth check failed:', err);
-          // Silent fail for initial load แต่ถ้ามาจาก login ให้แสดง error
-          const fromLogin = new URLSearchParams(window.location.search).get('from') === 'login';
-          if (fromLogin) {
-            setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
-          }
-        }
+        console.error('Auth init error:', err);
+        setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์');
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
     initAuth();
-
-    return () => {
-      mounted = false;
-    };
-  }, [fetchCurrentUser]);
-
-  // Listen for page visibility change to refresh auth state
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user) {
-        // เมื่อกลับมาที่หน้าและมี user อยู่แล้ว ให้ refresh เบาๆ
-        refresh();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user]);
+  }, []);
 
   const contextValue: AuthContextType = {
     user,
@@ -355,7 +258,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     refresh,
-    forceRefresh, // เพิ่ม force refresh function
     isAdmin: isAdmin(user?.role),
     isPharmacist: isPharmacist(user?.role),
     canManageUsers: canManageUsers(user?.role),
@@ -364,10 +266,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     canRequisition: canRequisition(user?.role),
   };
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+  return React.createElement(
+    AuthContext.Provider,
+    { value: contextValue },
+    children
   );
 }
 
@@ -380,9 +282,9 @@ export function useAuth(): AuthContextType {
   return context;
 }
 
-// Hook สำหรับดึงข้อมูลผู้ใช้ปัจจุบัน (backward compatibility + enhanced)
+// Hook สำหรับดึงข้อมูลผู้ใช้ปัจจุบัน (backward compatibility)
 export function useCurrentUser() {
-  const { user, loading, error, logout, refresh, forceRefresh, isAdmin, isPharmacist } = useAuth();
+  const { user, loading, error, logout, refresh, isAdmin, isPharmacist } = useAuth();
   
   return {
     user,
@@ -390,7 +292,6 @@ export function useCurrentUser() {
     error,
     logout,
     refresh,
-    forceRefresh, // เพิ่ม force refresh
     isAdmin,
     isPharmacist,
   };
@@ -424,15 +325,15 @@ export function usePermissions() {
   };
 }
 
-// Enhanced Login Hook with better error handling
+// Hook สำหรับ Login Form - Updated with hospital support
 export function useLogin() {
   const { login, loading, error } = useAuth();
   const [formData, setFormData] = useState<LoginCredentials>({
     identifier: '',
     password: '',
+    hospitalId: '',
     rememberMe: false,
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (field: keyof LoginCredentials, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -440,33 +341,24 @@ export function useLogin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
-
-    setIsSubmitting(true);
-    try {
-      await login(formData);
-    } catch (err) {
-      console.error('Login submission error:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
+    await login(formData);
   };
 
-  const isValid = formData.identifier.trim() !== '' && formData.password.trim() !== '';
-  const canSubmit = isValid && !loading && !isSubmitting;
+  const isValid = formData.identifier.trim() !== '' && 
+                  formData.password.trim() !== '' && 
+                  formData.hospitalId?.trim() !== '';
 
   return {
     formData,
     handleChange,
     handleSubmit,
     isValid,
-    canSubmit,
-    loading: loading || isSubmitting,
+    loading,
     error,
   };
 }
 
-// Utility functions
+// Utility functions for role and status translations
 export function translateRole(role: string): string {
   return roleTranslations[role as keyof typeof roleTranslations] || role;
 }
@@ -484,10 +376,7 @@ export function getRoleColor(role: string): string {
     STAFF_PHARMACIST: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     DEPARTMENT_HEAD: 'bg-green-100 text-green-800 border-green-200',
     STAFF_NURSE: 'bg-teal-100 text-teal-800 border-teal-200',
-    PHARMACY_TECHNICIAN: 'bg-orange-100 text-orange-800 border-orange-200',
-    DEVELOPER: 'bg-gray-100 text-gray-800 border-gray-200',
-    DIRECTOR: 'bg-pink-100 text-pink-800 border-pink-200',
-    GROUP_HEAD: 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    PHARMACY_TECHNICIAN: 'bg-orange-100 text-orange-800 border-orange-200'
   };
   return colors[role as keyof typeof colors] || 'bg-gray-100 text-gray-800 border-gray-200';
 }
@@ -503,19 +392,14 @@ export function getStatusColor(status: string): string {
   return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800 border-gray-200';
 }
 
-// Gradient color utilities for backgrounds
-export function getRoleGradient(role: string): string {
-  const gradients = {
-    HOSPITAL_ADMIN: 'from-red-500 to-pink-600',
-    PHARMACY_MANAGER: 'from-purple-500 to-indigo-600',
-    SENIOR_PHARMACIST: 'from-blue-500 to-cyan-600',
-    STAFF_PHARMACIST: 'from-indigo-500 to-purple-600',
-    DEPARTMENT_HEAD: 'from-green-500 to-emerald-600',
-    STAFF_NURSE: 'from-teal-500 to-green-600',
-    PHARMACY_TECHNICIAN: 'from-orange-500 to-red-600',
-    DEVELOPER: 'from-gray-500 to-gray-600',
-    DIRECTOR: 'from-pink-500 to-rose-600',
-    GROUP_HEAD: 'from-yellow-500 to-orange-600'
-  };
-  return gradients[role as keyof typeof gradients] || 'from-gray-500 to-gray-600';
+// Format date utilities
+export function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('th-TH');
 }
+
+export function formatDateTime(dateString: string): string {
+  return new Date(dateString).toLocaleString('th-TH');
+}
+
+// Export LoginCredentials interface for external use
+export type { LoginCredentials };

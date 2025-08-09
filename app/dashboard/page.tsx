@@ -1,10 +1,11 @@
-// app/dashboard/page.tsx - Version without initial authentication check
+// app/dashboard/page.tsx - แก้ปัญหา token sync หลัง login
 'use client';
 
 import { useCurrentUser } from '@/lib/client-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
 import { 
   User, 
   Building2, 
@@ -18,13 +19,63 @@ import {
   Activity,
   AlertTriangle,
   Clock,
-  Lock
+  Lock,
+  RefreshCw,
+  CheckCircle
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { user, loading, error, logout, isAdmin } = useCurrentUser();
+  const { user, loading, error, logout, isAdmin, forceRefresh } = useCurrentUser();
+  const [showLoginRedirect, setShowLoginRedirect] = useState(false);
+  const [countdown, setCountdown] = useState(5); // ลดเวลาลง
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  if (loading) {
+  // ฟังก์ชันสำหรับ refresh auth state (สำหรับกรณีที่ token มีแต่ state ไม่ sync)
+  const refreshAuthState = async () => {
+    setIsRefreshing(true);
+    try {
+      await forceRefresh();
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // จัดการ countdown สำหรับ login redirect
+  useEffect(() => {
+    // รอให้ loading เสร็จก่อน ถ้าไม่มี user และไม่มี error ค่อยเริ่ม countdown
+    if (!loading && !error && !user) {
+      setShowLoginRedirect(true);
+      
+      const countdownInterval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            window.location.href = '/auth/login';
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(countdownInterval);
+    }
+  }, [loading, error, user]);
+
+  // เช็คว่ามีการ redirect จากหน้า login มาหรือไม่ (จาก URL params)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromLogin = urlParams.get('from') === 'login';
+    
+    if (fromLogin && !user && !loading) {
+      // มีการ redirect จาก login แต่ยัง fetch user ไม่ได้ -> ลอง force refresh
+      console.log('🔍 [DEBUG] Detected redirect from login but no user, force refreshing...');
+      setTimeout(refreshAuthState, 1000);
+    }
+  }, [user, loading]);
+
+  if (loading || isRefreshing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center p-8">
@@ -32,8 +83,12 @@ export default function DashboardPage() {
             <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-6"></div>
             <div className="absolute inset-0 w-12 h-12 border-4 border-blue-200 rounded-full mx-auto"></div>
           </div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">กำลังโหลดข้อมูล</h2>
-          <p className="text-gray-600">กรุณารอสักครู่...</p>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            {isRefreshing ? 'กำลังซิงข์ข้อมูล...' : 'กำลังโหลดข้อมูล'}
+          </h2>
+          <p className="text-gray-600">
+            {isRefreshing ? 'กำลังตรวจสอบสถานะการเข้าสู่ระบบ...' : 'กรุณารอสักครู่...'}
+          </p>
         </div>
       </div>
     );
@@ -50,10 +105,21 @@ export default function DashboardPage() {
           <p className="text-red-600 mb-6 text-lg leading-relaxed">{error}</p>
           <div className="space-y-3">
             <Button 
-              onClick={() => window.location.reload()}
+              onClick={refreshAuthState}
               className="bg-red-600 hover:bg-red-700 text-white px-6 py-2"
+              disabled={isRefreshing}
             >
-              ลองใหม่อีกครั้ง
+              {isRefreshing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  กำลังรีเฟรช...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  ลองใหม่อีกครั้ง
+                </>
+              )}
             </Button>
             <Button 
               variant="outline" 
@@ -68,7 +134,65 @@ export default function DashboardPage() {
     );
   }
 
-  // ถ้าไม่มี user ให้ redirect ไปหน้า login
+  // ถ้าไม่มี user ให้แสดง countdown redirect
+  if (!user && showLoginRedirect) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-100">
+        <div className="text-center p-8 max-w-lg">
+          <div className="relative mb-8">
+            <div className="w-24 h-24 bg-gradient-to-r from-orange-400 to-amber-500 rounded-full flex items-center justify-center mx-auto shadow-xl">
+              <Lock className="w-12 h-12 text-white" />
+            </div>
+            <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+              <Clock className="w-4 h-4 text-white" />
+            </div>
+          </div>
+          
+          <h2 className="text-3xl font-bold text-gray-800 mb-4">ต้องเข้าสู่ระบบ</h2>
+          <p className="text-gray-600 mb-6 text-lg leading-relaxed">
+            คุณยังไม่ได้เข้าสู่ระบบ กำลังนำไปหน้าเข้าสู่ระบบใน
+          </p>
+          
+          <div className="bg-white rounded-lg p-6 shadow-lg mb-6">
+            <div className="text-6xl font-bold text-orange-500 mb-2">{countdown}</div>
+            <p className="text-gray-600">วินาที</p>
+          </div>
+
+          <div className="space-y-3">
+            <Button 
+              onClick={() => window.location.href = '/auth/login'}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-lg font-medium"
+            >
+              ไปเข้าสู่ระบบเลย
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={refreshAuthState}
+              className="w-full"
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  กำลังตรวจสอบ...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  ตรวจสอบสถานะอีกครั้ง
+                </>
+              )}
+            </Button>
+            <p className="text-sm text-gray-500">
+              หากคุณเพิ่งเข้าสู่ระบบ กรุณากดตรวจสอบสถานะอีกครั้ง
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ถ้าไม่มี user และยังไม่เริ่ม countdown (กรณี loading เสร็จแล้วแต่ยังไม่มี user)
   if (!user) {
     window.location.href = '/auth/login';
     return null;
@@ -100,18 +224,36 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Success notification ถ้าเพิ่งเข้าสู่ระบบ */}
+      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'login' && (
+        <div className="fixed top-4 right-4 z-50">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-green-800 font-medium">เข้าสู่ระบบสำเร็จ!</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
           <div className={`bg-gradient-to-r ${getRoleColor(user.role)} rounded-lg p-6 text-white`}>
-            <h2 className="text-2xl font-bold mb-2">
-              {roleTranslations[user.role as keyof typeof roleTranslations] || user.role}
-            </h2>
-            <p className="text-white/90">
-              ยินดีต้อนรับสู่ระบบจัดการสต็อกยาโรงพยาบาล
-            </p>
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">
+                  {roleTranslations[user.role as keyof typeof roleTranslations] || user.role}
+                </h2>
+                <p className="text-white/90">
+                  ยินดีต้อนรับสู่ระบบจัดการสต็อกยาโรงพยาบาล
+                </p>
+                <p className="text-white/80 text-sm mt-1">
+                  สวัสดี, {user.name}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -203,7 +345,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">โรงพยาบาล:</span>
-                    <span className="font-medium">{user.hospital.name}</span>
+                    <span className="font-medium">{user.hospital?.name || 'ไม่ระบุ'}</span>
                   </div>
                   {user.department && (
                     <div className="flex justify-between">
@@ -281,6 +423,28 @@ export default function DashboardPage() {
                     เบิกยา
                   </Button>
                 ) : null}
+                
+                {/* Debug Button for Development */}
+                {process.env.NODE_ENV === 'development' && (
+                  <Button 
+                    className="w-full justify-start bg-gray-100 hover:bg-gray-200 text-gray-600"
+                    variant="outline"
+                    onClick={refreshAuthState}
+                    disabled={isRefreshing}
+                  >
+                    {isRefreshing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        กำลังรีเฟรช...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Force Refresh Auth (Dev)
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

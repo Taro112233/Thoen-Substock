@@ -117,10 +117,10 @@ export default function AdminHeader() {
             {/* Title - Responsive */}
             <div>
               <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">
-                <span className="hidden sm:inline">ศูนย์จัดการข้อมูลหลัก</span>
-                <span className="sm:hidden">จัดการข้อมูล</span>
+                <span className="hidden sm:inline">Warehouse</span>
+                <span className="sm:hidden">Warehouse</span>
               </h1>
-              <p className="hidden md:block text-xs text-gray-500">Master Data Management</p>
+              <p className="hidden md:block text-xs text-gray-500">ระบบบริหารคลังเวชภัณฑ์</p>
             </div>
           </div>
 

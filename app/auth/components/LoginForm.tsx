@@ -1,11 +1,11 @@
-// app/auth/components/LoginForm.tsx
+// app/auth/components/LoginForm.tsx - Final Fixed Version
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { loginSchema, type LoginInput } from "@/lib/validations/auth";
+import { useForm, SubmitHandler } from "react-hook-form";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,32 +13,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, EyeOff, Loader2, AlertCircle, Building2, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, Building2, ShieldCheck, CheckCircle } from "lucide-react";
+
+// Define form schema directly in component for better type control
+const loginFormSchema = z.object({
+  username: z.string().min(1, "กรุณากรอกชื่อผู้ใช้หรืออีเมล"),
+  password: z.string().min(1, "กรุณากรอกรหัสผ่าน"),
+  hospitalId: z.string().min(1, "กรุณาเลือกโรงพยาบาล"),
+  rememberMe: z.boolean(),
+}) satisfies z.ZodType<LoginFormData>;
+
+// Form data type - strictly what we expect
+type LoginFormData = {
+  username: string;
+  password: string;
+  hospitalId: string;
+  rememberMe: boolean;
+};
 
 interface Hospital {
   id: string;
   name: string;
-  code: string;
-  nameEn?: string;
-  type?: string;
+  hospitalCode: string;
+  status: string;
+  type: string;
 }
 
 export default function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loadingHospitals, setLoadingHospitals] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
     trigger,
-    formState: { errors },
-  } = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
+    formState: { errors, isValid },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginFormSchema),
     mode: "onChange",
     defaultValues: {
       username: "",
@@ -48,22 +65,33 @@ export default function LoginForm() {
     },
   });
 
-  // Load hospitals
+  // Load hospitals from API
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
+        console.log('🔍 [HOSPITALS] Fetching hospitals from API...');
         const response = await fetch("/api/hospitals");
         
         if (response.ok) {
           const data = await response.json();
-          const hospitalsArray = Array.isArray(data) ? data : data.hospitals || [];
-          setHospitals(hospitalsArray);
+          console.log('✅ [HOSPITALS] API Response:', data);
+          
+          const hospitalsArray = Array.isArray(data) ? data : [];
+          
+          if (hospitalsArray.length > 0) {
+            setHospitals(hospitalsArray);
+            console.log('✅ [HOSPITALS] Loaded hospitals:', hospitalsArray.length);
+          } else {
+            console.warn('⚠️ [HOSPITALS] No hospitals found in API response');
+            setHospitals([]);
+          }
         } else {
-          console.error("Failed to fetch hospitals");
+          const errorData = await response.json();
+          console.error('❌ [HOSPITALS] API request failed:', response.status, errorData);
           setHospitals([]);
         }
       } catch (error) {
-        console.error("Error fetching hospitals:", error);
+        console.error('❌ [HOSPITALS] Error fetching hospitals:', error);
         setHospitals([]);
       } finally {
         setLoadingHospitals(false);
@@ -73,33 +101,64 @@ export default function LoginForm() {
     fetchHospitals();
   }, []);
 
-  const onSubmit = async (data: LoginInput) => {
+  const onSubmit: SubmitHandler<LoginFormData> = async (data) => {
+    if (!canSubmit) return;
+
     try {
-      setIsLoading(true);
+      setIsSubmitting(true);
+      setIsRedirecting(false);
       setError(null);
 
+      console.log('🔍 [LOGIN] Submitting login request:', {
+        username: data.username,
+        hospitalId: data.hospitalId,
+        hasPassword: !!data.password,
+        rememberMe: data.rememberMe
+      });
+
+      // Submit directly to API endpoint
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          username: data.username,
+          password: data.password,
+          hospitalId: data.hospitalId,
+          rememberMe: data.rememberMe
+        }),
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        router.push(result.redirectUrl || "/dashboard");
+        console.log('✅ [LOGIN] Login successful, redirecting...');
+        setIsRedirecting(true);
+        
+        // Redirect based on response
+        const redirectUrl = result.redirectUrl || "/dashboard";
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 1000); // Give user time to see success message
+        
       } else {
-        setError(result.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
+        const errorMessage = result.error || result.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ";
+        console.error('❌ [LOGIN] Login failed:', errorMessage);
+        setError(errorMessage);
+        setIsSubmitting(false);
       }
-    } catch (error) {
-      console.error("Login error:", error);
-      setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
-    } finally {
-      setIsLoading(false);
+
+    } catch (err) {
+      console.error('❌ [LOGIN] Network/unexpected error:', err);
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์");
+      setIsSubmitting(false);
     }
   };
 
-  const canSubmit = !isLoading && !loadingHospitals;
+  // Check if form can be submitted
+  const canSubmit = isValid && !isSubmitting && !loadingHospitals && !isRedirecting;
+  
+  // Combined loading states
+  const isLoading = isSubmitting || isRedirecting;
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -117,7 +176,21 @@ export default function LoginForm() {
         </CardHeader>
 
         <CardContent className="px-8 pb-8 space-y-6">
-          {error && (
+          {/* Success State */}
+          {isRedirecting && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-700">
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>เข้าสู่ระบบสำเร็จ กำลังนำไปหน้าหลัก...</span>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error State */}
+          {error && !isRedirecting && (
             <Alert className="border-red-200 bg-red-50">
               <AlertCircle className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-700">
@@ -126,14 +199,17 @@ export default function LoginForm() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Hospital Selection - First Field */}
+          <form onSubmit={handleSubmit((data: LoginFormData) => onSubmit(data))} className="space-y-5">
+            {/* Hospital Selection */}
             <div className="space-y-2">
               <Label htmlFor="hospitalId" className="text-sm font-medium text-gray-700">
                 หน่วยงาน *
               </Label>
               <Select 
-                onValueChange={(value) => setValue("hospitalId", value)} 
+                onValueChange={(value) => {
+                  setValue("hospitalId", value);
+                  trigger("hospitalId");
+                }}
                 disabled={isLoading || loadingHospitals}
               >
                 <SelectTrigger className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500">
@@ -145,16 +221,19 @@ export default function LoginForm() {
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  {hospitals.map((hospital) => (
-                    <SelectItem key={hospital.id} value={hospital.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{hospital.name}</span>
-                        {hospital.nameEn && (
-                          <span className="text-sm text-gray-500">{hospital.nameEn}</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
+                  {hospitals.length === 0 && !loadingHospitals ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      ไม่พบหน่วยงาน กรุณาติดต่อผู้ดูแลระบบ
+                    </div>
+                  ) : (
+                    hospitals.map((hospital) => (
+                      <SelectItem key={hospital.id} value={hospital.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{hospital.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               {errors.hospitalId && (
@@ -173,7 +252,7 @@ export default function LoginForm() {
                 {...register("username")}
                 id="username"
                 type="text"
-                placeholder="กรอกชื่อผู้ใช้"
+                placeholder="กรอกชื่อผู้ใช้หรืออีเมล"
                 disabled={isLoading}
                 className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500 transition-colors"
                 autoComplete="username"
@@ -246,7 +325,7 @@ export default function LoginForm() {
                 disabled={!canSubmit}
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+                {isRedirecting ? "กำลังนำไปหน้าหลัก..." : isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
               </Button>
             </div>
 
@@ -276,8 +355,6 @@ export default function LoginForm() {
               </Button>
             </div>
           </form>
-
-
         </CardContent>
       </Card>
     </div>

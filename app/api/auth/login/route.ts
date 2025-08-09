@@ -1,4 +1,4 @@
-// app/api/auth/login/route.ts - Fixed with JWT & Cookie
+// app/api/auth/login/route.ts - Updated เพื่อรองรับ AuthContext
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from 'jose';
@@ -17,13 +17,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     console.log('🔍 [DEBUG] Login request:', {
-      username: body.username,
+      identifier: body.identifier || body.username, // รองรับทั้ง identifier และ username
       hospitalId: body.hospitalId,
       hasPassword: !!body.password
     });
     
+    // แปลงข้อมูลให้ตรงกับ validation schema
+    const validationData = {
+      username: body.identifier || body.username, // ใช้ identifier หรือ username
+      password: body.password,
+      hospitalId: body.hospitalId,
+      rememberMe: body.rememberMe || false
+    };
+    
     // Validate input
-    const validatedData = loginSchema.parse(body);
+    const validatedData = loginSchema.parse(validationData);
     
     // หา user ด้วย username หรือ email
     const user = await prisma.user.findFirst({
@@ -116,14 +124,16 @@ export async function POST(request: NextRequest) {
     // ตรวจสอบสถานะผู้ใช้
     if (user.status === "PENDING") {
       return NextResponse.json({
-        success: false,
-        error: "บัญชีของคุณรอการอนุมัติจากผู้ดูแลระบบ",
+        success: true,
+        message: "บัญชีของคุณรอการอนุมัติจากผู้ดูแลระบบ",
         needsApproval: true,
         user: {
           id: user.id,
           name: user.name,
           email: user.email,
-          status: user.status
+          status: user.status,
+          hospitalId: user.hospitalId,
+          hospital: user.hospital
         }
       });
     }
@@ -145,7 +155,9 @@ export async function POST(request: NextRequest) {
           id: user.id,
           name: user.name,
           email: user.email,
-          status: user.status
+          status: user.status,
+          hospitalId: user.hospitalId,
+          hospital: user.hospital
         }
       });
     }
@@ -160,7 +172,7 @@ export async function POST(request: NextRequest) {
       departmentId: user.departmentId,
     })
     .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('24h')
+    .setExpirationTime(validatedData.rememberMe ? '30d' : '24h') // ถ้า remember me ให้ expire 30 วัน
     .setIssuedAt()
     .sign(JWT_SECRET);
     
@@ -194,25 +206,41 @@ export async function POST(request: NextRequest) {
     
     console.log('🔍 [DEBUG] Login successful for user:', user.id);
     
+    // สร้าง user object สำหรับ response (ตรงกับ AuthContext interface)
+    const responseUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      status: user.status,
+      hospitalId: user.hospitalId,
+      departmentId: user.departmentId,
+      phoneNumber: user.phoneNumber,
+      employeeId: user.employeeId,
+      position: user.position,
+      isProfileComplete: user.isProfileComplete,
+      emailVerified: user.emailVerified || false,
+      lastLoginAt: user.lastLoginAt?.toISOString(),
+      createdAt: user.createdAt.toISOString(),
+      hospital: {
+        id: user.hospital.id,
+        name: user.hospital.name,
+        code: user.hospital.hospitalCode
+      },
+      department: user.department ? {
+        id: user.department.id,
+        name: user.department.name,
+        code: user.department.departmentCode
+      } : undefined
+    };
+    
     // สร้าง Response พร้อม Set Cookie
     const response = NextResponse.json({
       success: true,
       message: "เข้าสู่ระบบสำเร็จ",
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        status: user.status,
-        isProfileComplete: user.isProfileComplete,
-        hospitalId: user.hospitalId,
-        departmentId: user.departmentId,
-        hospital: user.hospital,
-        department: user.department
-      },
+      user: responseUser,
       needsApproval: false,
       needsProfileCompletion: false
     });
@@ -222,7 +250,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: validatedData.rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24, // 30 days หรือ 24 hours
       path: '/'
     });
     

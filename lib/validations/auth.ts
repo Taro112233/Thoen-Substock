@@ -1,4 +1,4 @@
-// lib/validations/auth.ts - Updated Profile Completion Schema
+// lib/validations/auth.ts - Fixed Type Consistency
 import { z } from "zod";
 
 // Registration Schema
@@ -29,7 +29,7 @@ export const registerSchema = z.object({
   path: ["confirmPassword"],
 });
 
-// Login Schema
+// Login Schema - Fixed to ensure rememberMe is always boolean
 export const loginSchema = z.object({
   username: z
     .string()
@@ -43,10 +43,15 @@ export const loginSchema = z.object({
     .string()
     .min(1, "กรุณาเลือกโรงพยาบาล"),
   
-  rememberMe: z.boolean().optional().default(false),
+  // Fixed: Transform to ensure always boolean
+  rememberMe: z
+    .boolean()
+    .optional()
+    .default(false)
+    .transform((val) => Boolean(val)), // Ensure always boolean
 });
 
-// Profile Completion Schema - Fixed Department ID validation
+// Profile Completion Schema
 export const profileCompletionSchema = z.object({
   firstName: z
     .string()
@@ -80,10 +85,37 @@ export const profileCompletionSchema = z.object({
     .or(z.literal("")), // Allow empty string for optional field
 });
 
-// Type exports
+// Forgot Password Schema
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .email("กรุณากรอกอีเมลให้ถูกต้อง")
+    .min(1, "กรุณากรอกอีเมล"),
+});
+
+// Reset Password Schema
+export const resetPasswordSchema = z.object({
+  token: z
+    .string()
+    .min(1, "Token ไม่ถูกต้อง"),
+  
+  password: z
+    .string()
+    .min(8, "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "รหัสผ่านต้องมีตัวอักษรเล็ก ใหญ่ และตัวเลข"),
+  
+  confirmPassword: z.string().min(1, "กรุณายืนยันรหัสผ่าน"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "รหัสผ่านไม่ตรงกัน",
+  path: ["confirmPassword"],
+});
+
+// Type exports with proper inference
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ProfileCompletionInput = z.infer<typeof profileCompletionSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 // Legacy support
 export type RegisterFormData = RegisterInput;
