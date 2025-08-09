@@ -1,36 +1,28 @@
-// app/layout.tsx
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider } from "@/lib/client-auth";
+// app/layout.tsx (Root Layout)
+import './globals.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import { Toaster } from '@/components/ui/sonner';
+import { AuthProvider } from '@/lib/client-auth';
+import ConditionalHeader from '@/components/layout/ConditionalHeader';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "ระบบจัดการสต็อกยาโรงพยาบาล",
-  description: "Hospital Pharmacy Stock Management System",
+  title: 'Hospital Pharmacy Stock Management System V2.0',
+  description: 'ระบบจัดการสต็อกยาโรงพยาบาลแบบ Multi-tenant SaaS Platform',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="th">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="th" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
+          <ConditionalHeader />
           {children}
         </AuthProvider>
         <Toaster />

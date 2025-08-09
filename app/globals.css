@@ -121,3 +121,69 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* app/globals.css - เพิ่มส่วนนี้ลงใน CSS file ที่มีอยู่ */
+
+/* Animation สำหรับ background decorations ในหน้า auth */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* ซ่อน header ในหน้า auth */
+.auth-page .conditional-header {
+  display: none !important;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .conditional-header {
+    position: relative; /* เปลี่ยนจาก sticky เป็น relative ในมือถือถ้าต้องการ */
+  }
+}
+
+/* Header transition effects */
+.conditional-header {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Custom scrollbar สำหรับ notification dropdown */
+.notification-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.notification-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 2px;
+}
+
+.notification-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.notification-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
