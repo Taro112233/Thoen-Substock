@@ -1,15 +1,19 @@
-// prisma/seed.ts - Enhanced Seed Script with Master Data (FIXED)
+// prisma/seed.ts - Enhanced Personnel Types Seed Script
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../lib/password-utils";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting enhanced database seed with Master Data...");
+  console.log("🌱 Starting enhanced database seed with Personnel Types...");
 
   try {
-    // สร้างโรงพยาบาลตัวอย่าง
-    const hospital = await prisma.hospital.upsert({
+    // ================================
+    // CREATE HOSPITALS
+    // ================================
+    console.log("🏥 Creating Hospitals...");
+
+    const hospital1 = await prisma.hospital.upsert({
       where: { hospitalCode: "DEMO001" },
       update: {},
       create: {
@@ -19,8 +23,8 @@ async function main() {
         type: "GOVERNMENT",
         status: "ACTIVE",
         address: "123 ถนนตะครอ",
-        district: "ในเมือง",
-        subDistrict: "เมือง", 
+        district: "เมือง",
+        subDistrict: "ในเมือง", 
         province: "ลำปาง",
         postalCode: "52000",
         phone: "054-237-400",
@@ -40,9 +44,6 @@ async function main() {
       },
     });
 
-    console.log("✅ Created hospital:", hospital.name);
-
-    // สร้างโรงพยาบาลเพิ่มเติม
     const hospital2 = await prisma.hospital.upsert({
       where: { hospitalCode: "DEMO002" },
       update: {},
@@ -53,7 +54,7 @@ async function main() {
         type: "COMMUNITY",
         status: "ACTIVE",
         address: "456 ถนนเถิน-ลำปาง",
-        district: "ในเมือง",
+        district: "เถิน",
         subDistrict: "เถิน", 
         province: "ลำปาง",
         postalCode: "52160",
@@ -73,10 +74,40 @@ async function main() {
       },
     });
 
-    console.log("✅ Created hospital:", hospital2.name);
+    const hospital3 = await prisma.hospital.upsert({
+      where: { hospitalCode: "DEMO003" },
+      update: {},
+      create: {
+        hospitalCode: "DEMO003",
+        name: "โรงพยาบาลแม่ทะ",
+        nameEn: "Mae Tha Hospital",
+        type: "COMMUNITY",
+        status: "ACTIVE",
+        address: "789 ถนนแม่ทะ-ลำปาง",
+        district: "แม่ทะ",
+        subDistrict: "แม่ทะ", 
+        province: "ลำปาง",
+        postalCode: "52150",
+        phone: "054-234-567",
+        email: "info@maetha-hospital.go.th",
+        licenseNo: "LIC003",
+        licenseExpiry: new Date("2025-12-31"),
+        bedCount: 80,
+        employeeCount: 65,
+        establishedYear: 1970,
+        subscriptionPlan: "BASIC",
+        subscriptionStart: new Date(),
+        subscriptionEnd: new Date("2025-12-31"),
+        maxUsers: 30,
+        maxWarehouses: 3,
+        lastActivityAt: new Date(),
+      },
+    });
+
+    console.log("✅ Created hospitals:", [hospital1.name, hospital2.name, hospital3.name]);
 
     // ================================
-    // CREATE SYSTEM USER FIRST (ไม่มี PersonnelType)
+    // CREATE SYSTEM DEVELOPER USER FIRST
     // ================================
     console.log("👤 Creating system developer user...");
 
@@ -95,8 +126,8 @@ async function main() {
         position: "System Developer",
         role: "DEVELOPER",
         status: "ACTIVE",
-        hospitalId: hospital.id,
-        personnelTypeId: null, // ยังไม่มี PersonnelType
+        hospitalId: hospital1.id,
+        personnelTypeId: null, // จะอัพเดทภายหลัง
         isProfileComplete: true,
         emailVerified: true,
         password: hashedDevPassword,
@@ -106,35 +137,18 @@ async function main() {
     console.log("✅ Created developer user:", devUser.email);
 
     // ================================
-    // MASTER DATA - PERSONNEL TYPES (ใช้ devUser.id แทน "system")
+    // CREATE PERSONNEL TYPES FOR ALL HOSPITALS
     // ================================
     console.log("🎯 Creating Personnel Types (Master Data)...");
 
     type PersonnelHierarchy = "DEVELOPER" | "DIRECTOR" | "GROUP_HEAD" | "STAFF" | "STUDENT";
     
-    const personnelTypes: Array<{
-      typeCode: string;
-      typeName: string;
-      typeNameEn: string;
-      hierarchy: PersonnelHierarchy;
-      levelOrder: number;
-      canManageHospitals: boolean;
-      canManageWarehouses: boolean;
-      canManageDepartments: boolean;
-      canManagePersonnel: boolean;
-      canManageDrugs: boolean;
-      canManageMasterData: boolean;
-      canViewReports: boolean;
-      canApproveUsers: boolean;
-      description: string;
-      isSystemDefault?: boolean;
-      maxSubordinates?: number;
-    }> = [
+    const personnelTypesTemplate = [
       {
         typeCode: "DEV",
         typeName: "นักพัฒนา",
         typeNameEn: "Developer", 
-        hierarchy: "DEVELOPER",
+        hierarchy: "DEVELOPER" as PersonnelHierarchy,
         levelOrder: 1,
         canManageHospitals: true,
         canManageWarehouses: true,
@@ -145,14 +159,15 @@ async function main() {
         canViewReports: true,
         canApproveUsers: true,
         description: "ผู้พัฒนาระบบ มีสิทธิ์สูงสุดในการจัดการข้อมูลทั้งหมด",
+        responsibilities: ["พัฒนาระบบ", "ดูแลระบบ", "จัดการข้อมูลหลัก", "แก้ไขปัญหาเทคนิค"],
         isSystemDefault: true,
       },
       {
         typeCode: "DIR",
         typeName: "ผู้อำนวยการ",
         typeNameEn: "Director",
-        hierarchy: "DIRECTOR", 
-        levelOrder: 2,
+        hierarchy: "DIRECTOR" as PersonnelHierarchy, 
+        levelOrder: 10,
         canManageHospitals: false,
         canManageWarehouses: true,
         canManageDepartments: true,
@@ -162,14 +177,90 @@ async function main() {
         canViewReports: true,
         canApproveUsers: true,
         description: "ผู้อำนวยการโรงพยาบาล บริหารจัดการระดับสูง",
+        responsibilities: ["บริหารโรงพยาบาล", "อนุมัติงบประมาณ", "กำหนดนโยบาย", "ควบคุมคุณภาพ"],
         maxSubordinates: 50,
+        defaultDepartmentType: "ADMINISTRATION",
       },
       {
-        typeCode: "GRP_HEAD",
-        typeName: "หัวหน้ากลุ่มงาน",
-        typeNameEn: "Group Head",
-        hierarchy: "GROUP_HEAD",
-        levelOrder: 3, 
+        typeCode: "ASST_DIR",
+        typeName: "รองผู้อำนวยการ",
+        typeNameEn: "Assistant Director",
+        hierarchy: "DIRECTOR" as PersonnelHierarchy,
+        levelOrder: 15,
+        canManageHospitals: false,
+        canManageWarehouses: true,
+        canManageDepartments: true,
+        canManagePersonnel: false,
+        canManageDrugs: true,
+        canManageMasterData: false,
+        canViewReports: true,
+        canApproveUsers: true,
+        description: "รองผู้อำนวยการ ช่วยบริหารงานระดับสูง",
+        responsibilities: ["ช่วยบริหารโรงพยาบาล", "ควบคุมการดำเนินงาน", "กำกับแผนก"],
+        maxSubordinates: 30,
+      },
+      {
+        typeCode: "CHIEF_PHARM",
+        typeName: "หัวหน้าเภสัชกรรม",
+        typeNameEn: "Chief Pharmacist",
+        hierarchy: "GROUP_HEAD" as PersonnelHierarchy,
+        levelOrder: 20,
+        canManageHospitals: false,
+        canManageWarehouses: true,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: true,
+        canManageMasterData: false,
+        canViewReports: true,
+        canApproveUsers: false,
+        description: "หัวหน้าแผนกเภสัชกรรม ดูแลงานยาและเวชภัณฑ์",
+        responsibilities: ["จัดการระบบยา", "ควบคุมคุณภาพยา", "อนุมัติการเบิกจ่าย", "บริหารคลังยา"],
+        maxSubordinates: 15,
+        defaultDepartmentType: "PHARMACY",
+      },
+      {
+        typeCode: "CHIEF_NURSE",
+        typeName: "หัวหน้าพยาบาล",
+        typeNameEn: "Chief Nurse",
+        hierarchy: "GROUP_HEAD" as PersonnelHierarchy,
+        levelOrder: 20,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: true,
+        canApproveUsers: false,
+        description: "หัวหน้าฝ่ายการพยาบาล ดูแลงานพยาบาล",
+        responsibilities: ["บริหารงานพยาบาล", "ควบคุมคุณภาพการดูแล", "พัฒนาบุคลากร"],
+        maxSubordinates: 20,
+        defaultDepartmentType: "NURSING",
+      },
+      {
+        typeCode: "DEPT_HEAD",
+        typeName: "หัวหน้าแผนก",
+        typeNameEn: "Department Head",
+        hierarchy: "GROUP_HEAD" as PersonnelHierarchy,
+        levelOrder: 25,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: true,
+        canApproveUsers: false,
+        description: "หัวหน้าแผนกต่างๆ ดูแลงานเฉพาะด้าน",
+        responsibilities: ["บริหารแผนก", "ควบคุมงานประจำ", "รายงานผลการดำเนินงาน"],
+        maxSubordinates: 12,
+      },
+      {
+        typeCode: "SR_PHARM",
+        typeName: "เภสัชกรชำนาญการ",
+        typeNameEn: "Senior Pharmacist",
+        hierarchy: "STAFF" as PersonnelHierarchy,
+        levelOrder: 30,
         canManageHospitals: false,
         canManageWarehouses: false,
         canManageDepartments: false,
@@ -178,15 +269,17 @@ async function main() {
         canManageMasterData: false,
         canViewReports: true,
         canApproveUsers: false,
-        description: "หัวหน้ากลุ่มงาน ดูแลงานเฉพาะด้าน",
-        maxSubordinates: 15,
+        description: "เภสัชกรชำนาญการ มีประสบการณ์สูง",
+        responsibilities: ["จ่ายยาผู้ป่วยใน", "ให้คำปรึกษายา", "ตรวจสอบคำสั่งยา", "ควบคุมยาพิเศษ"],
+        maxSubordinates: 5,
+        defaultDepartmentType: "PHARMACY",
       },
       {
-        typeCode: "STAFF",
-        typeName: "พนักงาน",
-        typeNameEn: "Staff",
-        hierarchy: "STAFF",
-        levelOrder: 4,
+        typeCode: "PHARM",
+        typeName: "เภสัชกร",
+        typeNameEn: "Pharmacist",
+        hierarchy: "STAFF" as PersonnelHierarchy,
+        levelOrder: 35,
         canManageHospitals: false,
         canManageWarehouses: false,
         canManageDepartments: false,
@@ -195,14 +288,34 @@ async function main() {
         canManageMasterData: false,
         canViewReports: true,
         canApproveUsers: false,
-        description: "พนักงานทั่วไป ปฏิบัติงานตามหน้าที่",
+        description: "เภสัชกรปฏิบัติการ จ่ายยาและให้คำปรึกษา",
+        responsibilities: ["จ่ายยาผู้ป่วยนอก", "ให้คำปรึกษายา", "บันทึกข้อมูลยา"],
+        defaultDepartmentType: "PHARMACY",
       },
       {
-        typeCode: "STU",
-        typeName: "นักศึกษา",
-        typeNameEn: "Student",
-        hierarchy: "STUDENT",
-        levelOrder: 5,
+        typeCode: "SR_NURSE",
+        typeName: "พยาบาลวิชาชีพชำนาญการ",
+        typeNameEn: "Senior Nurse",
+        hierarchy: "STAFF" as PersonnelHierarchy,
+        levelOrder: 30,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: true,
+        canApproveUsers: false,
+        description: "พยาบาลวิชาชีพชำนาญการ ดูแลผู้ป่วยและควบคุมงาน",
+        responsibilities: ["ดูแลผู้ป่วย", "เบิกยาประจำแผนก", "ควบคุมงานพยาบาล"],
+        maxSubordinates: 8,
+      },
+      {
+        typeCode: "NURSE",
+        typeName: "พยาบาลวิชาชีพ",
+        typeNameEn: "Registered Nurse",
+        hierarchy: "STAFF" as PersonnelHierarchy,
+        levelOrder: 35,
         canManageHospitals: false,
         canManageWarehouses: false,
         canManageDepartments: false,
@@ -211,34 +324,148 @@ async function main() {
         canManageMasterData: false,
         canViewReports: false,
         canApproveUsers: false,
-        description: "นักศึกษาฝึกงาน สิทธิ์จำกัด",
-      }
+        description: "พยาบาลวิชาชีพ ดูแลผู้ป่วยโดยตรง",
+        responsibilities: ["ดูแลผู้ป่วย", "ให้ยาตามแพทย์สั่ง", "บันทึกสัญญาณชีพ"],
+      },
+      {
+        typeCode: "NURSE_ASS",
+        typeName: "ผู้ช่วยพยาบาล",
+        typeNameEn: "Nursing Assistant",
+        hierarchy: "STAFF" as PersonnelHierarchy,
+        levelOrder: 40,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: false,
+        canApproveUsers: false,
+        description: "ผู้ช่วยพยาบาล ช่วยงานการพยาบาล",
+        responsibilities: ["ช่วยดูแลผู้ป่วย", "ช่วยงานประจำ", "ติดต่อประสานงาน"],
+      },
+      {
+        typeCode: "PHARM_TECH",
+        typeName: "ผู้ช่วยเภสัชกร",
+        typeNameEn: "Pharmacy Technician",
+        hierarchy: "STAFF" as PersonnelHierarchy,
+        levelOrder: 40,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: false,
+        canApproveUsers: false,
+        description: "ผู้ช่วยเภสัชกร ช่วยงานเภสัชกรรม",
+        responsibilities: ["ช่วยจ่ายยา", "จัดเก็บยา", "ช่วยงานคลัง"],
+        defaultDepartmentType: "PHARMACY",
+      },
+      {
+        typeCode: "ADMIN",
+        typeName: "เจ้าหน้าที่บริหาร",
+        typeNameEn: "Administrative Staff",
+        hierarchy: "STAFF" as PersonnelHierarchy,
+        levelOrder: 35,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: true,
+        canApproveUsers: false,
+        description: "เจ้าหน้าที่บริหารงานทั่วไป",
+        responsibilities: ["งานสารบรรณ", "ประสานงาน", "จัดการข้อมูล"],
+        defaultDepartmentType: "ADMINISTRATION",
+      },
+      {
+        typeCode: "INTERN_PHARM",
+        typeName: "นักศึกษาเภสัชศาสตร์",
+        typeNameEn: "Pharmacy Intern",
+        hierarchy: "STUDENT" as PersonnelHierarchy,
+        levelOrder: 50,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: false,
+        canApproveUsers: false,
+        description: "นักศึกษาเภสัชศาสตร์ฝึกงาน",
+        responsibilities: ["เรียนรู้การจ่ายยา", "ช่วยงานเภสัชกร", "ศึกษาระบบงาน"],
+        defaultDepartmentType: "PHARMACY",
+      },
+      {
+        typeCode: "INTERN_NURSE",
+        typeName: "นักศึกษาพยาบาล",
+        typeNameEn: "Nursing Student",
+        hierarchy: "STUDENT" as PersonnelHierarchy,
+        levelOrder: 50,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: false,
+        canApproveUsers: false,
+        description: "นักศึกษาพยาบาลฝึกงาน",
+        responsibilities: ["เรียนรู้การดูแลผู้ป่วย", "ช่วยงานพยาบาล", "ศึกษาการปฏิบัติงาน"],
+      },
+      {
+        typeCode: "TRAINEE",
+        typeName: "พนักงานฝึกหัด",
+        typeNameEn: "Trainee",
+        hierarchy: "STUDENT" as PersonnelHierarchy,
+        levelOrder: 55,
+        canManageHospitals: false,
+        canManageWarehouses: false,
+        canManageDepartments: false,
+        canManagePersonnel: false,
+        canManageDrugs: false,
+        canManageMasterData: false,
+        canViewReports: false,
+        canApproveUsers: false,
+        description: "พนักงานฝึกหัดใหม่",
+        responsibilities: ["เรียนรู้งานใหม่", "ช่วยงานพื้นฐาน", "ปฏิบัติตามคำแนะนำ"],
+      },
     ];
 
-    // สร้าง PersonnelTypes ใช้ devUser.id แทน "system"
-    const createdPersonnelTypes: any[] = [];
+    // สร้าง Personnel Types สำหรับทุกโรงพยาบาล
+    const allPersonnelTypes: Record<string, any[]> = {};
     
-    for (const personnelType of personnelTypes) {
-      const created = await prisma.personnelType.upsert({
-        where: { 
-          hospitalId_typeCode: {
+    for (const hospital of [hospital1, hospital2, hospital3]) {
+      console.log(`🏥 Creating Personnel Types for ${hospital.name}...`);
+      
+      const hospitalPersonnelTypes: any[] = [];
+      
+      for (const template of personnelTypesTemplate) {
+        const created = await prisma.personnelType.upsert({
+          where: { 
+            hospitalId_typeCode: {
+              hospitalId: hospital.id,
+              typeCode: template.typeCode
+            }
+          },
+          update: {},
+          create: {
+            ...template,
             hospitalId: hospital.id,
-            typeCode: personnelType.typeCode
+            createdBy: devUser.id
           }
-        },
-        update: {},
-        create: {
-          ...personnelType,
-          hospitalId: hospital.id,
-          createdBy: devUser.id // ใช้ devUser.id แทน "system"
-        }
-      });
-      createdPersonnelTypes.push(created);
-      console.log(`✅ Created personnel type: ${personnelType.typeName}`);
+        });
+        hospitalPersonnelTypes.push(created);
+        console.log(`  ✅ ${template.typeName} (${template.typeCode})`);
+      }
+      
+      allPersonnelTypes[hospital.id] = hospitalPersonnelTypes;
     }
 
-    // อัพเดท devUser ให้มี personnelTypeId
-    const devPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "DEV");
+    // อัพเดท Developer User ให้มี Personnel Type
+    const devPersonnelType = allPersonnelTypes[hospital1.id].find(pt => pt.typeCode === "DEV");
     await prisma.user.update({
       where: { id: devUser.id },
       data: { personnelTypeId: devPersonnelType.id }
@@ -247,386 +474,28 @@ async function main() {
     console.log("✅ Updated developer user with personnel type");
 
     // ================================
-    // MASTER DATA - DRUG FORMS
-    // ================================
-    console.log("💊 Creating Drug Forms (Master Data)...");
-
-    const drugForms = [
-      {
-        formCode: "TAB",
-        formName: "ยาเม็ด",
-        formNameEn: "Tablet",
-        category: "ORAL",
-        description: "ยารูปแบบเม็ด สำหรับรับประทาน",
-        usageInstructions: "รับประทานพร้อมน้ำ",
-        commonStrengths: ["250mg", "500mg", "1g"],
-        standardUnits: ["tablet", "tabs"]
-      },
-      {
-        formCode: "CAP",
-        formName: "ยาแคปซูล",
-        formNameEn: "Capsule", 
-        category: "ORAL",
-        description: "ยารูปแบบแคปซูล สำหรับรับประทาน",
-        usageInstructions: "รับประทานทั้งเม็ด ห้ามเปิด",
-        commonStrengths: ["250mg", "500mg"],
-        standardUnits: ["capsule", "caps"]
-      },
-      {
-        formCode: "INJ",
-        formName: "ยาฉีด",
-        formNameEn: "Injection",
-        category: "INJECTION", 
-        description: "ยาสำหรับฉีด",
-        requiresSpecialStorage: true,
-        usageInstructions: "ฉีดโดยบุคลากรที่ผ่านการฝึกอบรม",
-        commonStrengths: ["1ml", "2ml", "5ml", "10ml"],
-        standardUnits: ["ampoule", "vial", "ml"]
-      },
-      {
-        formCode: "SYR",
-        formName: "ยาน้ำ",
-        formNameEn: "Syrup",
-        category: "ORAL",
-        description: "ยาในรูปแบบน้ำเชื่อม",
-        usageInstructions: "เขย่าก่อนใช้",
-        commonStrengths: ["60ml", "100ml", "120ml"],
-        standardUnits: ["bottle", "ml"]
-      },
-      {
-        formCode: "CRE",
-        formName: "ครีม",
-        formNameEn: "Cream",
-        category: "TOPICAL",
-        description: "ยาทาภายนอก",
-        usageInstructions: "ทาบางๆ บริเวณที่ต้องการ",
-        commonStrengths: ["15g", "30g"],
-        standardUnits: ["tube", "g"]
-      },
-      {
-        formCode: "SUP",
-        formName: "ยาเหน็บ",
-        formNameEn: "Suppository",
-        category: "OTHER",
-        description: "ยาสำหรับใช้ทางทวารหนัก",
-        requiresSpecialStorage: true,
-        usageInstructions: "เก็บในตู้เย็น",
-        standardUnits: ["suppository", "piece"]
-      }
-    ];
-
-    for (const form of drugForms) {
-      await prisma.drugForm.upsert({
-        where: {
-          hospitalId_formCode: {
-            hospitalId: hospital.id,
-            formCode: form.formCode
-          }
-        },
-        update: {},
-        create: {
-          ...form,
-          hospitalId: hospital.id,
-          isSystemDefault: true,
-          createdBy: devUser.id
-        }
-      });
-      console.log(`✅ Created drug form: ${form.formName}`);
-    }
-
-    // ================================
-    // MASTER DATA - DRUG GROUPS  
-    // ================================
-    console.log("🧬 Creating Drug Groups (Master Data)...");
-
-    const drugGroups = [
-      {
-        groupCode: "ANTI",
-        groupName: "Antibiotic",
-        groupNameTh: "ยาปฏิชีวนะ",
-        therapeuticClass: "Anti-infective",
-        description: "ยาต้านเชื้อแบคทีเรีย",
-        requiresMonitoring: true,
-        hasInteractions: true,
-        riskLevel: "MEDIUM"
-      },
-      {
-        groupCode: "ANALG",
-        groupName: "Analgesic",
-        groupNameTh: "ยาแก้ปวด",
-        therapeuticClass: "Pain Relief",
-        description: "ยาบรรเทาอาการปวด",
-        riskLevel: "LOW"
-      },
-      {
-        groupCode: "ANTIH",
-        groupName: "Antihistamine", 
-        groupNameTh: "ยาต้านฮีสตามีน",
-        therapeuticClass: "Allergy",
-        description: "ยาแก้แพ้",
-        riskLevel: "LOW"
-      },
-      {
-        groupCode: "ANTIV",
-        groupName: "Antiviral",
-        groupNameTh: "ยาต้านไวรัส",
-        therapeuticClass: "Anti-infective",
-        description: "ยาต้านเชื้อไวรัส",
-        requiresMonitoring: true,
-        riskLevel: "MEDIUM"
-      },
-      {
-        groupCode: "CARD",
-        groupName: "Cardiovascular",
-        groupNameTh: "ยาหัวใจและหลอดเลือด", 
-        therapeuticClass: "Cardiovascular",
-        description: "ยาสำหรับโรคหัวใจและหลอดเลือด",
-        requiresMonitoring: true,
-        hasInteractions: true,
-        riskLevel: "HIGH"
-      }
-    ];
-
-    for (const group of drugGroups) {
-      await prisma.drugGroup.upsert({
-        where: {
-          hospitalId_groupCode: {
-            hospitalId: hospital.id,
-            groupCode: group.groupCode
-          }
-        },
-        update: {},
-        create: {
-          ...group,
-          hospitalId: hospital.id,
-          isSystemDefault: true,
-          createdBy: devUser.id
-        }
-      });
-      console.log(`✅ Created drug group: ${group.groupNameTh}`);
-    }
-
-    // ================================
-    // MASTER DATA - DRUG TYPES
-    // ================================
-    console.log("⚠️ Creating Drug Types (Master Data)...");
-
-    const drugTypes = [
-      {
-        typeCode: "HIGH_ALERT",
-        typeName: "High Alert Drug",
-        typeNameTh: "ยาเสี่ยงสูง",
-        isHighAlert: true,
-        requiresWitness: true,
-        requiresApproval: true,
-        auditRequired: true,
-        description: "ยาที่มีความเสี่ยงสูงในการใช้ ต้องมีการตรวจสอบพิเศษ",
-        precautions: "ตรวจสอบขนาดยาและวิธีการใช้อย่างละเอียด",
-        color: "#dc2626",
-        iconName: "alert-triangle"
-      },
-      {
-        typeCode: "NARCOTIC",
-        typeName: "Narcotic Drug", 
-        typeNameTh: "ยาเสพติด",
-        isNarcotic: true,
-        isControlled: true,
-        requiresWitness: true,
-        requiresApproval: true,
-        requiresDoubleLock: true,
-        maxDispenseQty: 30,
-        auditRequired: true,
-        reportingRequired: true,
-        description: "ยาเสพติดที่ต้องควบคุมอย่างเข้มงวด",
-        precautions: "เก็บในตู้ล็อคคู่ บันทึกการใช้ทุกครั้ง",
-        color: "#dc2626",
-        iconName: "shield-alert"
-      },
-      {
-        typeCode: "CONTROLLED",
-        typeName: "Controlled Drug",
-        typeNameTh: "ยาควบคุม",
-        isControlled: true,
-        requiresApproval: true,
-        auditRequired: true,
-        description: "ยาที่ต้องมีการควบคุมการใช้",
-        color: "#f59e0b",
-        iconName: "lock"
-      },
-      {
-        typeCode: "PSYCHO",
-        typeName: "Psychotropic Drug",
-        typeNameTh: "ยาจิตเวช",
-        isPsychotropic: true,
-        isControlled: true,
-        requiresApproval: true,
-        auditRequired: true,
-        description: "ยาจิตเวชที่ต้องควบคุม",
-        color: "#8b5cf6",
-        iconName: "brain"
-      },
-      {
-        typeCode: "REFER",
-        typeName: "Refer Drug",
-        typeNameTh: "ยา Refer", 
-        isRefer: true,
-        requiresApproval: true,
-        description: "ยาที่ต้องส่งต่อหรือขออนุมัติพิเศษ",
-        color: "#06b6d4",
-        iconName: "arrow-right-circle"
-      },
-      {
-        typeCode: "DANGEROUS",
-        typeName: "Dangerous Drug",
-        typeNameTh: "ยาอันตราย",
-        isDangerous: true,
-        requiresWitness: true,
-        auditRequired: true,
-        description: "ยาที่อันตรายต่อการใช้",
-        precautions: "ใช้ความระมัดระวังสูงสุด",
-        color: "#dc2626",
-        iconName: "skull"
-      }
-    ];
-
-    for (const type of drugTypes) {
-      await prisma.drugType.upsert({
-        where: {
-          hospitalId_typeCode: {
-            hospitalId: hospital.id,
-            typeCode: type.typeCode
-          }
-        },
-        update: {},
-        create: {
-          ...type,
-          hospitalId: hospital.id,
-          isSystemDefault: true,
-          createdBy: devUser.id
-        }
-      });
-      console.log(`✅ Created drug type: ${type.typeNameTh}`);
-    }
-
-    // ================================
-    // MASTER DATA - DRUG STORAGE CONDITIONS
-    // ================================
-    console.log("❄️ Creating Drug Storage Conditions (Master Data)...");
-
-    const storageConditions = [
-      {
-        storageCode: "RT",
-        storageName: "Room Temperature",
-        storageNameTh: "อุณหภูมิห้อง",
-        temperatureMin: 15,
-        temperatureMax: 30,
-        storageInstructions: "เก็บในที่แห้ง ป้องกันแสงแดด",
-        color: "#22c55e",
-        iconName: "thermometer"
-      },
-      {
-        storageCode: "FRIDGE",
-        storageName: "Refrigerated",
-        storageNameTh: "ในตู้เย็น",
-        temperatureMin: 2,
-        temperatureMax: 8,
-        requiresRefrigeration: true,
-        monitoringRequired: true,
-        checkFrequency: "DAILY",
-        storageInstructions: "เก็บในตู้เย็น 2-8°C",
-        handlingPrecautions: "ห้ามปล่อยให้อุณหภูมิสูงเกิน 8°C",
-        color: "#3b82f6",
-        iconName: "snowflake"
-      },
-      {
-        storageCode: "FREEZE",
-        storageName: "Frozen",
-        storageNameTh: "แช่แข็ง",
-        temperatureMin: -25,
-        temperatureMax: -10,
-        requiresFreezing: true,
-        monitoringRequired: true,
-        checkFrequency: "DAILY",
-        storageInstructions: "เก็บในช่องแช่แข็ง -20°C หรือต่ำกว่า",
-        handlingPrecautions: "ห้ามให้ละลาย ใช้ทันทีหลังละลาย",
-        color: "#06b6d4",
-        iconName: "ice-cream-2"
-      },
-      {
-        storageCode: "DRY",
-        storageName: "Keep Dry",
-        storageNameTh: "เก็บในที่แห้ง",
-        temperatureMin: 15,
-        temperatureMax: 25,
-        humidityMax: 60,
-        protectFromMoisture: true,
-        storageInstructions: "เก็บในที่แห้ง ความชื้นไม่เกิน 60%",
-        color: "#f59e0b",
-        iconName: "droplets-off"
-      },
-      {
-        storageCode: "DARK",
-        storageName: "Protect from Light",
-        storageNameTh: "ป้องกันแสง",
-        temperatureMin: 15,
-        temperatureMax: 30,
-        protectFromLight: true,
-        storageInstructions: "เก็บในที่มืด ป้องกันแสงแดดและแสงไฟ",
-        color: "#6b7280",
-        iconName: "sun-off"
-      },
-      {
-        storageCode: "CONTROLLED",
-        storageName: "Controlled Environment",
-        storageNameTh: "สภาพแวดล้อมควบคุม",
-        temperatureMin: 20,
-        temperatureMax: 25,
-        humidityMin: 45,
-        humidityMax: 65,
-        protectFromLight: true,
-        protectFromMoisture: true,
-        requiresInertGas: true,
-        monitoringRequired: true,
-        checkFrequency: "HOURLY",
-        storageInstructions: "ควบคุมอุณหภูมิ ความชื้น และแสง",
-        color: "#8b5cf6",
-        iconName: "gauge"
-      }
-    ];
-
-    for (const storage of storageConditions) {
-      await prisma.drugStorage.upsert({
-        where: {
-          hospitalId_storageCode: {
-            hospitalId: hospital.id,
-            storageCode: storage.storageCode
-          }
-        },
-        update: {},
-        create: {
-          ...storage,
-          hospitalId: hospital.id,
-          isSystemDefault: true,
-          createdBy: devUser.id
-        }
-      });
-      console.log(`✅ Created storage condition: ${storage.storageNameTh}`);
-    }
-
-    // ================================
     // CREATE DEPARTMENTS
     // ================================
     console.log("🏢 Creating Departments...");
 
-    const departments = [
+    const departmentTemplates = [
+      {
+        departmentCode: "ADMIN",
+        name: "ฝ่ายบริหาร",
+        nameEn: "Administration Department",
+        type: "ADMINISTRATION",
+        location: "ชั้น 1 อาคารบริหาร",
+        phone: "100",
+        email: "admin@hospital.go.th",
+      },
       {
         departmentCode: "PHARM",
         name: "เภสัชกรรม",
         nameEn: "Pharmacy Department",
         type: "PHARMACY",
         location: "ชั้น 1 อาคารผู้ป่วยนอก",
-        phone: "054-237-400 ต่อ 101",
-        email: "pharmacy@lampang-hospital.go.th",
+        phone: "101",
+        email: "pharmacy@hospital.go.th",
       },
       {
         departmentCode: "EMERG",
@@ -634,8 +503,8 @@ async function main() {
         nameEn: "Emergency Department",
         type: "EMERGENCY",
         location: "ชั้น 1 อาคารอุบัติเหตุและฉุกเฉิน",
-        phone: "054-237-400 ต่อ 911",
-        email: "emergency@lampang-hospital.go.th",
+        phone: "911",
+        email: "emergency@hospital.go.th",
       },
       {
         departmentCode: "ICU",
@@ -643,8 +512,8 @@ async function main() {
         nameEn: "Intensive Care Unit", 
         type: "ICU",
         location: "ชั้น 3 อาคารผู้ป่วยใน",
-        phone: "054-237-400 ต่อ 301",
-        email: "icu@lampang-hospital.go.th",
+        phone: "301",
+        email: "icu@hospital.go.th",
       },
       {
         departmentCode: "OR",
@@ -652,8 +521,8 @@ async function main() {
         nameEn: "Operating Room",
         type: "SURGERY", 
         location: "ชั้น 2 อาคารผู้ป่วยใน",
-        phone: "054-237-400 ต่อ 201",
-        email: "or@lampang-hospital.go.th",
+        phone: "201",
+        email: "or@hospital.go.th",
       },
       {
         departmentCode: "OPD",
@@ -661,8 +530,8 @@ async function main() {
         nameEn: "Out Patient Department",
         type: "OUTPATIENT",
         location: "ชั้น 1-2 อาคารผู้ป่วยนอก",
-        phone: "054-237-400 ต่อ 102",
-        email: "opd@lampang-hospital.go.th",
+        phone: "102",
+        email: "opd@hospital.go.th",
       },
       {
         departmentCode: "IPD",
@@ -670,257 +539,313 @@ async function main() {
         nameEn: "In Patient Department",
         type: "INPATIENT",
         location: "ชั้น 4-8 อาคารผู้ป่วยใน",
-        phone: "054-237-400 ต่อ 401",
-        email: "ipd@lampang-hospital.go.th",
+        phone: "401",
+        email: "ipd@hospital.go.th",
       }
     ];
 
-    for (const dept of departments) {
-      const department = await prisma.department.upsert({
-        where: { 
-          hospitalId_departmentCode: {
+    for (const hospital of [hospital1, hospital2, hospital3]) {
+      for (const template of departmentTemplates) {
+        await prisma.department.upsert({
+          where: { 
+            hospitalId_departmentCode: {
+              hospitalId: hospital.id,
+              departmentCode: template.departmentCode,
+            }
+          },
+          update: {},
+          create: {
             hospitalId: hospital.id,
-            departmentCode: dept.departmentCode,
-          }
-        },
-        update: {},
-        create: {
-          hospitalId: hospital.id,
-          departmentCode: dept.departmentCode,
-          name: dept.name,
-          nameEn: dept.nameEn,
-          type: dept.type as any,
-          location: dept.location,
-          phone: dept.phone,
-          email: dept.email,
-          isActive: true,
-        },
-      });
-      console.log("✅ Created department:", department.name);
-    }
-
-    // ================================
-    // CREATE WAREHOUSES  
-    // ================================
-    console.log("🏪 Creating Warehouses...");
-
-    const warehouses = [
-      {
-        warehouseCode: "CENTRAL",
-        name: "คลังยาหลัก",
-        type: "CENTRAL",
-        location: "ชั้น B1 อาคารเภสัชกรรม",
-        area: 200.5,
-        capacity: 10000,
-        hasTemperatureControl: true,
-        minTemperature: 15,
-        maxTemperature: 25,
-        hasHumidityControl: true,
-        minHumidity: 45,
-        maxHumidity: 65,
-        securityLevel: "HIGH",
-        accessControl: true,
-        cctv: true,
-        alarm: true,
-        requireApproval: true
-      },
-      {
-        warehouseCode: "COLD_STORE", 
-        name: "ห้องเย็น",
-        type: "COLD_STORAGE",
-        location: "ชั้น B1 อาคารเภสัชกรรม",
-        area: 20.0,
-        capacity: 1500,
-        hasTemperatureControl: true,
-        minTemperature: 2,
-        maxTemperature: 8,
-        securityLevel: "HIGH",
-        accessControl: true,
-        cctv: true
+            departmentCode: template.departmentCode,
+            name: template.name,
+            nameEn: template.nameEn,
+            type: template.type as any,
+            location: template.location,
+            phone: template.phone,
+            email: template.email.replace("@hospital.go.th", `@${hospital.hospitalCode.toLowerCase()}.go.th`),
+            isActive: true,
+          },
+        });
       }
-    ];
-
-    for (const warehouse of warehouses) {
-      const warehouseRecord = await prisma.warehouse.upsert({
-        where: {
-          hospitalId_warehouseCode: {
-            hospitalId: hospital.id,
-            warehouseCode: warehouse.warehouseCode
-          }
-        },
-        update: {},
-        create: {
-          ...warehouse,
-          type: warehouse.type as any,
-          hospitalId: hospital.id,
-          isActive: true
-        }
-      });
-      console.log("✅ Created warehouse:", warehouseRecord.name);
+      console.log(`  ✅ Created departments for ${hospital.name}`);
     }
 
     // ================================
-    // CREATE ADDITIONAL USERS
+    // CREATE DIVERSE USERS
     // ================================
-    console.log("👥 Creating Additional Users...");
+    console.log("👥 Creating Diverse Users with Personnel Types...");
 
-    // สร้าง Director User
-    const hashedDirectorPassword = await hashPassword("director123");
-    const directorPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "DIR");
+    // Get departments for assignments
+    const adminDept1 = await prisma.department.findFirst({ where: { departmentCode: "ADMIN", hospitalId: hospital1.id } });
+    const pharmDept1 = await prisma.department.findFirst({ where: { departmentCode: "PHARM", hospitalId: hospital1.id } });
+    const icuDept1 = await prisma.department.findFirst({ where: { departmentCode: "ICU", hospitalId: hospital1.id } });
+    const emergDept1 = await prisma.department.findFirst({ where: { departmentCode: "EMERG", hospitalId: hospital1.id } });
+    const opdDept1 = await prisma.department.findFirst({ where: { departmentCode: "OPD", hospitalId: hospital1.id } });
 
-    const directorUser = await prisma.user.upsert({
-      where: { email: "director@lampang-hospital.go.th" },
-      update: {},
-      create: {
+    const userTemplates = [
+      // Hospital 1 - Lampang Hospital
+      {
         email: "director@lampang-hospital.go.th",
-        username: "director",
-        name: "ผู้อำนวยการโรงพยาบาล",
-        firstName: "ผู้อำนวยการ",
-        lastName: "โรงพยาบาล",
+        username: "director01",
+        name: "นายวิชัย ใจดี",
+        firstName: "วิชัย",
+        lastName: "ใจดี",
         phoneNumber: "054-237-400",
         employeeId: "DIR001", 
         position: "ผู้อำนวยการโรงพยาบาลลำปาง",
         role: "DIRECTOR",
         status: "ACTIVE",
-        hospitalId: hospital.id,
-        personnelTypeId: directorPersonnelType?.id,
-        isProfileComplete: true,
-        emailVerified: true,
-        password: hashedDirectorPassword,
+        hospitalId: hospital1.id,
+        departmentId: adminDept1?.id,
+        personnelTypeCode: "DIR",
+        password: "director123"
       },
-    });
-
-    console.log("✅ Created director user:", directorUser.email);
-
-    // สร้าง Pharmacy Manager User
-    const hashedPharmPassword = await hashPassword("pharm123");
-    const pharmDept = await prisma.department.findFirst({ 
-      where: { departmentCode: "PHARM", hospitalId: hospital.id } 
-    });
-    const groupHeadPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "GRP_HEAD");
-    
-    const pharmUser = await prisma.user.upsert({
-      where: { email: "pharm@lampang-hospital.go.th" },
-      update: {},
-      create: {
-        email: "pharm@lampang-hospital.go.th",
-        username: "pharm_head",
-        name: "หัวหน้าเภสัชกรรม",
-        firstName: "หัวหน้า",
-        lastName: "เภสัชกรรม",
+      {
+        email: "asst.director@lampang-hospital.go.th",
+        username: "asst_director01",
+        name: "นางสาวสุดา ช่วยงาน",
+        firstName: "สุดา",
+        lastName: "ช่วยงาน",
         phoneNumber: "054-237-401",
+        employeeId: "ADIR001", 
+        position: "รองผู้อำนวยการโรงพยาบาลลำปาง",
+        role: "DIRECTOR",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: adminDept1?.id,
+        personnelTypeCode: "ASST_DIR",
+        password: "asst123"
+      },
+      {
+        email: "chief.pharm@lampang-hospital.go.th",
+        username: "chief_pharm01",
+        name: "นางสมใจ ยาดี",
+        firstName: "สมใจ",
+        lastName: "ยาดี",
+        phoneNumber: "054-237-411",
         employeeId: "PH001",
         position: "หัวหน้าแผนกเภสัชกรรม",
         role: "GROUP_HEAD",
         status: "ACTIVE",
-        hospitalId: hospital.id,
-        departmentId: pharmDept?.id,
-        personnelTypeId: groupHeadPersonnelType?.id,
-        isProfileComplete: true,
-        emailVerified: true,
-        password: hashedPharmPassword,
+        hospitalId: hospital1.id,
+        departmentId: pharmDept1?.id,
+        personnelTypeCode: "CHIEF_PHARM",
+        password: "chief123"
       },
-    });
-
-    console.log("✅ Created pharmacy head user:", pharmUser.email);
-
-    // สร้าง Staff User ตัวอย่าง (รอการอนุมัติ)
-    const hashedStaffPassword = await hashPassword("staff123");
-    const icuDept = await prisma.department.findFirst({ 
-      where: { departmentCode: "ICU", hospitalId: hospital.id } 
-    });
-    const staffPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "STAFF");
-    
-    const staffUser = await prisma.user.upsert({
-      where: { email: "nurse@lampang-hospital.go.th" },
-      update: {},
-      create: {
-        email: "nurse@lampang-hospital.go.th", 
-        username: "nurse001",
-        name: "พยาบาลทดสอบ",
+      {
+        email: "chief.nurse@lampang-hospital.go.th",
+        username: "chief_nurse01",
+        name: "นางพยาบาลใหญ่ ดูแลดี",
+        firstName: "พยาบาลใหญ่",
+        lastName: "ดูแลดี",
+        phoneNumber: "054-237-321",
+        employeeId: "CN001",
+        position: "หัวหน้าฝ่ายการพยาบาล",
+        role: "GROUP_HEAD",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: icuDept1?.id,
+        personnelTypeCode: "CHIEF_NURSE",
+        password: "nurse123"
+      },
+      {
+        email: "sr.pharm@lampang-hospital.go.th",
+        username: "sr_pharm01",
+        name: "นายเภสัช ชำนาญการ",
+        firstName: "เภสัช",
+        lastName: "ชำนาญการ",
+        phoneNumber: "054-237-412",
+        employeeId: "SPH001",
+        position: "เภสัชกรชำนาญการ",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: pharmDept1?.id,
+        personnelTypeCode: "SR_PHARM",
+        password: "srpharm123"
+      },
+      {
+        email: "pharm01@lampang-hospital.go.th",
+        username: "pharm01",
+        name: "นางสาวยาใส จ่ายดี",
+        firstName: "ยาใส",
+        lastName: "จ่ายดี",
+        phoneNumber: "054-237-413",
+        employeeId: "PH002",
+        position: "เภสัชกร",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: pharmDept1?.id,
+        personnelTypeCode: "PHARM",
+        password: "pharm123"
+      },
+      {
+        email: "pharm02@lampang-hospital.go.th",
+        username: "pharm02",
+        name: "นายยาสมุนไพร รักษาโรค",
+        firstName: "ยาสมุนไพร",
+        lastName: "รักษาโรค",
+        phoneNumber: "054-237-414",
+        employeeId: "PH003",
+        position: "เภสัชกร",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: pharmDept1?.id,
+        personnelTypeCode: "PHARM",
+        password: "pharm123"
+      },
+      {
+        email: "sr.nurse@lampang-hospital.go.th",
+        username: "sr_nurse01",
+        name: "นางพยาบาล ชำนาญงาน",
         firstName: "พยาบาล",
-        lastName: "ทดสอบ",
-        phoneNumber: "054-237-301",
-        employeeId: "NS001",
+        lastName: "ชำนาญงาน",
+        phoneNumber: "054-237-322",
+        employeeId: "SN001",
+        position: "พยาบาลวิชาชีพชำนาญการ",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: icuDept1?.id,
+        personnelTypeCode: "SR_NURSE",
+        password: "srnurse123"
+      },
+      {
+        email: "nurse01@lampang-hospital.go.th",
+        username: "nurse01",
+        name: "นางสาวพยาบาล ดูแลใจ",
+        firstName: "พยาบาล",
+        lastName: "ดูแลใจ",
+        phoneNumber: "054-237-323",
+        employeeId: "N001",
         position: "พยาบาลวิชาชีพ",
         role: "STAFF",
-        status: "PENDING", // รอการอนุมัติ
-        hospitalId: hospital.id,
-        departmentId: icuDept?.id,
-        personnelTypeId: staffPersonnelType?.id,
-        isProfileComplete: true,
-        emailVerified: true,
-        password: hashedStaffPassword,
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: icuDept1?.id,
+        personnelTypeCode: "NURSE",
+        password: "nurse123"
       },
-    });
-
-    console.log("✅ Created staff user:", staffUser.email);
-
-    // สร้าง Student User ตัวอย่าง
-    const hashedStudentPassword = await hashPassword("student123");
-    const studentPersonnelType = createdPersonnelTypes.find(pt => pt.typeCode === "STU");
-    
-    const studentUser = await prisma.user.upsert({
-      where: { email: "student@lampang-hospital.go.th" },
-      update: {},
-      create: {
-        email: "student@lampang-hospital.go.th",
-        username: "student001", 
-        name: "นักศึกษาฝึกงาน",
+      {
+        email: "nurse02@lampang-hospital.go.th",
+        username: "nurse02",
+        name: "นางพยาบาล ใจเย็น",
+        firstName: "พยาบาล",
+        lastName: "ใจเย็น",
+        phoneNumber: "054-237-324",
+        employeeId: "N002",
+        position: "พยาบาลวิชาชีพ",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: emergDept1?.id,
+        personnelTypeCode: "NURSE",
+        password: "nurse123"
+      },
+      {
+        email: "nurse.assist@lampang-hospital.go.th",
+        username: "nurse_assist01",
+        name: "นายช่วยพยาบาล ขยันงาน",
+        firstName: "ช่วยพยาบาล",
+        lastName: "ขยันงาน",
+        phoneNumber: "054-237-325",
+        employeeId: "NA001",
+        position: "ผู้ช่วยพยาบาล",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: opdDept1?.id,
+        personnelTypeCode: "NURSE_ASS",
+        password: "assist123"
+      },
+      {
+        email: "pharm.tech@lampang-hospital.go.th",
+        username: "pharm_tech01",
+        name: "นางสาวช่วยเภสัช คล่องแคล่ว",
+        firstName: "ช่วยเภสัช",
+        lastName: "คล่องแคล่ว",
+        phoneNumber: "054-237-415",
+        employeeId: "PT001",
+        position: "ผู้ช่วยเภสัชกร",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: pharmDept1?.id,
+        personnelTypeCode: "PHARM_TECH",
+        password: "tech123"
+      },
+      {
+        email: "admin@lampang-hospital.go.th",
+        username: "admin01",
+        name: "นางสาวธุรการ จัดระเบียบ",
+        firstName: "ธุรการ",
+        lastName: "จัดระเบียบ",
+        phoneNumber: "054-237-100",
+        employeeId: "AD001",
+        position: "เจ้าหน้าที่บริหารงานทั่วไป",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital1.id,
+        departmentId: adminDept1?.id,
+        personnelTypeCode: "ADMIN",
+        password: "admin123"
+      },
+      {
+        email: "intern.pharm@lampang-hospital.go.th",
+        username: "intern_pharm01",
+        name: "นายนักศึกษา ฝึกหัดยา",
         firstName: "นักศึกษา",
-        lastName: "ฝึกงาน",
+        lastName: "ฝึกหัดยา",
         phoneNumber: "081-234-5678",
-        employeeId: "STU001",
-        position: "นักศึกษาเภสัชศาสตร์",
+        employeeId: "IP001",
+        position: "นักศึกษาเภสัชศาสตร์ฝึกงาน",
         role: "STUDENT",
         status: "PENDING",
-        hospitalId: hospital.id,
-        departmentId: pharmDept?.id,
-        personnelTypeId: studentPersonnelType?.id,
-        isProfileComplete: true,
-        emailVerified: true,
-        password: hashedStudentPassword,
+        hospitalId: hospital1.id,
+        departmentId: pharmDept1?.id,
+        personnelTypeCode: "INTERN_PHARM",
+        password: "intern123"
       },
-    });
+      {
+        email: "intern.nurse@lampang-hospital.go.th",
+        username: "intern_nurse01",
+        name: "นางสาวนักศึกษา ฝึกพยาบาล",
+        firstName: "นักศึกษา",
+        lastName: "ฝึกพยาบาล",
+        phoneNumber: "081-234-5679",
+        employeeId: "IN001",
+        position: "นักศึกษาพยาบาลฝึกงาน",
+        role: "STUDENT",
+        status: "PENDING",
+        hospitalId: hospital1.id,
+        departmentId: icuDept1?.id,
+        personnelTypeCode: "INTERN_NURSE",
+        password: "intern123"
+      },
+      {
+        email: "trainee@lampang-hospital.go.th",
+        username: "trainee01",
+        name: "นายพนักงานใหม่ เรียนรู้งาน",
+        firstName: "พนักงานใหม่",
+        lastName: "เรียนรู้งาน",
+        phoneNumber: "081-234-5680",
+        employeeId: "TR001",
+        position: "พนักงานฝึกหัด",
+        role: "STAFF",
+        status: "PENDING",
+        hospitalId: hospital1.id,
+        departmentId: adminDept1?.id,
+        personnelTypeCode: "TRAINEE",
+        password: "trainee123"
+      },
 
-    console.log("✅ Created student user:", studentUser.email);
-
-    // ================================
-    // CREATE ADDITIONAL TEST USERS FOR HOSPITAL 2
-    // ================================
-    console.log("👥 Creating Users for Hospital 2...");
-
-    // สร้าง PersonnelTypes สำหรับโรงพยาบาลที่ 2
-    const hospital2PersonnelTypes: any[] = [];
-    for (const personnelType of personnelTypes) {
-      const created = await prisma.personnelType.upsert({
-        where: { 
-          hospitalId_typeCode: {
-            hospitalId: hospital2.id,
-            typeCode: personnelType.typeCode
-          }
-        },
-        update: {},
-        create: {
-          ...personnelType,
-          hospitalId: hospital2.id,
-          createdBy: devUser.id
-        }
-      });
-      hospital2PersonnelTypes.push(created);
-    }
-
-    // สร้าง Director สำหรับโรงพยาบาลที่ 2
-    const hashedDirector2Password = await hashPassword("director2123");
-    const director2PersonnelType = hospital2PersonnelTypes.find(pt => pt.typeCode === "DIR");
-
-    const director2User = await prisma.user.upsert({
-      where: { email: "director@thoen-hospital.go.th" },
-      update: {},
-      create: {
+      // Hospital 2 - Thoen Hospital Users
+      {
         email: "director@thoen-hospital.go.th",
-        username: "director2",
-        name: "ผู้อำนวยการโรงพยาบาลเถิน",
+        username: "director02",
+        name: "นายผู้อำนวยการ โรงพยาบาลเถิน",
         firstName: "ผู้อำนวยการ",
         lastName: "โรงพยาบาลเถิน",
         phoneNumber: "054-231-234",
@@ -929,46 +854,192 @@ async function main() {
         role: "DIRECTOR",
         status: "ACTIVE",
         hospitalId: hospital2.id,
-        personnelTypeId: director2PersonnelType?.id,
-        isProfileComplete: true,
-        emailVerified: true,
-        password: hashedDirector2Password,
+        personnelTypeCode: "DIR",
+        password: "director123"
       },
+      {
+        email: "pharm@thoen-hospital.go.th",
+        username: "pharm_thoen",
+        name: "นางเภสัช โรงพยาบาลเถิน",
+        firstName: "เภสัช",
+        lastName: "โรงพยาบาลเถิน",
+        phoneNumber: "054-231-235",
+        employeeId: "PH004",
+        position: "เภสัชกรหัวหน้า",
+        role: "GROUP_HEAD",
+        status: "ACTIVE",
+        hospitalId: hospital2.id,
+        personnelTypeCode: "CHIEF_PHARM",
+        password: "pharm123"
+      },
+      {
+        email: "nurse@thoen-hospital.go.th",
+        username: "nurse_thoen",
+        name: "นางพยาบาล โรงพยาบาลเถิน",
+        firstName: "พยาบาล",
+        lastName: "โรงพยาบาลเถิน",
+        phoneNumber: "054-231-236",
+        employeeId: "N003",
+        position: "พยาบาลวิชาชีพ",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital2.id,
+        personnelTypeCode: "NURSE",
+        password: "nurse123"
+      },
+
+      // Hospital 3 - Mae Tha Hospital Users
+      {
+        email: "director@maetha-hospital.go.th",
+        username: "director03",
+        name: "นายผู้อำนวยการ โรงพยาบาลแม่ทะ",
+        firstName: "ผู้อำนวยการ",
+        lastName: "โรงพยาบาลแม่ทะ",
+        phoneNumber: "054-234-567",
+        employeeId: "DIR003", 
+        position: "ผู้อำนวยการโรงพยาบาลแม่ทะ",
+        role: "DIRECTOR",
+        status: "ACTIVE",
+        hospitalId: hospital3.id,
+        personnelTypeCode: "DIR",
+        password: "director123"
+      },
+      {
+        email: "pharm@maetha-hospital.go.th",
+        username: "pharm_maetha",
+        name: "นายเภสัช โรงพยาบาลแม่ทะ",
+        firstName: "เภสัช",
+        lastName: "โรงพยาบาลแม่ทะ",
+        phoneNumber: "054-234-568",
+        employeeId: "PH005",
+        position: "เภสัชกร",
+        role: "STAFF",
+        status: "ACTIVE",
+        hospitalId: hospital3.id,
+        personnelTypeCode: "PHARM",
+        password: "pharm123"
+      }
+    ];
+
+    // สร้าง Users และ assign Personnel Types
+    for (const template of userTemplates) {
+      const hashedPassword = await hashPassword(template.password);
+      const personnelType = allPersonnelTypes[template.hospitalId].find(pt => pt.typeCode === template.personnelTypeCode);
+      
+      const user = await prisma.user.upsert({
+        where: { email: template.email },
+        update: {},
+        create: {
+          email: template.email,
+          username: template.username,
+          name: template.name,
+          firstName: template.firstName,
+          lastName: template.lastName,
+          phoneNumber: template.phoneNumber,
+          employeeId: template.employeeId,
+          position: template.position,
+          role: template.role as any,
+          status: template.status as any,
+          hospitalId: template.hospitalId,
+          departmentId: template.departmentId,
+          personnelTypeId: personnelType?.id,
+          isProfileComplete: true,
+          emailVerified: true,
+          password: hashedPassword,
+        },
+      });
+      
+      console.log(`✅ Created user: ${user.name} (${template.personnelTypeCode})`);
+    }
+
+    // ================================
+    // CREATE MASTER DATA (ย่อๆ)
+    // ================================
+    console.log("💊 Creating Basic Master Data...");
+
+    // Drug Forms
+    const drugForms = [
+      { formCode: "TAB", formName: "ยาเม็ด", formNameEn: "Tablet", category: "ORAL" },
+      { formCode: "CAP", formName: "ยาแคปซูล", formNameEn: "Capsule", category: "ORAL" },
+      { formCode: "INJ", formName: "ยาฉีด", formNameEn: "Injection", category: "INJECTION" },
+      { formCode: "SYR", formName: "ยาน้ำ", formNameEn: "Syrup", category: "ORAL" },
+      { formCode: "CRE", formName: "ครีม", formNameEn: "Cream", category: "TOPICAL" }
+    ];
+
+    for (const hospital of [hospital1, hospital2, hospital3]) {
+      for (const form of drugForms) {
+        await prisma.drugForm.upsert({
+          where: {
+            hospitalId_formCode: {
+              hospitalId: hospital.id,
+              formCode: form.formCode
+            }
+          },
+          update: {},
+          create: {
+            ...form,
+            hospitalId: hospital.id,
+            isSystemDefault: true,
+            createdBy: devUser.id
+          }
+        });
+      }
+    }
+
+    console.log("✅ Created drug forms for all hospitals");
+
+    // ================================
+    // SUMMARY
+    // ================================
+    console.log("\n🎉 Enhanced Personnel Types seed completed successfully!");
+    console.log("\n📊 Summary:");
+    console.log(`🏥 Hospitals: ${[hospital1, hospital2, hospital3].length}`);
+    console.log(`👥 Personnel Types: ${personnelTypesTemplate.length} × 3 hospitals = ${personnelTypesTemplate.length * 3}`);
+    console.log(`👤 Users: ${userTemplates.length + 1} (including dev user)`);
+    
+    console.log("\n📋 Test Accounts by Role:");
+    console.log("🔧 DEVELOPER:");
+    console.log("  - dev@system.local / dev123");
+    
+    console.log("\n👨‍💼 DIRECTORS:");
+    console.log("  - director@lampang-hospital.go.th / director123 (ผู้อำนวยการ)");
+    console.log("  - asst.director@lampang-hospital.go.th / asst123 (รองผู้อำนวยการ)");
+    console.log("  - director@thoen-hospital.go.th / director123");
+    console.log("  - director@maetha-hospital.go.th / director123");
+    
+    console.log("\n👥 GROUP HEADS:");
+    console.log("  - chief.pharm@lampang-hospital.go.th / chief123 (หัวหน้าเภสัชกรรม)");
+    console.log("  - chief.nurse@lampang-hospital.go.th / nurse123 (หัวหน้าพยาบาล)");
+    console.log("  - pharm@thoen-hospital.go.th / pharm123 (หัวหน้าเภสัชกรรม)");
+    
+    console.log("\n👩‍⚕️ STAFF:");
+    console.log("  - sr.pharm@lampang-hospital.go.th / srpharm123 (เภสัชกรชำนาญการ)");
+    console.log("  - pharm01@lampang-hospital.go.th / pharm123 (เภสัชกร)");
+    console.log("  - pharm02@lampang-hospital.go.th / pharm123 (เภสัชกร)");
+    console.log("  - sr.nurse@lampang-hospital.go.th / srnurse123 (พยาบาลชำนาญการ)");
+    console.log("  - nurse01@lampang-hospital.go.th / nurse123 (พยาบาล ICU)");
+    console.log("  - nurse02@lampang-hospital.go.th / nurse123 (พยาบาล ER)");
+    console.log("  - nurse.assist@lampang-hospital.go.th / assist123 (ผู้ช่วยพยาบาล)");
+    console.log("  - pharm.tech@lampang-hospital.go.th / tech123 (ผู้ช่วยเภสัชกร)");
+    console.log("  - admin@lampang-hospital.go.th / admin123 (เจ้าหน้าที่บริหาร)");
+    
+    console.log("\n🎓 STUDENTS (PENDING APPROVAL):");
+    console.log("  - intern.pharm@lampang-hospital.go.th / intern123 (นักศึกษาเภสัชศาสตร์)");
+    console.log("  - intern.nurse@lampang-hospital.go.th / intern123 (นักศึกษาพยาบาล)");
+    console.log("  - trainee@lampang-hospital.go.th / trainee123 (พนักงานฝึกหัด)");
+    
+    console.log("\n🎯 Personnel Types Created:");
+    personnelTypesTemplate.forEach(pt => {
+      console.log(`  - ${pt.typeCode}: ${pt.typeName} (${pt.hierarchy}, Level ${pt.levelOrder})`);
     });
-
-    console.log("✅ Created director user for hospital 2:", director2User.email);
-
-    console.log("\n🎉 Enhanced database seed completed successfully!");
-    console.log("\n📋 Test accounts:");
-    console.log("🔧 Developer: dev@system.local / dev123 (ACTIVE)");
-    console.log("👨‍💼 Director (Lampang): director@lampang-hospital.go.th / director123 (ACTIVE)");
-    console.log("👨‍💼 Director (Thoen): director@thoen-hospital.go.th / director2123 (ACTIVE)");
-    console.log("👩‍⚕️ Pharmacy Head: pharm@lampang-hospital.go.th / pharm123 (ACTIVE)"); 
-    console.log("👩‍⚕️ Nurse: nurse@lampang-hospital.go.th / staff123 (PENDING)");
-    console.log("🎓 Student: student@lampang-hospital.go.th / student123 (PENDING)");
     
-    console.log("\n🏥 Hospitals:");
-    console.log("🏢 โรงพยาบาลลำปาง (DEMO001) - 5 users");
-    console.log("🏢 โรงพยาบาลเถิน (DEMO002) - 1 user");
-    
-    console.log("\n🎯 Master Data Created:");
-    console.log("👥 Personnel Types: Developer, Director, Group Head, Staff, Student (×2 hospitals)");
-    console.log("💊 Drug Forms: Tablet, Capsule, Injection, Syrup, Cream, Suppository");
-    console.log("🧬 Drug Groups: Antibiotic, Analgesic, Antihistamine, Antiviral, Cardiovascular");
-    console.log("⚠️ Drug Types: High Alert, Narcotic, Controlled, Psychotropic, Refer, Dangerous");
-    console.log("❄️ Storage Conditions: Room Temp, Refrigerated, Frozen, Dry, Dark, Controlled");
-    
-    console.log("\n🏢 Departments & Warehouses:");
-    console.log("🏥 Departments: Pharmacy, Emergency, ICU, OR, OPD, IPD");
-    console.log("🏪 Warehouses: Central, Emergency, Controlled, Cold Storage");
-    
-    console.log("\n📝 Next steps:");
+    console.log("\n📝 Next Steps:");
     console.log("1. Run: pnpm dev");
     console.log("2. Login as dev@system.local / dev123");
-    console.log("3. Test Admin Panel at /admin");
-    console.log("4. Director can approve pending users");
-    console.log("5. Group Head can manage drug master data");
-    console.log("6. Start building API endpoints");
+    console.log("3. Test Personnel Types Management at /admin/personnel-types");
+    console.log("4. Directors can approve pending users");
+    console.log("5. Test role-based permissions");
+    console.log("6. Verify multi-tenant isolation between hospitals");
 
   } catch (error) {
     console.error("❌ Seed error:", error);
