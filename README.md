@@ -1,3 +1,259 @@
+Directory structure:
+└── taro112233-thoen-substock/
+    ├── README.md
+    ├── components.json
+    ├── drug-form1
+    ├── drug-form2
+    ├── eslint.config.mjs
+    ├── middleware.ts
+    ├── next.config.ts
+    ├── package.json
+    ├── pnpm-lock.yaml
+    ├── pnpm-workspace.yaml
+    ├── postcss.config.mjs
+    ├── tsconfig.json
+    ├── app/
+    │   ├── globals.css
+    │   ├── layout.tsx
+    │   ├── page.tsx
+    │   ├── admin/
+    │   │   ├── layout.tsx
+    │   │   ├── page.tsx
+    │   │   ├── components/
+    │   │   │   ├── HierarchyBadge.tsx
+    │   │   │   └── PermissionGuard.tsx
+    │   │   ├── departments/
+    │   │   │   ├── page.tsx
+    │   │   │   └── components/
+    │   │   │       ├── DepartmentForm.tsx
+    │   │   │       └── DepartmentList.tsx
+    │   │   ├── drugs/
+    │   │   │   └── page.tsx
+    │   │   ├── hospitals/
+    │   │   │   ├── page.tsx
+    │   │   │   ├── components/
+    │   │   │   │   ├── HospitalCreateDialog.tsx
+    │   │   │   │   ├── HospitalDeleteDialog.tsx
+    │   │   │   │   ├── HospitalEditDialog.tsx
+    │   │   │   │   ├── HospitalForm.tsx
+    │   │   │   │   ├── HospitalList.tsx
+    │   │   │   │   ├── HospitalListSection.tsx
+    │   │   │   │   ├── HospitalPageHeader.tsx
+    │   │   │   │   ├── HospitalPagination.tsx
+    │   │   │   │   ├── HospitalSearchFilter.tsx
+    │   │   │   │   └── HospitalViewDialog.tsx
+    │   │   │   └── types/
+    │   │   │       └── hospital.ts
+    │   │   ├── personnel/
+    │   │   │   ├── page.tsx
+    │   │   │   └── components/
+    │   │   │       └── PersonnelTypeList.tsx
+    │   │   ├── users/
+    │   │   │   └── pending/
+    │   │   │       └── page.tsx
+    │   │   └── warehouses/
+    │   │       ├── page.tsx
+    │   │       └── components/
+    │   │           ├── WarehouseForm.tsx
+    │   │           └── WarehouseList.tsx
+    │   ├── api/
+    │   │   ├── admin/
+    │   │   │   ├── departments/
+    │   │   │   │   ├── route.ts
+    │   │   │   │   └── [id]/
+    │   │   │   │       └── route.ts
+    │   │   │   ├── drug-categories/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── drugs/
+    │   │   │   │   ├── route.ts
+    │   │   │   │   └── [id]/
+    │   │   │   │       └── route.ts
+    │   │   │   ├── hospitals/
+    │   │   │   │   ├── route.ts
+    │   │   │   │   └── [id]/
+    │   │   │   │       └── route.ts
+    │   │   │   ├── stats/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── users/
+    │   │   │   │   ├── route.ts
+    │   │   │   │   ├── approve/
+    │   │   │   │   │   └── route.ts
+    │   │   │   │   └── pending/
+    │   │   │   │       └── route.ts
+    │   │   │   └── warehouses/
+    │   │   │       ├── route.ts
+    │   │   │       ├── [id]/
+    │   │   │       │   └── route.ts
+    │   │   │       └── managers/
+    │   │   │           └── route.ts
+    │   │   ├── arcjet/
+    │   │   │   └── route.ts
+    │   │   ├── auth/
+    │   │   │   ├── [...nextauth]/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── check-approval/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── complete-profile/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── login/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── logout/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── me/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── profile-completion/
+    │   │   │   │   └── route.ts
+    │   │   │   └── register/
+    │   │   │       └── route.ts
+    │   │   ├── departments/
+    │   │   │   └── route.ts
+    │   │   └── hospitals/
+    │   │       └── route.ts
+    │   ├── auth/
+    │   │   ├── layout.tsx
+    │   │   ├── components/
+    │   │   │   ├── LoginForm.tsx
+    │   │   │   ├── PendingApprovalCard.tsx
+    │   │   │   ├── ProfileForm.tsx
+    │   │   │   └── RegisterForm.tsx
+    │   │   ├── login/
+    │   │   │   └── page.tsx
+    │   │   ├── pending-approval/
+    │   │   │   └── page.tsx
+    │   │   ├── profile-completion/
+    │   │   │   └── page.tsx
+    │   │   └── register/
+    │   │       ├── page.tsx
+    │   │       └── profile/
+    │   │           └── page.tsx
+    │   ├── components/
+    │   │   ├── AdminHeader.tsx
+    │   │   └── ProtectedLayout.tsx
+    │   ├── dashboard/
+    │   │   └── page.tsx
+    │   ├── showcase/
+    │   │   ├── page.tsx
+    │   │   └── mockup/
+    │   │       └── page.tsx
+    │   └── utils/
+    │       ├── auth-client.ts
+    │       └── auth.ts
+    ├── components/
+    │   ├── admin/
+    │   │   ├── AdminBreadcrumb.tsx
+    │   │   ├── AdminHeader.tsx
+    │   │   ├── DataTable.tsx
+    │   │   ├── EmptyState.tsx
+    │   │   ├── QuickActionCard.tsx
+    │   │   ├── Sidebar.tsx
+    │   │   ├── StatCard.tsx
+    │   │   └── drugs/
+    │   │       └── drug-form.tsx
+    │   ├── layout/
+    │   │   ├── ConditionalHeader.tsx
+    │   │   └── LayoutProvider.tsx
+    │   ├── showcase/
+    │   │   ├── BackgroundDecoration.tsx
+    │   │   ├── DemoComponents.tsx
+    │   │   ├── FloatingActionButton.tsx
+    │   │   ├── ShowcaseFooter.tsx
+    │   │   ├── ShowcaseHeader.tsx
+    │   │   ├── ShowcaseNavigation.tsx
+    │   │   └── sections/
+    │   │       ├── ActionsSection.tsx
+    │   │       ├── AdvancedPatternsSection.tsx
+    │   │       ├── AuthSection.tsx
+    │   │       ├── DisplaySection.tsx
+    │   │       ├── FormsSection.tsx
+    │   │       ├── LayoutSection.tsx
+    │   │       └── VisualizationSection.tsx
+    │   └── ui/
+    │       ├── accordion.tsx
+    │       ├── alert-dialog.tsx
+    │       ├── alert.tsx
+    │       ├── aspect-ratio.tsx
+    │       ├── avatar.tsx
+    │       ├── badge.tsx
+    │       ├── breadcrumb.tsx
+    │       ├── button.tsx
+    │       ├── calendar.tsx
+    │       ├── card.tsx
+    │       ├── carousel.tsx
+    │       ├── chart.tsx
+    │       ├── checkbox.tsx
+    │       ├── collapsible.tsx
+    │       ├── command.tsx
+    │       ├── context-menu.tsx
+    │       ├── dialog.tsx
+    │       ├── drawer.tsx
+    │       ├── dropdown-menu.tsx
+    │       ├── error-message.tsx
+    │       ├── form.tsx
+    │       ├── hover-card.tsx
+    │       ├── input-otp.tsx
+    │       ├── input.tsx
+    │       ├── label.tsx
+    │       ├── loading-spinner.tsx
+    │       ├── menubar.tsx
+    │       ├── navigation-menu.tsx
+    │       ├── pagination.tsx
+    │       ├── popover.tsx
+    │       ├── progress.tsx
+    │       ├── radio-group.tsx
+    │       ├── resizable.tsx
+    │       ├── scroll-area.tsx
+    │       ├── select.tsx
+    │       ├── separator.tsx
+    │       ├── sheet.tsx
+    │       ├── sidebar.tsx
+    │       ├── skeleton.tsx
+    │       ├── slider.tsx
+    │       ├── sonner.tsx
+    │       ├── switch.tsx
+    │       ├── table.tsx
+    │       ├── tabs.tsx
+    │       ├── textarea.tsx
+    │       ├── toggle-group.tsx
+    │       ├── toggle.tsx
+    │       ├── tooltip.tsx
+    │       └── use-toast.tsx
+    ├── hooks/
+    │   └── use-mobile.ts
+    ├── lib/
+    │   ├── admin-utils.ts
+    │   ├── api-helpers.ts
+    │   ├── auth-middleware.ts
+    │   ├── auth-options.ts
+    │   ├── auth-utils.ts
+    │   ├── auth.ts
+    │   ├── client-auth.tsx
+    │   ├── mock-data.ts
+    │   ├── password-utils.ts
+    │   ├── prisma.ts
+    │   ├── utils.ts
+    │   └── validations/
+    │       └── auth.ts
+    ├── prisma/
+    │   ├── schema.prisma
+    │   ├── seed.ts
+    │   └── schemas/
+    │       ├── admin-master-data.prisma
+    │       ├── analytics.prisma
+    │       ├── audit.prisma
+    │       ├── auth.prisma
+    │       ├── hospital-core.prisma
+    │       ├── inventory.prisma
+    │       ├── notifications.prisma
+    │       ├── requisitions.prisma
+    │       ├── shared-enums.prisma
+    │       └── suppliers.prisma
+    ├── scripts/
+    │   ├── create-pending-users.ts
+    │   ├── merge-schemas.js
+    │   └── push-auth-schema.sh
+    └── types/
+        └── next-auth.d.ts
+
 # 📌 Project Instructions for Claude: Hospital Pharmacy Stock Management System V2.0
 
 **Project Name:** Hospital Pharmacy Stock Management System  
@@ -30,7 +286,7 @@
 **Database:** Neon (Serverless PostgreSQL) สำหรับความเร็วและการขยายตัวอัตโนมัติ  
 **Hosting:** Vercel (Full-stack deployment) สำหรับการติดตั้งที่รวดเร็ว  
 **Mobile:** Progressive Web App (PWA) สำหรับการใช้งานบนมือถือ  
-**Authentication:** NextAuth.js v5 สำหรับการจัดการการเข้าสู่ระบบ  
+**Authentication:** JWT และ bcryptjs สำหรับการจัดการการเข้าสู่ระบบ  
 **File Storage:** Vercel Blob Storage สำหรับการจัดเก็บไฟล์
 
 ### Database Design Principles
@@ -107,7 +363,7 @@ PWA configuration สำหรับ offline capability Runtime caching สำ�
 ## 🚀 Implementation Phases
 
 ### Phase 1: Core Foundation (Months 1-3)
-การติดตั้ง Neon database ด้วย multi-tenant architecture การออกแบบ multi-tenant Prisma schema ที่ scalable การผสานรวม NextAuth.js v5 สำหรับ authentication การดำเนินการ stock card CRUD พื้นฐานด้วย type safety และการ implement hospital context middleware
+การติดตั้ง Neon database ด้วย multi-tenant architecture การออกแบบ multi-tenant Prisma schema ที่ scalable การผสานรวม JWT auth สำหรับ authentication การดำเนินการ stock card CRUD พื้นฐานด้วย type safety และการ implement hospital context middleware
 
 ### Phase 2: Advanced Features (Months 4-6)
 Complete requisition workflow ด้วย state management ระบบ notifications แบบเรียลไทม์ด้วย WebSocket การรายงานขั้นสูงด้วย charts และ analytics การปรับปรุง mobile PWA สำหรับผู้ใช้มือถือ และการติดตาม batch ด้วย FEFO management
