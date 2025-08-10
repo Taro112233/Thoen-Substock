@@ -1,6 +1,5 @@
-// app/admin/layout.tsx
+// app/admin/layout.tsx (ปรับปรุง)
 import { ReactNode } from 'react';
-import AdminHeader from '../components/AdminHeader';
 import PermissionGuard from './components/PermissionGuard';
 
 interface AdminLayoutProps {
@@ -16,6 +15,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             {children}
           </div>
         </main>
+        
+        {/* Toast Container - จะแสดงที่นี่ */}
+        <div id="toast-container" className="fixed top-4 right-4 z-50 space-y-2">
+          {/* Toast messages will be rendered here */}
+        </div>
       </div>
     </PermissionGuard>
   );

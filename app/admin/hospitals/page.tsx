@@ -1,126 +1,306 @@
-// app/admin/hospitals/page.tsx
+// app/admin/hospitals/page.tsx - Modular Section Architecture
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { 
-  Building2, 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  MapPin,
-  Bed,
-  Phone,
-  Globe
-} from 'lucide-react';
-import { mockHospitals } from '@/lib/mock-data';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import { Toaster } from 'sonner';
+
+// Import shared types
+import { Hospital, PaginationInfo, ApiResponse } from './types/hospital';
+
+// Import modular sections
+import { HospitalPageHeader } from './components/HospitalPageHeader';
+import { HospitalSearchFilter } from './components/HospitalSearchFilter';
+import { HospitalListSection } from './components/HospitalListSection';
+import { HospitalPagination } from './components/HospitalPagination';
+
+// Import dialogs (we'll create these as separate components too)
+import { HospitalCreateDialog } from './components/HospitalCreateDialog';
+import { HospitalEditDialog } from './components/HospitalEditDialog';
+import { HospitalViewDialog } from './components/HospitalViewDialog';
+import { HospitalDeleteDialog } from './components/HospitalDeleteDialog';
+
+// ===================================
+// MAIN COMPONENT
+// ===================================
 
 export default function HospitalManagementPage() {
-  const [hospitals, setHospitals] = useState(mockHospitals);
-  const [searchTerm, setSearchTerm] = useState('');
+  // ===================================
+  // STATE MANAGEMENT
+  // ===================================
 
-  const filteredHospitals = hospitals.filter(hospital =>
-    hospital.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    hospital.province.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Data states
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+
+  // Pagination state
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+    totalCount: 0,
+    hasNext: false,
+    hasPrev: false,
+  });
+
+  // Dialog states
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
+
+  // ===================================
+  // API FUNCTIONS
+  // ===================================
+
+  const fetchHospitals = async (page = 1, limit = pagination.limit) => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(searchTerm && { search: searchTerm }),
+        ...(statusFilter && statusFilter !== 'ALL' && { status: statusFilter }),
+        ...(typeFilter && typeFilter !== 'ALL' && { type: typeFilter }),
+      });
+
+      const response = await fetch(`/api/admin/hospitals?${params}`);
+      const result: ApiResponse<Hospital[]> = await response.json();
+
+      if (result.success && result.data) {
+        setHospitals(result.data);
+        if (result.pagination) {
+          setPagination(result.pagination);
+        }
+      } else {
+        toast.error('ไม่สามารถดึงข้อมูลโรงพยาบาลได้', {
+          description: result.error || 'เกิดข้อผิดพลาดในการโหลดข้อมูล',
+        });
+        setHospitals([]);
+      }
+    } catch (error) {
+      console.error('Error fetching hospitals:', error);
+      toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ', {
+        description: 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต',
+      });
+      setHospitals([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Force refresh function
+  const forceRefresh = async () => {
+    console.log('Force refreshing data...');
+    const refreshToast = toast.loading('กำลังรีเฟรชข้อมูล...', {
+      description: 'อัปเดตข้อมูลล่าสุด',
+    });
+    
+    try {
+      await fetchHospitals(pagination.page);
+      toast.dismiss(refreshToast);
+      toast.success('รีเฟรชข้อมูลสำเร็จ', {
+        description: `พบข้อมูลโรงพยาบาล ${pagination.totalCount} แห่ง`,
+        duration: 2000,
+      });
+    } catch (error) {
+      toast.dismiss(refreshToast);
+      toast.error('ไม่สามารถรีเฟรชข้อมูลได้', {
+        description: 'กรุณาลองใหม่อีกครั้ง',
+      });
+    }
+  };
+
+  // ===================================
+  // EVENT HANDLERS
+  // ===================================
+
+  const handleCreateSuccess = async () => {
+    console.log('Create success, refreshing...');
+    await forceRefresh(); // Force refresh data
+  };
+
+  const handleUpdateSuccess = async () => {
+    console.log('Update success, refreshing...');
+    await forceRefresh(); // Force refresh data
+  };
+
+  const handleDeleteSuccess = async () => {
+    console.log('Delete success, refreshing...');
+    await forceRefresh(); // Force refresh data
+  };
+
+  const handleView = (hospital: Hospital) => {
+    setSelectedHospital(hospital);
+    setShowViewDialog(true);
+    toast.info('เปิดข้อมูลโรงพยาบาล', {
+      description: `แสดงรายละเอียดของ ${hospital.name}`,
+      duration: 2000,
+    });
+  };
+
+  const handleEdit = (hospital: Hospital) => {
+    setSelectedHospital(hospital);
+    setShowEditDialog(true);
+    toast.info('เปิดฟอร์มแก้ไข', {
+      description: `แก้ไขข้อมูล ${hospital.name}`,
+      duration: 2000,
+    });
+  };
+
+  const handleDelete = (hospital: Hospital) => {
+    setSelectedHospital(hospital);
+    setShowDeleteDialog(true);
+    toast.warning('ยืนยันการลบ', {
+      description: `กำลังลบ ${hospital.name}`,
+      duration: 2000,
+    });
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('ALL');
+    setTypeFilter('ALL');
+    toast.info('ล้างฟิลเตอร์แล้ว', {
+      description: 'กำลังโหลดข้อมูลทั้งหมด',
+    });
+  };
+
+  const handlePageChange = (page: number) => {
+    fetchHospitals(page, pagination.limit);
+  };
+
+  const handleLimitChange = (limit: number) => {
+    fetchHospitals(1, limit);
+  };
+
+  // ===================================
+  // EFFECTS
+  // ===================================
+
+  // Initial load
+  useEffect(() => {
+    fetchHospitals(1);
+  }, []);
+
+  // Filter changes with debounce
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      fetchHospitals(1);
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm, statusFilter, typeFilter]);
+
+  // ===================================
+  // RENDER
+  // ===================================
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Building2 className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <CardTitle>จัดการข้อมูลโรงพยาบาล</CardTitle>
-                <CardDescription>เพิ่ม แก้ไข และจัดการข้อมูลโรงพยาบาลในระบบ</CardDescription>
-              </div>
-            </div>
-            <Button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              เพิ่มโรงพยาบาล
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
+    <>
+      <div className="min-h-screen bg-gray-50/50">
+        <div className="max-w-7xl mx-auto p-6 space-y-6">
+          
+          {/* Page Header Section */}
+          <HospitalPageHeader
+            totalCount={pagination.totalCount}
+            onCreateClick={() => setShowCreateDialog(true)}
+            onRefreshClick={forceRefresh}
+            isLoading={loading}
+          />
 
-      {/* Search and Filter */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center space-x-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="ค้นหาโรงพยาบาล..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Badge variant="outline" className="py-2 px-4">
-              ทั้งหมด {filteredHospitals.length} แห่ง
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Search and Filter Section */}
+          <HospitalSearchFilter
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            typeFilter={typeFilter}
+            totalCount={pagination.totalCount}
+            onSearchChange={setSearchTerm}
+            onStatusFilterChange={setStatusFilter}
+            onTypeFilterChange={setTypeFilter}
+            onClearFilters={handleClearFilters}
+            isLoading={loading}
+          />
 
-      {/* Hospital List */}
-      <div className="grid gap-4">
-        {filteredHospitals.map((hospital) => (
-          <Card key={hospital.id} className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-4">
-                  <div className="p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl">
-                    <Building2 className="h-8 w-8 text-purple-600" />
-                  </div>
-                  <div className="space-y-2">
-                    <div>
-                      <h3 className="text-xl font-semibold">{hospital.name}</h3>
-                      <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                        <span className="flex items-center">
-                          <MapPin className="h-3 w-3 mr-1" />
-                          จังหวัด{hospital.province}
-                        </span>
-                        <span className="flex items-center">
-                          <Bed className="h-3 w-3 mr-1" />
-                          {hospital.beds} เตียง
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-4 pt-2">
-                      <Badge 
-                        variant={hospital.status === 'active' ? 'default' : 'secondary'}
-                        className={hospital.status === 'active' ? 'bg-green-500' : ''}
-                      >
-                        {hospital.status === 'active' ? 'ใช้งาน' : 'ไม่ใช้งาน'}
-                      </Badge>
-                      <span className="text-xs text-gray-500">ID: {hospital.id}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+          {/* Hospital List Section */}
+          <HospitalListSection
+            hospitals={hospitals}
+            isLoading={loading}
+            onView={handleView}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+
+          {/* Pagination Section */}
+          {!loading && hospitals.length > 0 && (
+            <HospitalPagination
+              pagination={pagination}
+              onPageChange={handlePageChange}
+              onLimitChange={handleLimitChange}
+              isLoading={loading}
+            />
+          )}
+
+          {/* Dialog Components */}
+          <HospitalCreateDialog
+            open={showCreateDialog}
+            onOpenChange={setShowCreateDialog}
+            onSuccess={handleCreateSuccess}
+          />
+
+          <HospitalEditDialog
+            open={showEditDialog}
+            onOpenChange={setShowEditDialog}
+            hospital={selectedHospital}
+            onSuccess={handleUpdateSuccess}
+            onClose={() => setSelectedHospital(null)}
+          />
+
+          <HospitalViewDialog
+            open={showViewDialog}
+            onOpenChange={setShowViewDialog}
+            hospital={selectedHospital}
+            onEdit={() => {
+              setShowViewDialog(false);
+              setShowEditDialog(true);
+            }}
+            onClose={() => setSelectedHospital(null)}
+          />
+
+          <HospitalDeleteDialog
+            open={showDeleteDialog}
+            onOpenChange={setShowDeleteDialog}
+            hospital={selectedHospital}
+            onSuccess={handleDeleteSuccess}
+            onClose={() => setSelectedHospital(null)}
+          />
+
+        </div>
       </div>
-    </div>
+      
+      {/* Sonner Toast Notifications */}
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: 'white',
+            color: 'black',
+            border: '1px solid #e2e8f0',
+            fontSize: '14px',
+          },
+          className: 'font-sans',
+        }}
+        closeButton
+        richColors
+      />
+    </>
   );
 }
