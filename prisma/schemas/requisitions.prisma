@@ -33,6 +33,10 @@ model Requisition {
   // ความสัมพันธ์หลัก
   hospitalId      String
   hospital        Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  deliveryNotes           DeliveryNote[]
+  emergencyFromOriginal   EmergencyRequisition[] @relation("EmergencyFromOriginal")
+  originalForEmergency    EmergencyRequisition[]
+  progressiveDeliveries ProgressiveDelivery[]
   
   // แผนกที่เบิก
   requestingDepartmentId String
@@ -115,6 +119,7 @@ model RequisitionItem {
   drug            Drug        @relation(fields: [drugId], references: [id], onDelete: Cascade)
   stockCardId     String?
   stockCard       StockCard?  @relation(fields: [stockCardId], references: [id], onDelete: SetNull)
+  progressiveDeliveries ProgressiveDeliveryItem[]
   
   // จำนวน
   requestedQty    Int         // จำนวนที่เบิก

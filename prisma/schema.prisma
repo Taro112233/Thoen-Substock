@@ -1,6 +1,6 @@
 // This file is auto-generated. Do not edit manually.
 // Edit files in prisma/schemas/ directory instead.
-// Last generated: 2025-08-10T15:17:53.292Z
+// Last generated: 2025-08-10T16:35:21.110Z
 
 generator client {
   provider = "prisma-client-js"
@@ -405,9 +405,19 @@ model User {
   hospitalId    String
   hospital      Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
-  // ความสัมพันธ์กับแผนก (optional สำหรับ pharmacy staff)
+  // ความสัมพันธ์
   departmentId  String?
   department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  stockMovements      StockMovementHistory[]
+  inventorySnapshots  InventoryValueSnapshot[]
+  operatedCarts         DeliveryCart[] @relation("CartOperator")
+  drivenTrips           DeliveryTrip[] @relation("TripDriver")
+  assistedTrips         DeliveryTrip[] @relation("TripAssistant")
+  deliveries            ProgressiveDelivery[] @relation("Deliverer")
+  receivedDeliveries    ProgressiveDelivery[] @relation("Receiver")
+  recordedCheckpoints   TripCheckpoint[]
+  cartActivities        CartActivityLog[]
+  createdRoutes         DeliveryRoute[]
   
   // การติดตามการเข้าสู่ระบบ
   lastLoginAt   DateTime?
@@ -856,6 +866,8 @@ model Department {
   // ความสัมพันธ์
   hospitalId      String
   hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  incomingDeliveries    ProgressiveDelivery[]
+  tripCheckpoints       TripCheckpoint[]
   
   // ข้อมูลแผนก
   name            String
@@ -929,6 +941,10 @@ model Warehouse {
   // ความสัมพันธ์
   hospitalId      String
   hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  expiryLots      ExpiryLot[]
+  stockMovements  StockMovementHistory[]
+  valueSnapshots  InventoryValueSnapshot[]
+  deliveryCarts   DeliveryCart[]
   
   // ข้อมูลคลัง
   name            String
@@ -1013,6 +1029,9 @@ model Drug {
   // ความสัมพันธ์
   hospitalId      String
   hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  drugExtended    DrugExtended?
+  deliveryItems   DeliveryItem[]
+  progressiveDeliveryItems ProgressiveDeliveryItem[]
   
   // ข้อมูลยาพื้นฐาน
   hospitalDrugCode String         // รหัสยาของโรงพยาบาล
@@ -1388,6 +1407,7 @@ model StockBatch {
   hospitalId      String
   stockCardId     String
   stockCard       StockCard     @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+  deliveryItems   DeliveryItem[]
   
   // ข้อมูล batch
   batchNumber     String        // หมายเลข batch
@@ -1492,6 +1512,8 @@ model StockCard {
   transactions    StockTransaction[]
   stockCounts     StockCountItem[]
   requisitionItems RequisitionItem[]
+  expiryLots      ExpiryLot[]
+  movementHistory StockMovementHistory[]
   
   @@unique([hospitalId, drugId, warehouseId])
   @@index([hospitalId, warehouseId])
@@ -1641,6 +1663,10 @@ model Requisition {
   // ความสัมพันธ์หลัก
   hospitalId      String
   hospital        Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  deliveryNotes           DeliveryNote[]
+  emergencyFromOriginal   EmergencyRequisition[] @relation("EmergencyFromOriginal")
+  originalForEmergency    EmergencyRequisition[]
+  progressiveDeliveries ProgressiveDelivery[]
   
   // แผนกที่เบิก
   requestingDepartmentId String
@@ -1723,6 +1749,7 @@ model RequisitionItem {
   drug            Drug        @relation(fields: [drugId], references: [id], onDelete: Cascade)
   stockCardId     String?
   stockCard       StockCard?  @relation(fields: [stockCardId], references: [id], onDelete: SetNull)
+  progressiveDeliveries ProgressiveDeliveryItem[]
   
   // จำนวน
   requestedQty    Int         // จำนวนที่เบิก
@@ -2309,6 +2336,888 @@ model SupplierEvaluation {
   @@index([periodStart, periodEnd])
   @@map("supplier_evaluations")
 }
+
+// ==========================================
+// ENHANCED INVENTORY
+// 📦 Enhanced Inventory & Delivery Features
+// ExpiryLot, DeliveryNote, Emergency Requisitions
+// ==========================================
+
+// prisma/schemas/enhanced-inventory.prisma
+// Enhanced Inventory & Delivery Management Schema
+// เสริมระบบจัดการสต็อกการ์ดและใบส่งยาให้ครอบคลุมตามความต้องการ
+
+// ==========================================
+// ENHANCED STOCK CARD MODELS
+// ==========================================
+
+// ขยายข้อมูล Drug Model เพื่อรองรับข้อมูลเพิ่มเติมตาม requirements
+model DrugExtended {
+  id              String          @id @default(uuid())
+  
+  // ความสัมพันธ์กับ Drug หลัก
+  drugId          String          @unique
+  drug            Drug            @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลบรรจุภัณฑ์เพิ่มเติม
+  packSizeDescription String?     // คำอธิบายขนาดบรรจุ เช่น "500 tablets/box"
+  innerPackSize   Int?            // จำนวนในแพ็คย่อย
+  outerPackSize   Int?            // จำนวนในแพ็คใหญ่
+  
+  // ข้อมูลการแสดงผล
+  displayName     String?         // ชื่อแสดงผลในระบบ
+  shortName       String?         // ชื่อย่อ
+  
+  // การจัดกลุ่มและหมวดหมู่เพิ่มเติม
+  primaryCategory String?         // หมวดหมู่หลัก
+  secondaryCategory String?       // หมวดหมู่รอง
+  
+  // Audit fields
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@map("drug_extended")
+}
+
+// เพิ่ม relation ใน Drug model (จะต้องเพิ่มในไฟล์ hospital-core.prisma)
+// drugExtended    DrugExtended?
+
+// ==========================================
+// DELIVERY NOTE SYSTEM
+// ==========================================
+
+enum DeliveryStatus {
+  DRAFT           // ร่าง
+  PREPARED        // เตรียมส่งแล้ว
+  IN_TRANSIT      // กำลังส่ง
+  DELIVERED       // ส่งแล้ว
+  RECEIVED        // รับแล้ว
+  PARTIALLY_RECEIVED // รับบางส่วน
+  CANCELLED       // ยกเลิก
+  RETURNED        // ส่งคืน
+}
+
+model DeliveryNote {
+  id              String          @id @default(uuid())
+  
+  // ความสัมพันธ์หลัก
+  hospitalId      String
+  requisitionId   String
+  requisition     Requisition     @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  
+  // หมายเลขใบส่งยา
+  deliveryNumber  String          @unique
+  
+  // ข้อมูลการส่ง
+  department      String          // แผนกที่รับ
+  deliveryDate    DateTime        @default(now())
+  purpose         String          // วัตถุประสงค์
+  
+  // สถานะ
+  status          DeliveryStatus  @default(DRAFT)
+  
+  // ข้อมูลผู้รับผิดชอบ
+  preparedBy      String          // ผู้เตรียม
+  deliveredBy     String?         // ผู้ส่ง
+  receivedBy      String?         // ผู้รับ
+  
+  // สรุปมูลค่า
+  totalValue      Decimal         @default(0)
+  totalItems      Int             @default(0)
+  
+  // หมายเหตุ
+  notes           String?
+  deliveryNotes   String?         // หมายเหตุการส่ง
+  receivingNotes  String?         // หมายเหตุการรับ
+  
+  // การติดตาม
+  deliveredAt     DateTime?       // เวลาที่ส่งจริง
+  receivedAt      DateTime?       // เวลาที่รับจริง
+  
+  // Audit fields
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  items           DeliveryItem[]
+  
+  @@index([hospitalId])
+  @@index([requisitionId])
+  @@index([deliveryDate])
+  @@index([status])
+  @@map("delivery_notes")
+}
+
+// เพิ่ม relation ใน Requisition model
+// deliveryNotes   DeliveryNote[]
+
+model DeliveryItem {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  deliveryNoteId  String
+  deliveryNote    DeliveryNote  @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  drugId          String
+  drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  stockBatchId    String        // จะต้องใช้ batch ที่เฉพาะเจาะจง
+  stockBatch      StockBatch    @relation(fields: [stockBatchId], references: [id], onDelete: Restrict)
+  
+  // รหัสสินค้า
+  productCode     String        // รหัสยา (copy จาก Drug)
+  
+  // ชื่อสินค้าและรายละเอียด
+  productName     String        // ชื่อยาพร้อมความแรงและรูปแบบ
+  dosageForm      String        // รูปแบบยา
+  description     String?       // รายละเอียดเพิ่มเติม
+  packSize        String        // ขนาดบรรจุ
+  
+  // จำนวนที่ส่ง
+  quantityDelivered String      // จำนวนที่ส่ง เช่น "5 x 100's"
+  quantityInUnits Int           // จำนวนเป็นหน่วยย่อย
+  
+  // ราคาและมูลค่า
+  unitPrice       Decimal       // ราคาต่อหน่วย
+  totalValue      Decimal       // มูลค่ารวม
+  
+  // ข้อมูล Batch และวันหมดอายุ
+  batchNumber     String        // หมายเลข lot/batch
+  expiryDate      DateTime      // วันหมดอายุ
+  manufacturingDate DateTime?   // วันที่ผลิต
+  
+  // ข้อมูลผู้ผลิต/จัดจำหน่าย
+  company         String        // บริษัทผู้ผลิต/จัดจำหน่าย
+  
+  // สต็อกคงเหลือของ lot นี้ในคลัง
+  lotBalance      Int           // สต็อกคงเหลือของ lot นี้หลังจากส่ง
+  
+  // หมายเหตุ
+  notes           String?
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([deliveryNoteId])
+  @@index([drugId])
+  @@index([stockBatchId])
+  @@index([batchNumber])
+  @@map("delivery_items")
+}
+
+// เพิ่ม relation ใน Drug model
+// deliveryItems   DeliveryItem[]
+
+// เพิ่ม relation ใน StockBatch model  
+// deliveryItems   DeliveryItem[]
+
+// ==========================================
+// ENHANCED EXPIRY LOT MANAGEMENT
+// ==========================================
+
+// ตาราง ExpiryLot แยกออกมาเพื่อจัดการวันหมดอายุแต่ละ lot ได้ดีขึ้น
+model ExpiryLot {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  stockCardId     String
+  stockCard       StockCard     @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+  warehouseId     String
+  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูล Lot
+  lotNumber       String        // หมายเลข lot/batch
+  expiryDate      DateTime      // วันหมดอายุ
+  manufacturingDate DateTime?   // วันที่ผลิต
+  
+  // จำนวนในแต่ละ lot
+  quantity        Int           // จำนวนในlot นี้
+  reservedQty     Int           @default(0) // จำนวนที่จอง
+  availableQty    Int           // จำนวนที่พร้อมใช้
+  
+  // ข้อมูลต้นทุน
+  unitCost        Decimal       // ต้นทุนต่อหน่วยของ lot นี้
+  totalCost       Decimal       // ต้นทุนรวมของ lot นี้
+  
+  // ข้อมูลผู้ผลิต/ซัพพลายเออร์
+  supplierId      String?       // ซัพพลายเออร์
+  manufacturer    String?       // ผู้ผลิต
+  countryOfOrigin String?       // ประเทศผู้ผลิต
+  
+  // การรับเข้า
+  receivedDate    DateTime      // วันที่รับเข้า
+  purchaseOrderId String?       // PO ที่รับเข้ามา
+  goodsReceiptId  String?       // ใบรับของ
+  
+  // สถานะและการจัดการ
+  status          BatchStatus   @default(ACTIVE) // ใช้ enum จาก StockBatch
+  quarantineReason String?      // เหตุผลการกักกัน (ถ้ามี)
+  isNearExpiry    Boolean       @default(false) // ใกล้หมดอายุ
+  daysToExpiry    Int?          // จำนวนวันก่อนหมดอายุ
+  
+  // การจัดเก็บ
+  storageLocation String?       // ตำแหน่งเก็บในคลัง
+  storageCondition String?      // เงื่อนไขการเก็บ
+  
+  // FEFO Management
+  fefoRank        Int           @default(0) // อันดับ FEFO (First Expired First Out)
+  
+  // การติดตาม
+  lastUsedDate    DateTime?     // วันที่ใช้ล่าสุด
+  firstUsedDate   DateTime?     // วันที่ใช้ครั้งแรก
+  
+  // หมายเหตุ
+  notes           String?
+  qualityNotes    String?       // หมายเหตุคุณภาพ
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([hospitalId, stockCardId, lotNumber, expiryDate])
+  @@index([hospitalId, warehouseId])
+  @@index([expiryDate])
+  @@index([status])
+  @@index([isNearExpiry])
+  @@index([fefoRank])
+  @@map("expiry_lots")
+}
+
+// เพิ่ม relation ใน StockCard model
+// expiryLots      ExpiryLot[]
+
+// เพิ่ม relation ใน Warehouse model  
+// expiryLots      ExpiryLot[]
+
+// ==========================================
+// EMERGENCY REQUISITION AUTO-CREATION
+// ==========================================
+
+model EmergencyRequisition {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  originalRequisitionId String
+  originalRequisition   Requisition @relation(fields: [originalRequisitionId], references: [id], onDelete: Cascade)
+  emergencyRequisitionId String
+  emergencyRequisition  Requisition @relation("EmergencyFromOriginal", fields: [emergencyRequisitionId], references: [id], onDelete: Cascade)
+  
+  // เหตุผลการสร้าง Emergency Requisition
+  reason          String        @default("UNFULFILLED_QUANTITY") 
+  unfulfilledQty  Int           // จำนวนที่ไม่สามารถจ่ายได้
+  originalQty     Int           // จำนวนเดิมที่เบิก
+  
+  // การติดตาม
+  autoCreated     Boolean       @default(true) // สร้างอัตโนมัติ
+  urgentPrefix    String        @default("E")  // prefix "E" หรือ "ฉ"
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  
+  @@index([originalRequisitionId])
+  @@index([emergencyRequisitionId])
+  @@map("emergency_requisitions")
+}
+
+// เพิ่ม relations ใน Requisition model
+// emergencyFromOriginal EmergencyRequisition[] @relation("EmergencyFromOriginal")
+// originalForEmergency  EmergencyRequisition[]
+
+// ==========================================
+// STOCK MOVEMENT HISTORY (Enhanced)
+// ==========================================
+
+model StockMovementHistory {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  stockCardId     String
+  stockCard       StockCard     @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+  warehouseId     String
+  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  expiryLotId     String?
+  expiryLot       ExpiryLot?    @relation(fields: [expiryLotId], references: [id], onDelete: SetNull)
+  
+  // ประเภทการเคลื่อนไหว
+  movementType    TransactionType // ใช้ enum จาก StockTransaction
+  direction       String        // "IN" หรือ "OUT"
+  
+  // จำนวน
+  quantity        Int           // จำนวนที่เคลื่อนไหว
+  stockBefore     Int           // สต็อกก่อนเคลื่อนไหว
+  stockAfter      Int           // สต็อกหลังเคลื่อนไหว
+  
+  // มูลค่า
+  unitCost        Decimal       // ต้นทุนต่อหน่วย
+  totalCost       Decimal       // ต้นทุนรวม
+  runningTotalCost Decimal      // ต้นทุนสะสม
+  
+  // การอ้างอิง
+  referenceType   String?       // "REQUISITION", "DELIVERY", "RECEIVE", "ADJUST"
+  referenceId     String?       // ID เอกสารอ้างอิง
+  referenceNumber String?       // หมายเลขเอกสารอ้างอิง
+  
+  // ผู้ดำเนินการ
+  performedBy     String
+  performer       User          @relation(fields: [performedBy], references: [id], onDelete: Restrict)
+  
+  // หมายเหตุ
+  notes           String?
+  reason          String?       // เหตุผล
+  
+  // วันที่และเวลา
+  movementDate    DateTime      @default(now())
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  
+  @@index([hospitalId, stockCardId])
+  @@index([warehouseId])
+  @@index([movementType])
+  @@index([movementDate])
+  @@index([referenceType, referenceId])
+  @@map("stock_movement_history")
+}
+
+// เพิ่ม relations
+// ใน StockCard model: movementHistory StockMovementHistory[]
+// ใน Warehouse model: stockMovements StockMovementHistory[]
+// ใน ExpiryLot model: movements StockMovementHistory[]
+// ใน User model: stockMovements StockMovementHistory[]
+
+// ==========================================
+// INVENTORY VALUE TRACKING
+// ==========================================
+
+model InventoryValueSnapshot {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  warehouseId     String
+  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  // วันที่ snapshot
+  snapshotDate    DateTime      @default(now())
+  snapshotType    String        // "DAILY", "MONTHLY", "ON_DEMAND"
+  
+  // มูลค่ารวม
+  totalValue      Decimal       // มูลค่าสต็อกรวม
+  totalItems      Int           // จำนวนรายการยา
+  totalQuantity   Int           // จำนวนหน่วยรวม
+  
+  // การแบ่งตามประเภท
+  activeValue     Decimal       // มูลค่ายาที่ใช้งานได้
+  expiredValue    Decimal       // มูลค่ายาหมดอายุ
+  nearExpiryValue Decimal       // มูลค่ายาใกล้หมดอายุ
+  quarantineValue Decimal       // มูลค่ายาที่ถูกกักกัน
+  
+  // สถิติ
+  averageCostPerUnit Decimal    // ต้นทุนเฉลี่ยต่อหน่วย
+  turnoverRatio   Decimal?      // อัตราการหมุนเวียนสต็อก
+  
+  // การเปรียบเทียบ
+  previousSnapshotId String?    // snapshot ครั้งก่อน
+  valueChange     Decimal?      // การเปลี่ยนแปลงมูลค่า
+  percentageChange Decimal?     // การเปลี่ยนแปลงเป็นเปอร์เซ็นต์
+  
+  // หมายเหตุ
+  notes           String?
+  
+  // ผู้สร้าง snapshot
+  createdBy       String
+  creator         User          @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  
+  @@index([hospitalId, warehouseId])
+  @@index([snapshotDate])
+  @@index([snapshotType])
+  @@map("inventory_value_snapshots")
+}
+
+// เพิ่ม relations
+// ใน Warehouse model: valueSnapshots InventoryValueSnapshot[]
+// ใน User model: inventorySnapshots InventoryValueSnapshot[]
+
+// ==========================================
+// DELIVERY TRANSPORT
+// 🚛 Hospital Delivery Cart & Progressive Delivery
+// Cart Management, Trip Tracking, Progressive Delivery
+// ==========================================
+
+// prisma/schemas/delivery-transport.prisma
+// Hospital Delivery Cart & Progressive Delivery Management Schema
+// ระบบจัดการรถเข็นส่งยาและการจัดส่งแบบค่อยเป็นค่อยไปในโรงพยาบาล
+
+// ==========================================
+// DELIVERY CART MANAGEMENT
+// ==========================================
+
+enum CartType {
+  MEDICATION         // รถเข็นยา
+  EMERGENCY          // รถเข็นฉุกเฉิน
+  CONTROLLED_DRUGS   // รถเข็นยาควบคุม
+  GENERAL_SUPPLIES   // รถเข็นวัสดุทั่วไป
+  COLD_CHAIN         // รถเข็นห่วงโซ่ความเย็น
+}
+
+enum CartStatus {
+  AVAILABLE          // พร้อมใช้งาน
+  IN_USE             // กำลังใช้งาน
+  LOADING            // กำลังโหลดยา
+  IN_TRANSIT         // เดินทางระหว่างแผนก
+  DELIVERING         // กำลังส่งยา
+  RETURNING          // กำลังกลับ
+  MAINTENANCE        // บำรุงรักษา
+  OUT_OF_SERVICE     // ชำรุด/ไม่สามารถใช้งาน
+}
+
+model DeliveryCart {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  warehouseId     String        // คลังหลักที่รถเข็นสังกัด
+  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลรถเข็น
+  cartNumber      String        @unique // รหัสรถเข็น เช่น "CART-001"
+  cartName        String        // ชื่อรถเข็น
+  type            CartType
+  
+  // ข้อมูลทางกายภาพ
+  capacity        Int?          // ความจุ (ลิตร หรือ จำนวนรายการ)
+  maxWeight       Decimal?      // น้ำหนักสูงสุด (กิโลกรัม)
+  
+  // คุณสมบัติพิเศษ
+  hasTemperatureControl Boolean @default(false) // ควบคุมอุณหภูมิ
+  hasLockSystem     Boolean     @default(false) // ระบบล็อค
+  hasGPS            Boolean     @default(false) // ระบบ GPS
+  hasBarcodeScan    Boolean     @default(false) // เครื่องสแกนบาร์โค้ด
+  
+  // สถานะปัจจุบัน
+  status          CartStatus    @default(AVAILABLE)
+  currentLocation String?       // ตำแหน่งปัจจุบัน
+  
+  // ผู้รับผิดชอบ
+  currentOperatorId String?     // ผู้ควบคุมรถเข็นปัจจุบัน
+  currentOperator   User?       @relation("CartOperator", fields: [currentOperatorId], references: [id], onDelete: SetNull)
+  
+  // การใช้งาน
+  totalTrips      Int           @default(0) // จำนวนเที่ยวรวม
+  totalDistance   Decimal       @default(0) // ระยะทางรวม (เมตร)
+  lastMaintenanceDate DateTime? // วันที่บำรุงรักษาล่าสุด
+  nextMaintenanceDate DateTime? // วันที่บำรุงรักษาครั้งต่อไป
+  
+  // หมายเหตุ
+  description     String?
+  notes           String?
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  deliveryTrips   DeliveryTrip[]
+  cartLogs        CartActivityLog[]
+  
+  @@index([hospitalId, warehouseId])
+  @@index([status])
+  @@index([type])
+  @@map("delivery_carts")
+}
+
+// เพิ่ม relation ใน Warehouse model
+// deliveryCarts   DeliveryCart[]
+
+// เพิ่ม relation ใน User model  
+// operatedCarts   DeliveryCart[] @relation("CartOperator")
+
+// ==========================================
+// DELIVERY TRIP MANAGEMENT
+// ==========================================
+
+enum TripStatus {
+  PLANNED         // วางแผนแล้ว
+  LOADING         // กำลังโหลดยา
+  READY_TO_GO     // พร้อมออกเดินทาง
+  IN_TRANSIT      // เดินทางแล้ว
+  DELIVERING      // กำลังส่งยา
+  COMPLETED       // เสร็จสิ้น
+  CANCELLED       // ยกเลิก
+  RETURNED_PARTIAL // กลับพร้อมยาบางส่วน
+}
+
+model DeliveryTrip {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  cartId          String
+  cart            DeliveryCart  @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  
+  // หมายเลขเที่ยว
+  tripNumber      String        @unique // เช่น "TRIP-20241210-001"
+  
+  // การวางแผน
+  plannedDate     DateTime      // วันที่วางแผน
+  plannedStartTime DateTime     // เวลาเริ่มต้นที่วางแผน
+  plannedDuration Int?          // ระยะเวลาที่คาดการณ์ (นาที)
+  
+  // เส้นทาง
+  routeDescription String?      // คำอธิบายเส้นทาง
+  departmentSequence Json       // ลำดับแผนกที่จะไป (array of department IDs)
+  
+  // เวลาจริง
+  actualStartTime DateTime?     // เวลาเริ่มต้นจริง
+  actualEndTime   DateTime?     // เวลาสิ้นสุดจริง
+  actualDuration  Int?          // ระยะเวลาจริง (นาที)
+  
+  // สถานะ
+  status          TripStatus    @default(PLANNED)
+  priority        String        @default("NORMAL") // "LOW", "NORMAL", "HIGH", "URGENT"
+  
+  // ผู้รับผิดชอบ
+  assignedDriverId String       // คนขับรถเข็น
+  assignedDriver   User         @relation("TripDriver", fields: [assignedDriverId], references: [id], onDelete: Restrict)
+  assistantId      String?      // ผู้ช่วย
+  assistant        User?        @relation("TripAssistant", fields: [assistantId], references: [id], onDelete: SetNull)
+  
+  // สรุปการส่ง
+  totalDeliveries Int           @default(0) // จำนวนการส่งรวม
+  completedDeliveries Int       @default(0) // จำนวนที่ส่งสำเร็จ
+  totalWeight     Decimal       @default(0) // น้ำหนักรวม
+  totalValue      Decimal       @default(0) // มูลค่ารวม
+  
+  // การติดตาม
+  gpsTrackingData Json?         // ข้อมูล GPS tracking (array of coordinates)
+  actualDistance  Decimal?      // ระยะทางจริง (เมตร)
+  
+  // หมายเหตุ
+  notes           String?
+  issuesEncountered String?     // ปัญหาที่พบ
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  deliveries      ProgressiveDelivery[]
+  checkpoints     TripCheckpoint[]
+  
+  @@index([hospitalId, cartId])
+  @@index([plannedDate])
+  @@index([status])
+  @@index([assignedDriverId])
+  @@map("delivery_trips")
+}
+
+// เพิ่ม relations ใน User model
+// drivenTrips     DeliveryTrip[] @relation("TripDriver")
+// assistedTrips   DeliveryTrip[] @relation("TripAssistant")
+
+// ==========================================
+// PROGRESSIVE DELIVERY SYSTEM
+// ==========================================
+
+enum ProgressiveDeliveryStatus {
+  PENDING         // รอส่ง
+  LOADED          // โหลดลงรถเข็นแล้ว
+  IN_TRANSIT      // เดินทางแล้ว
+  ARRIVED         // ถึงจุดหมายแล้ว
+  DELIVERED       // ส่งแล้ว
+  PARTIALLY_DELIVERED // ส่งบางส่วน
+  RETURNED        // ส่งคืน
+  CANCELLED       // ยกเลิก
+}
+
+model ProgressiveDelivery {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์หลัก
+  hospitalId      String
+  requisitionId   String        // ใบเบิกที่เกี่ยวข้อง
+  requisition     Requisition   @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  deliveryTripId  String        // เที่ยวส่งที่เกี่ยวข้อง
+  deliveryTrip    DeliveryTrip  @relation(fields: [deliveryTripId], references: [id], onDelete: Cascade)
+  
+  // หมายเลขการส่งย่อย
+  deliveryNumber  String        @unique // เช่น "DEL-REQ001-001"
+  sequenceInTrip  Int           // ลำดับการส่งในเที่ยวนี้
+  
+  // แผนกปลายทาง
+  targetDepartmentId String
+  targetDepartment   Department @relation(fields: [targetDepartmentId], references: [id], onDelete: Cascade)
+  
+  // วันที่และเวลา
+  scheduledTime   DateTime      // เวลาที่กำหนดส่ง
+  loadedAt        DateTime?     // เวลาที่โหลดลงรถเข็น
+  departedAt      DateTime?     // เวลาที่ออกเดินทาง
+  arrivedAt       DateTime?     // เวลาที่ถึง
+  deliveredAt     DateTime?     // เวลาที่ส่งสำเร็จ
+  
+  // สถานะ
+  status          ProgressiveDeliveryStatus @default(PENDING)
+  
+  // ข้อมูลผู้รับ-ส่ง
+  deliveredBy     String?       // ผู้ส่ง
+  deliverer       User?         @relation("Deliverer", fields: [deliveredBy], references: [id], onDelete: SetNull)
+  receivedBy      String?       // ผู้รับ
+  receiver        User?         @relation("Receiver", fields: [receivedBy], references: [id], onDelete: SetNull)
+  
+  // การส่งมอบ
+  totalItems      Int           @default(0) // จำนวนรายการรวม
+  deliveredItems  Int           @default(0) // จำนวนที่ส่งได้
+  remainingItems  Int           @default(0) // จำนวนที่เหลือ
+  totalValue      Decimal       @default(0) // มูลค่ารวม
+  
+  // หมายเหตุและปัญหา
+  deliveryNotes   String?       // หมายเหตุการส่ง
+  receivingNotes  String?       // หมายเหตุการรับ
+  issues          String?       // ปัญหาที่พบ
+  resolutionNotes String?       // วิธีแก้ไข
+  
+  // การติดตาม
+  requiresSignature Boolean     @default(true) // ต้องการลายเซ็น
+  signatureImagePath String?    // path รูป signature
+  photoEvidencePath String?     // path รูปหลักฐาน
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  items           ProgressiveDeliveryItem[]
+  
+  @@index([hospitalId, requisitionId])
+  @@index([deliveryTripId])
+  @@index([targetDepartmentId])
+  @@index([status])
+  @@index([scheduledTime])
+  @@map("progressive_deliveries")
+}
+
+// เพิ่ม relations ใน Requisition model
+// progressiveDeliveries ProgressiveDelivery[]
+
+// เพิ่ม relations ใน Department model
+// incomingDeliveries    ProgressiveDelivery[]
+
+// เพิ่ม relations ใน User model
+// deliveries        ProgressiveDelivery[] @relation("Deliverer")
+// receivedDeliveries ProgressiveDelivery[] @relation("Receiver")
+
+// ==========================================
+// PROGRESSIVE DELIVERY ITEMS
+// ==========================================
+
+model ProgressiveDeliveryItem {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  deliveryId      String
+  delivery        ProgressiveDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  requisitionItemId String      // รายการในใบเบิกเดิม
+  requisitionItem   RequisitionItem @relation(fields: [requisitionItemId], references: [id], onDelete: Cascade)
+  drugId          String
+  drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // จำนวนในการส่งครั้งนี้
+  plannedQty      Int           // จำนวนที่วางแผนส่ง
+  actualQty       Int           @default(0) // จำนวนที่ส่งจริง
+  
+  // ข้อมูล batch
+  batchNumbers    Json          // array of {batchId, quantity} ที่ส่งในครั้งนี้
+  
+  // สถานะรายการ
+  status          String        @default("PENDING") // "PENDING", "LOADED", "DELIVERED", "PARTIAL", "RETURNED"
+  
+  // หมายเหตุ
+  notes           String?
+  issues          String?       // ปัญหาเฉพาะรายการนี้
+  
+  // การติดตาม
+  loadedAt        DateTime?     // เวลาที่โหลดลงรถเข็น
+  deliveredAt     DateTime?     // เวลาที่ส่งรายการนี้
+  
+  @@index([deliveryId])
+  @@index([requisitionItemId])
+  @@index([drugId])
+  @@map("progressive_delivery_items")
+}
+
+// เพิ่ม relation ใน RequisitionItem model
+// progressiveDeliveries ProgressiveDeliveryItem[]
+
+// เพิ่ม relation ใน Drug model
+// progressiveDeliveryItems ProgressiveDeliveryItem[]
+
+// ==========================================
+// TRIP CHECKPOINTS & TRACKING
+// ==========================================
+
+enum CheckpointType {
+  DEPARTURE       // จุดออกเดินทาง
+  ARRIVAL         // จุดมาถึง
+  DELIVERY_START  // เริ่มส่งยา
+  DELIVERY_END    // ส่งยาเสร็จ
+  BREAK           // พักระหว่างทาง
+  ISSUE           // เกิดปัญหา
+  RETURN          // กลับ
+}
+
+model TripCheckpoint {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  tripId          String
+  trip            DeliveryTrip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูล checkpoint
+  checkpointType  CheckpointType
+  location        String        // ตำแหน่ง
+  departmentId    String?       // แผนก (ถ้ามี)
+  department      Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  
+  // เวลา
+  plannedTime     DateTime?     // เวลาที่วางแผน
+  actualTime      DateTime      @default(now()) // เวลาจริง
+  
+  // ข้อมูล GPS
+  latitude        Decimal?      // ละติจูด
+  longitude       Decimal?      // ลองจิจูด
+  accuracy        Decimal?      // ความแม่นยำ GPS (เมตร)
+  
+  // รายละเอียด
+  description     String?       // คำอธิบาย
+  notes           String?       // หมายเหตุ
+  issues          String?       // ปัญหาที่พบ
+  
+  // ผู้บันทึก
+  recordedBy      String
+  recorder        User          @relation(fields: [recordedBy], references: [id], onDelete: Restrict)
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  
+  @@index([tripId])
+  @@index([checkpointType])
+  @@index([actualTime])
+  @@map("trip_checkpoints")
+}
+
+// เพิ่ม relation ใน Department model
+// tripCheckpoints TripCheckpoint[]
+
+// เพิ่ม relation ใน User model
+// recordedCheckpoints TripCheckpoint[]
+
+// ==========================================
+// CART ACTIVITY LOGGING
+// ==========================================
+
+enum CartActivity {
+  CHECKOUT        // เบิกรถเข็น
+  CHECKIN         // คืนรถเข็น
+  LOADING         // โหลดยา
+  DEPARTURE       // ออกเดินทาง
+  ARRIVAL         // มาถึง
+  MAINTENANCE     // บำรุงรักษา
+  CLEANING        // ทำความสะอาด
+  ISSUE_REPORTED  // รายงานปัญหา
+  ISSUE_RESOLVED  // แก้ไขปัญหา
+}
+
+model CartActivityLog {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  cartId          String
+  cart            DeliveryCart  @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  
+  // กิจกรรม
+  activity        CartActivity
+  description     String?       // คำอธิบายกิจกรรม
+  
+  // ผู้ดำเนินการ
+  performedBy     String
+  performer       User          @relation(fields: [performedBy], references: [id], onDelete: Restrict)
+  
+  // ข้อมูลเพิ่มเติม
+  location        String?       // ตำแหน่งที่เกิดเหตุการณ์
+  duration        Int?          // ระยะเวลา (นาที)
+  metadata        Json?         // ข้อมูลเพิ่มเติม (เช่น อุณหภูมิ, น้ำหนัก)
+  
+  // การอ้างอิง
+  relatedTripId   String?       // เที่ยวที่เกี่ยวข้อง
+  relatedTrip     DeliveryTrip? @relation(fields: [relatedTripId], references: [id], onDelete: SetNull)
+  
+  // หมายเหตุ
+  notes           String?
+  
+  // Audit fields
+  timestamp       DateTime      @default(now())
+  
+  @@index([cartId])
+  @@index([activity])
+  @@index([timestamp])
+  @@index([performedBy])
+  @@map("cart_activity_logs")
+}
+
+// เพิ่ม relation ใน User model
+// cartActivities  CartActivityLog[]
+
+// เพิ่ม relation ใน DeliveryTrip model
+// cartLogs        CartActivityLog[]
+
+// ==========================================
+// DELIVERY ROUTE OPTIMIZATION
+// ==========================================
+
+model DeliveryRoute {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  
+  // ข้อมูลเส้นทาง
+  routeName       String        // ชื่อเส้นทาง เช่น "Route A - Morning"
+  description     String?       // คำอธิบาย
+  
+  // การวางแผน
+  departmentOrder Json          // ลำดับแผนก (array of department IDs)
+  estimatedTime   Int           // เวลาที่คาดการณ์รวม (นาที)
+  estimatedDistance Decimal?    // ระยะทางที่คาดการณ์ (เมตร)
+  
+  // การใช้งาน
+  isActive        Boolean       @default(true)
+  isDefault       Boolean       @default(false) // เส้นทางเริ่มต้น
+  frequency       String?       // ความถี่ "DAILY", "WEEKLY", "AS_NEEDED"
+  
+  // สถิติการใช้งาน
+  usageCount      Int           @default(0)
+  averageTime     Int?          // เวลาเฉลี่ย (นาที)
+  averageDistance Decimal?      // ระยะทางเฉลี่ย (เมตร)
+  
+  // ผู้สร้าง
+  createdBy       String
+  creator         User          @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([hospitalId])
+  @@index([isActive])
+  @@map("delivery_routes")
+}
+
+// เพิ่ม relation ใน User model
+// createdRoutes   DeliveryRoute[]
 
 // ==========================================
 // ANALYTICS

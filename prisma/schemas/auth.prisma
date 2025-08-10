@@ -57,9 +57,19 @@ model User {
   hospitalId    String
   hospital      Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   
-  // ความสัมพันธ์กับแผนก (optional สำหรับ pharmacy staff)
+  // ความสัมพันธ์
   departmentId  String?
   department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  stockMovements      StockMovementHistory[]
+  inventorySnapshots  InventoryValueSnapshot[]
+  operatedCarts         DeliveryCart[] @relation("CartOperator")
+  drivenTrips           DeliveryTrip[] @relation("TripDriver")
+  assistedTrips         DeliveryTrip[] @relation("TripAssistant")
+  deliveries            ProgressiveDelivery[] @relation("Deliverer")
+  receivedDeliveries    ProgressiveDelivery[] @relation("Receiver")
+  recordedCheckpoints   TripCheckpoint[]
+  cartActivities        CartActivityLog[]
+  createdRoutes         DeliveryRoute[]
   
   // การติดตามการเข้าสู่ระบบ
   lastLoginAt   DateTime?

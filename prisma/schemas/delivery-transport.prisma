@@ -1,0 +1,470 @@
+// prisma/schemas/delivery-transport.prisma
+// Hospital Delivery Cart & Progressive Delivery Management Schema
+// ระบบจัดการรถเข็นส่งยาและการจัดส่งแบบค่อยเป็นค่อยไปในโรงพยาบาล
+
+// ==========================================
+// DELIVERY CART MANAGEMENT
+// ==========================================
+
+enum CartType {
+  MEDICATION         // รถเข็นยา
+  EMERGENCY          // รถเข็นฉุกเฉิน
+  CONTROLLED_DRUGS   // รถเข็นยาควบคุม
+  GENERAL_SUPPLIES   // รถเข็นวัสดุทั่วไป
+  COLD_CHAIN         // รถเข็นห่วงโซ่ความเย็น
+}
+
+enum CartStatus {
+  AVAILABLE          // พร้อมใช้งาน
+  IN_USE             // กำลังใช้งาน
+  LOADING            // กำลังโหลดยา
+  IN_TRANSIT         // เดินทางระหว่างแผนก
+  DELIVERING         // กำลังส่งยา
+  RETURNING          // กำลังกลับ
+  MAINTENANCE        // บำรุงรักษา
+  OUT_OF_SERVICE     // ชำรุด/ไม่สามารถใช้งาน
+}
+
+model DeliveryCart {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  warehouseId     String        // คลังหลักที่รถเข็นสังกัด
+  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูลรถเข็น
+  cartNumber      String        @unique // รหัสรถเข็น เช่น "CART-001"
+  cartName        String        // ชื่อรถเข็น
+  type            CartType
+  
+  // ข้อมูลทางกายภาพ
+  capacity        Int?          // ความจุ (ลิตร หรือ จำนวนรายการ)
+  maxWeight       Decimal?      // น้ำหนักสูงสุด (กิโลกรัม)
+  
+  // คุณสมบัติพิเศษ
+  hasTemperatureControl Boolean @default(false) // ควบคุมอุณหภูมิ
+  hasLockSystem     Boolean     @default(false) // ระบบล็อค
+  hasGPS            Boolean     @default(false) // ระบบ GPS
+  hasBarcodeScan    Boolean     @default(false) // เครื่องสแกนบาร์โค้ด
+  
+  // สถานะปัจจุบัน
+  status          CartStatus    @default(AVAILABLE)
+  currentLocation String?       // ตำแหน่งปัจจุบัน
+  
+  // ผู้รับผิดชอบ
+  currentOperatorId String?     // ผู้ควบคุมรถเข็นปัจจุบัน
+  currentOperator   User?       @relation("CartOperator", fields: [currentOperatorId], references: [id], onDelete: SetNull)
+  
+  // การใช้งาน
+  totalTrips      Int           @default(0) // จำนวนเที่ยวรวม
+  totalDistance   Decimal       @default(0) // ระยะทางรวม (เมตร)
+  lastMaintenanceDate DateTime? // วันที่บำรุงรักษาล่าสุด
+  nextMaintenanceDate DateTime? // วันที่บำรุงรักษาครั้งต่อไป
+  
+  // หมายเหตุ
+  description     String?
+  notes           String?
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  deliveryTrips   DeliveryTrip[]
+  cartLogs        CartActivityLog[]
+  
+  @@index([hospitalId, warehouseId])
+  @@index([status])
+  @@index([type])
+  @@map("delivery_carts")
+}
+
+// เพิ่ม relation ใน Warehouse model
+// deliveryCarts   DeliveryCart[]
+
+// เพิ่ม relation ใน User model  
+// operatedCarts   DeliveryCart[] @relation("CartOperator")
+
+// ==========================================
+// DELIVERY TRIP MANAGEMENT
+// ==========================================
+
+enum TripStatus {
+  PLANNED         // วางแผนแล้ว
+  LOADING         // กำลังโหลดยา
+  READY_TO_GO     // พร้อมออกเดินทาง
+  IN_TRANSIT      // เดินทางแล้ว
+  DELIVERING      // กำลังส่งยา
+  COMPLETED       // เสร็จสิ้น
+  CANCELLED       // ยกเลิก
+  RETURNED_PARTIAL // กลับพร้อมยาบางส่วน
+}
+
+model DeliveryTrip {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  cartId          String
+  cart            DeliveryCart  @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  
+  // หมายเลขเที่ยว
+  tripNumber      String        @unique // เช่น "TRIP-20241210-001"
+  
+  // การวางแผน
+  plannedDate     DateTime      // วันที่วางแผน
+  plannedStartTime DateTime     // เวลาเริ่มต้นที่วางแผน
+  plannedDuration Int?          // ระยะเวลาที่คาดการณ์ (นาที)
+  
+  // เส้นทาง
+  routeDescription String?      // คำอธิบายเส้นทาง
+  departmentSequence Json       // ลำดับแผนกที่จะไป (array of department IDs)
+  
+  // เวลาจริง
+  actualStartTime DateTime?     // เวลาเริ่มต้นจริง
+  actualEndTime   DateTime?     // เวลาสิ้นสุดจริง
+  actualDuration  Int?          // ระยะเวลาจริง (นาที)
+  
+  // สถานะ
+  status          TripStatus    @default(PLANNED)
+  priority        String        @default("NORMAL") // "LOW", "NORMAL", "HIGH", "URGENT"
+  
+  // ผู้รับผิดชอบ
+  assignedDriverId String       // คนขับรถเข็น
+  assignedDriver   User         @relation("TripDriver", fields: [assignedDriverId], references: [id], onDelete: Restrict)
+  assistantId      String?      // ผู้ช่วย
+  assistant        User?        @relation("TripAssistant", fields: [assistantId], references: [id], onDelete: SetNull)
+  
+  // สรุปการส่ง
+  totalDeliveries Int           @default(0) // จำนวนการส่งรวม
+  completedDeliveries Int       @default(0) // จำนวนที่ส่งสำเร็จ
+  totalWeight     Decimal       @default(0) // น้ำหนักรวม
+  totalValue      Decimal       @default(0) // มูลค่ารวม
+  
+  // การติดตาม
+  gpsTrackingData Json?         // ข้อมูล GPS tracking (array of coordinates)
+  actualDistance  Decimal?      // ระยะทางจริง (เมตร)
+  
+  // หมายเหตุ
+  notes           String?
+  issuesEncountered String?     // ปัญหาที่พบ
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  deliveries      ProgressiveDelivery[]
+  checkpoints     TripCheckpoint[]
+  
+  @@index([hospitalId, cartId])
+  @@index([plannedDate])
+  @@index([status])
+  @@index([assignedDriverId])
+  @@map("delivery_trips")
+}
+
+// เพิ่ม relations ใน User model
+// drivenTrips     DeliveryTrip[] @relation("TripDriver")
+// assistedTrips   DeliveryTrip[] @relation("TripAssistant")
+
+// ==========================================
+// PROGRESSIVE DELIVERY SYSTEM
+// ==========================================
+
+enum ProgressiveDeliveryStatus {
+  PENDING         // รอส่ง
+  LOADED          // โหลดลงรถเข็นแล้ว
+  IN_TRANSIT      // เดินทางแล้ว
+  ARRIVED         // ถึงจุดหมายแล้ว
+  DELIVERED       // ส่งแล้ว
+  PARTIALLY_DELIVERED // ส่งบางส่วน
+  RETURNED        // ส่งคืน
+  CANCELLED       // ยกเลิก
+}
+
+model ProgressiveDelivery {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์หลัก
+  hospitalId      String
+  requisitionId   String        // ใบเบิกที่เกี่ยวข้อง
+  requisition     Requisition   @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  deliveryTripId  String        // เที่ยวส่งที่เกี่ยวข้อง
+  deliveryTrip    DeliveryTrip  @relation(fields: [deliveryTripId], references: [id], onDelete: Cascade)
+  
+  // หมายเลขการส่งย่อย
+  deliveryNumber  String        @unique // เช่น "DEL-REQ001-001"
+  sequenceInTrip  Int           // ลำดับการส่งในเที่ยวนี้
+  
+  // แผนกปลายทาง
+  targetDepartmentId String
+  targetDepartment   Department @relation(fields: [targetDepartmentId], references: [id], onDelete: Cascade)
+  
+  // วันที่และเวลา
+  scheduledTime   DateTime      // เวลาที่กำหนดส่ง
+  loadedAt        DateTime?     // เวลาที่โหลดลงรถเข็น
+  departedAt      DateTime?     // เวลาที่ออกเดินทาง
+  arrivedAt       DateTime?     // เวลาที่ถึง
+  deliveredAt     DateTime?     // เวลาที่ส่งสำเร็จ
+  
+  // สถานะ
+  status          ProgressiveDeliveryStatus @default(PENDING)
+  
+  // ข้อมูลผู้รับ-ส่ง
+  deliveredBy     String?       // ผู้ส่ง
+  deliverer       User?         @relation("Deliverer", fields: [deliveredBy], references: [id], onDelete: SetNull)
+  receivedBy      String?       // ผู้รับ
+  receiver        User?         @relation("Receiver", fields: [receivedBy], references: [id], onDelete: SetNull)
+  
+  // การส่งมอบ
+  totalItems      Int           @default(0) // จำนวนรายการรวม
+  deliveredItems  Int           @default(0) // จำนวนที่ส่งได้
+  remainingItems  Int           @default(0) // จำนวนที่เหลือ
+  totalValue      Decimal       @default(0) // มูลค่ารวม
+  
+  // หมายเหตุและปัญหา
+  deliveryNotes   String?       // หมายเหตุการส่ง
+  receivingNotes  String?       // หมายเหตุการรับ
+  issues          String?       // ปัญหาที่พบ
+  resolutionNotes String?       // วิธีแก้ไข
+  
+  // การติดตาม
+  requiresSignature Boolean     @default(true) // ต้องการลายเซ็น
+  signatureImagePath String?    // path รูป signature
+  photoEvidencePath String?     // path รูปหลักฐาน
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  items           ProgressiveDeliveryItem[]
+  
+  @@index([hospitalId, requisitionId])
+  @@index([deliveryTripId])
+  @@index([targetDepartmentId])
+  @@index([status])
+  @@index([scheduledTime])
+  @@map("progressive_deliveries")
+}
+
+// เพิ่ม relations ใน Requisition model
+// progressiveDeliveries ProgressiveDelivery[]
+
+// เพิ่ม relations ใน Department model
+// incomingDeliveries    ProgressiveDelivery[]
+
+// เพิ่ม relations ใน User model
+// deliveries        ProgressiveDelivery[] @relation("Deliverer")
+// receivedDeliveries ProgressiveDelivery[] @relation("Receiver")
+
+// ==========================================
+// PROGRESSIVE DELIVERY ITEMS
+// ==========================================
+
+model ProgressiveDeliveryItem {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  deliveryId      String
+  delivery        ProgressiveDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  requisitionItemId String      // รายการในใบเบิกเดิม
+  requisitionItem   RequisitionItem @relation(fields: [requisitionItemId], references: [id], onDelete: Cascade)
+  drugId          String
+  drug            Drug          @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  
+  // จำนวนในการส่งครั้งนี้
+  plannedQty      Int           // จำนวนที่วางแผนส่ง
+  actualQty       Int           @default(0) // จำนวนที่ส่งจริง
+  
+  // ข้อมูล batch
+  batchNumbers    Json          // array of {batchId, quantity} ที่ส่งในครั้งนี้
+  
+  // สถานะรายการ
+  status          String        @default("PENDING") // "PENDING", "LOADED", "DELIVERED", "PARTIAL", "RETURNED"
+  
+  // หมายเหตุ
+  notes           String?
+  issues          String?       // ปัญหาเฉพาะรายการนี้
+  
+  // การติดตาม
+  loadedAt        DateTime?     // เวลาที่โหลดลงรถเข็น
+  deliveredAt     DateTime?     // เวลาที่ส่งรายการนี้
+  
+  @@index([deliveryId])
+  @@index([requisitionItemId])
+  @@index([drugId])
+  @@map("progressive_delivery_items")
+}
+
+// เพิ่ม relation ใน RequisitionItem model
+// progressiveDeliveries ProgressiveDeliveryItem[]
+
+// เพิ่ม relation ใน Drug model
+// progressiveDeliveryItems ProgressiveDeliveryItem[]
+
+// ==========================================
+// TRIP CHECKPOINTS & TRACKING
+// ==========================================
+
+enum CheckpointType {
+  DEPARTURE       // จุดออกเดินทาง
+  ARRIVAL         // จุดมาถึง
+  DELIVERY_START  // เริ่มส่งยา
+  DELIVERY_END    // ส่งยาเสร็จ
+  BREAK           // พักระหว่างทาง
+  ISSUE           // เกิดปัญหา
+  RETURN          // กลับ
+}
+
+model TripCheckpoint {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  tripId          String
+  trip            DeliveryTrip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  // ข้อมูล checkpoint
+  checkpointType  CheckpointType
+  location        String        // ตำแหน่ง
+  departmentId    String?       // แผนก (ถ้ามี)
+  department      Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  
+  // เวลา
+  plannedTime     DateTime?     // เวลาที่วางแผน
+  actualTime      DateTime      @default(now()) // เวลาจริง
+  
+  // ข้อมูล GPS
+  latitude        Decimal?      // ละติจูด
+  longitude       Decimal?      // ลองจิจูด
+  accuracy        Decimal?      // ความแม่นยำ GPS (เมตร)
+  
+  // รายละเอียด
+  description     String?       // คำอธิบาย
+  notes           String?       // หมายเหตุ
+  issues          String?       // ปัญหาที่พบ
+  
+  // ผู้บันทึก
+  recordedBy      String
+  recorder        User          @relation(fields: [recordedBy], references: [id], onDelete: Restrict)
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  
+  @@index([tripId])
+  @@index([checkpointType])
+  @@index([actualTime])
+  @@map("trip_checkpoints")
+}
+
+// เพิ่ม relation ใน Department model
+// tripCheckpoints TripCheckpoint[]
+
+// เพิ่ม relation ใน User model
+// recordedCheckpoints TripCheckpoint[]
+
+// ==========================================
+// CART ACTIVITY LOGGING
+// ==========================================
+
+enum CartActivity {
+  CHECKOUT        // เบิกรถเข็น
+  CHECKIN         // คืนรถเข็น
+  LOADING         // โหลดยา
+  DEPARTURE       // ออกเดินทาง
+  ARRIVAL         // มาถึง
+  MAINTENANCE     // บำรุงรักษา
+  CLEANING        // ทำความสะอาด
+  ISSUE_REPORTED  // รายงานปัญหา
+  ISSUE_RESOLVED  // แก้ไขปัญหา
+}
+
+model CartActivityLog {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  cartId          String
+  cart            DeliveryCart  @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  
+  // กิจกรรม
+  activity        CartActivity
+  description     String?       // คำอธิบายกิจกรรม
+  
+  // ผู้ดำเนินการ
+  performedBy     String
+  performer       User          @relation(fields: [performedBy], references: [id], onDelete: Restrict)
+  
+  // ข้อมูลเพิ่มเติม
+  location        String?       // ตำแหน่งที่เกิดเหตุการณ์
+  duration        Int?          // ระยะเวลา (นาที)
+  metadata        Json?         // ข้อมูลเพิ่มเติม (เช่น อุณหภูมิ, น้ำหนัก)
+  
+  // การอ้างอิง
+  relatedTripId   String?       // เที่ยวที่เกี่ยวข้อง
+  relatedTrip     DeliveryTrip? @relation(fields: [relatedTripId], references: [id], onDelete: SetNull)
+  
+  // หมายเหตุ
+  notes           String?
+  
+  // Audit fields
+  timestamp       DateTime      @default(now())
+  
+  @@index([cartId])
+  @@index([activity])
+  @@index([timestamp])
+  @@index([performedBy])
+  @@map("cart_activity_logs")
+}
+
+// เพิ่ม relation ใน User model
+// cartActivities  CartActivityLog[]
+
+// เพิ่ม relation ใน DeliveryTrip model
+// cartLogs        CartActivityLog[]
+
+// ==========================================
+// DELIVERY ROUTE OPTIMIZATION
+// ==========================================
+
+model DeliveryRoute {
+  id              String        @id @default(uuid())
+  
+  // ความสัมพันธ์
+  hospitalId      String
+  
+  // ข้อมูลเส้นทาง
+  routeName       String        // ชื่อเส้นทาง เช่น "Route A - Morning"
+  description     String?       // คำอธิบาย
+  
+  // การวางแผน
+  departmentOrder Json          // ลำดับแผนก (array of department IDs)
+  estimatedTime   Int           // เวลาที่คาดการณ์รวม (นาที)
+  estimatedDistance Decimal?    // ระยะทางที่คาดการณ์ (เมตร)
+  
+  // การใช้งาน
+  isActive        Boolean       @default(true)
+  isDefault       Boolean       @default(false) // เส้นทางเริ่มต้น
+  frequency       String?       // ความถี่ "DAILY", "WEEKLY", "AS_NEEDED"
+  
+  // สถิติการใช้งาน
+  usageCount      Int           @default(0)
+  averageTime     Int?          // เวลาเฉลี่ย (นาที)
+  averageDistance Decimal?      // ระยะทางเฉลี่ย (เมตร)
+  
+  // ผู้สร้าง
+  createdBy       String
+  creator         User          @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  
+  // Audit fields
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([hospitalId])
+  @@index([isActive])
+  @@map("delivery_routes")
+}
+
+// เพิ่ม relation ใน User model
+// createdRoutes   DeliveryRoute[]

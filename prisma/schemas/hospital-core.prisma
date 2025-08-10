@@ -167,6 +167,8 @@ model Department {
   // ความสัมพันธ์
   hospitalId      String
   hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  incomingDeliveries    ProgressiveDelivery[]
+  tripCheckpoints       TripCheckpoint[]
   
   // ข้อมูลแผนก
   name            String
@@ -240,6 +242,10 @@ model Warehouse {
   // ความสัมพันธ์
   hospitalId      String
   hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  expiryLots      ExpiryLot[]
+  stockMovements  StockMovementHistory[]
+  valueSnapshots  InventoryValueSnapshot[]
+  deliveryCarts   DeliveryCart[]
   
   // ข้อมูลคลัง
   name            String
@@ -324,6 +330,9 @@ model Drug {
   // ความสัมพันธ์
   hospitalId      String
   hospital        Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  drugExtended    DrugExtended?
+  deliveryItems   DeliveryItem[]
+  progressiveDeliveryItems ProgressiveDeliveryItem[]
   
   // ข้อมูลยาพื้นฐาน
   hospitalDrugCode String         // รหัสยาของโรงพยาบาล

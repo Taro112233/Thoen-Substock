@@ -102,6 +102,7 @@ model StockBatch {
   hospitalId      String
   stockCardId     String
   stockCard       StockCard     @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+  deliveryItems   DeliveryItem[]
   
   // ข้อมูล batch
   batchNumber     String        // หมายเลข batch
@@ -206,6 +207,8 @@ model StockCard {
   transactions    StockTransaction[]
   stockCounts     StockCountItem[]
   requisitionItems RequisitionItem[]
+  expiryLots      ExpiryLot[]
+  movementHistory StockMovementHistory[]
   
   @@unique([hospitalId, drugId, warehouseId])
   @@index([hospitalId, warehouseId])

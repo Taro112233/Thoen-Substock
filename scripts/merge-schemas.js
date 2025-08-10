@@ -1,6 +1,6 @@
 // scripts/merge-schemas.js
-// Enhanced Prisma Schema Merger with Master Data Support (Final Fixed Version)
-// แก้ไข relation errors และตรวจสอบ Master Data integrity
+// Enhanced Prisma Schema Merger with Master Data + Delivery Cart Support (v3.0)
+// แก้ไข relation errors และเพิ่มรองรับ Progressive Delivery System
 
 const fs = require('fs');
 const path = require('path');
@@ -24,18 +24,20 @@ datasource db {
 
 `;
 
-// Schema file order for proper dependency resolution (Updated with fixed order)
+// Schema file order for proper dependency resolution (Updated with Delivery Cart support)
 const SCHEMA_ORDER = {
-  'shared-enums.prisma': 0,          // ต้อง load ก่อนทุกไฟล์
-  'admin-master-data.prisma': 1,     // Master Data ต้องมาก่อน core models
-  'auth.prisma': 2,                  // User management
-  'hospital-core.prisma': 3,         // Hospital, Department, Warehouse, Drug
-  'inventory.prisma': 4,             // Stock management
-  'requisitions.prisma': 5,          // Requisition system
-  'suppliers.prisma': 6,             // Supplier management
-  'analytics.prisma': 7,             // Analytics and reporting
-  'audit.prisma': 8,                 // Audit and compliance
-  'notifications.prisma': 9          // Notifications
+  'shared-enums.prisma': 0,              // ต้อง load ก่อนทุกไฟล์
+  'admin-master-data.prisma': 1,         // Master Data ต้องมาก่อน core models
+  'auth.prisma': 2,                      // User management
+  'hospital-core.prisma': 3,             // Hospital, Department, Warehouse, Drug
+  'inventory.prisma': 4,                 // Stock management
+  'requisitions.prisma': 5,              // Requisition system
+  'suppliers.prisma': 6,                 // Supplier management
+  'enhanced-inventory.prisma': 7,        // Enhanced Stock & Delivery features
+  'delivery-transport.prisma': 8,        // NEW: Delivery Cart & Progressive Delivery
+  'analytics.prisma': 9,                 // Analytics and reporting
+  'audit.prisma': 10,                    // Audit and compliance
+  'notifications.prisma': 11             // Notifications
 };
 
 function extractModelsAndEnums(content) {
@@ -85,6 +87,14 @@ function validateRelations(content) {
     console.log(`🎯 Found ${masterDataRelations.length} master data relations`);
   }
   
+  // Validate Delivery Cart relations (NEW)
+  const deliveryModels = ['DeliveryCart', 'DeliveryTrip', 'ProgressiveDelivery', 'ExpiryLot'];
+  const deliveryRelations = relations.filter(r => deliveryModels.includes(r.targetModel));
+  
+  if (deliveryRelations.length > 0) {
+    console.log(`🚛 Found ${deliveryRelations.length} delivery cart relations`);
+  }
+  
   // ตรวจสอบ relations ที่สำคัญ
   const requiredRelations = [
     { from: 'Drug', to: 'DrugForm', field: 'drugForm' },
@@ -95,7 +105,11 @@ function validateRelations(content) {
     { from: 'Hospital', to: 'DrugForm', field: 'drugForms' },
     { from: 'Hospital', to: 'DrugGroup', field: 'drugGroups' },
     { from: 'Hospital', to: 'DrugType', field: 'drugTypes' },
-    { from: 'Hospital', to: 'DrugStorage', field: 'drugStorage' }
+    { from: 'Hospital', to: 'DrugStorage', field: 'drugStorage' },
+    // NEW: Delivery Cart relations
+    { from: 'Warehouse', to: 'DeliveryCart', field: 'deliveryCarts' },
+    { from: 'Requisition', to: 'ProgressiveDelivery', field: 'progressiveDeliveries' },
+    { from: 'StockCard', to: 'ExpiryLot', field: 'expiryLots' }
   ];
   
   let foundCriticalRelations = 0;
@@ -136,7 +150,7 @@ function validateMasterDataStructure(content) {
   }
   
   // Check for proper enum definitions
-  const requiredEnums = ['PersonnelHierarchy'];
+  const requiredEnums = ['PersonnelHierarchy', 'CartType', 'TripStatus', 'ProgressiveDeliveryStatus'];
   const missingEnums = [];
   
   requiredEnums.forEach(enumName => {
@@ -169,8 +183,76 @@ function validateMasterDataStructure(content) {
   return { missingModels, missingEnums };
 }
 
+function validateDeliveryCartStructure(content) {
+  console.log('🚛 Validating delivery cart structure...');
+  
+  const requiredDeliveryModels = [
+    'DeliveryCart',
+    'DeliveryTrip', 
+    'ProgressiveDelivery',
+    'ProgressiveDeliveryItem',
+    'TripCheckpoint',
+    'CartActivityLog',
+    'ExpiryLot',
+    'DeliveryNote',
+    'DeliveryItem'
+  ];
+  
+  const missingDeliveryModels = [];
+  
+  requiredDeliveryModels.forEach(model => {
+    if (!content.includes(`model ${model}`)) {
+      missingDeliveryModels.push(model);
+    }
+  });
+  
+  if (missingDeliveryModels.length > 0) {
+    console.warn(`⚠️  Warning: Missing delivery models: ${missingDeliveryModels.join(', ')}`);
+  } else {
+    console.log('✅ All required delivery models found');
+  }
+  
+  // Check delivery-specific enums
+  const requiredDeliveryEnums = [
+    'CartType',
+    'CartStatus', 
+    'TripStatus',
+    'ProgressiveDeliveryStatus',
+    'CheckpointType',
+    'CartActivity'
+  ];
+  
+  let foundDeliveryEnums = 0;
+  requiredDeliveryEnums.forEach(enumName => {
+    if (content.includes(`enum ${enumName}`)) {
+      foundDeliveryEnums++;
+    }
+  });
+  
+  console.log(`🚚 Found ${foundDeliveryEnums}/${requiredDeliveryEnums.length} delivery enums`);
+  
+  // ตรวจสอบ Progressive Delivery relations
+  const progressiveDeliveryChecks = [
+    'requisitionId',
+    'deliveryTripId',
+    'targetDepartmentId',
+    'requisitionItemId'
+  ];
+  
+  let foundProgressiveFields = 0;
+  progressiveDeliveryChecks.forEach(field => {
+    if (content.includes(field)) {
+      foundProgressiveFields++;
+    }
+  });
+  
+  console.log(`📦 Found ${foundProgressiveFields}/${progressiveDeliveryChecks.length} progressive delivery fields`);
+  
+  return { missingDeliveryModels };
+}
+
 function mergeSchemas() {
-  console.log('🔄 Merging Prisma schemas with Master Data support...');
+  console.log('🔄 Merging Prisma schemas with Master Data + Delivery Cart support...');
   
   // Check if schemas directory exists
   if (!fs.existsSync(SCHEMAS_DIR)) {
@@ -255,20 +337,30 @@ function mergeSchemas() {
     mergedContent += `\n// ==========================================\n`;
     mergedContent += `// ${sectionName}\n`;
     
-    // Add special annotations for master data
+    // Add special annotations for different types
     if (file === 'admin-master-data.prisma') {
       mergedContent += `// 🎯 Master Data Management Models\n`;
       mergedContent += `// For Admin Panel Data Management\n`;
     } else if (file === 'shared-enums.prisma') {
       mergedContent += `// 🔧 Shared Enums - Foundation Layer\n`;
+    } else if (file === 'enhanced-inventory.prisma') {
+      mergedContent += `// 📦 Enhanced Inventory & Delivery Features\n`;
+      mergedContent += `// ExpiryLot, DeliveryNote, Emergency Requisitions\n`;
+    } else if (file === 'delivery-transport.prisma') {
+      mergedContent += `// 🚛 Hospital Delivery Cart & Progressive Delivery\n`;
+      mergedContent += `// Cart Management, Trip Tracking, Progressive Delivery\n`;
     }
     
     mergedContent += `// ==========================================\n\n`;
     mergedContent += content + '\n';
     
-    // Enhanced logging with master data indicators
-    const masterDataIndicator = file.includes('master-data') ? '🎯 ' : '';
-    console.log(`✅ ${masterDataIndicator}Merged ${file}: ${models.size} models, ${enums.size} enums`);
+    // Enhanced logging with special indicators
+    let indicator = '';
+    if (file.includes('master-data')) indicator = '🎯 ';
+    else if (file.includes('delivery') || file.includes('enhanced-inventory')) indicator = '🚛 ';
+    else if (file.includes('shared-enums')) indicator = '🔧 ';
+    
+    console.log(`✅ ${indicator}Merged ${file}: ${models.size} models, ${enums.size} enums`);
   });
   
   // Write the merged schema
@@ -281,6 +373,9 @@ function mergeSchemas() {
     
     // Validate master data structure
     validateMasterDataStructure(mergedContent);
+    
+    // Validate delivery cart structure (NEW)
+    validateDeliveryCartStructure(mergedContent);
     
     return mergedContent;
   } catch (error) {
@@ -308,10 +403,11 @@ function validateMerge() {
       throw new Error('No models found in merged schema');
     }
     
-    // Check for required models including master data
+    // Check for required models including master data and delivery
     const requiredModels = [
       'User', 'Hospital', 'Drug', 'StockCard',
-      'PersonnelType', 'DrugForm', 'DrugGroup', 'DrugType', 'DrugStorage'
+      'PersonnelType', 'DrugForm', 'DrugGroup', 'DrugType', 'DrugStorage',
+      'DeliveryCart', 'DeliveryTrip', 'ProgressiveDelivery', 'ExpiryLot'
     ];
     const modelNames = modelMatches.map(match => match.replace('model ', ''));
     
@@ -352,6 +448,26 @@ function validateMerge() {
     
     if (missingAdminFeatures.length > 0) {
       console.warn(`⚠️  Warning: Admin panel features missing: ${missingAdminFeatures.join(', ')}`);
+    }
+    
+    // Check for delivery cart requirements (NEW)
+    const deliveryRequirements = [
+      'CartType',
+      'TripStatus',
+      'ProgressiveDeliveryStatus',
+      'CartActivity',
+      'CheckpointType'
+    ];
+    
+    const missingDeliveryFeatures = [];
+    for (const requirement of deliveryRequirements) {
+      if (!content.includes(requirement)) {
+        missingDeliveryFeatures.push(requirement);
+      }
+    }
+    
+    if (missingDeliveryFeatures.length > 0) {
+      console.warn(`⚠️  Warning: Delivery cart features missing: ${missingDeliveryFeatures.join(', ')}`);
     }
     
     // Check for potential relation issues
@@ -396,6 +512,26 @@ function validateMerge() {
       potentialIssues.push(`Hospital master data relations incomplete (${foundHospitalRelations}/${hospitalMasterDataChecks.length})`);
     }
     
+    // ตรวจสอบ Delivery Cart relations (NEW)
+    const deliveryRelationChecks = [
+      'deliveryCarts',
+      'progressiveDeliveries',
+      'expiryLots',
+      'deliveryTrips',
+      'operatedCarts'
+    ];
+    
+    let foundDeliveryRelations = 0;
+    deliveryRelationChecks.forEach(relation => {
+      if (content.includes(relation)) {
+        foundDeliveryRelations++;
+      }
+    });
+    
+    if (foundDeliveryRelations < deliveryRelationChecks.length) {
+      potentialIssues.push(`Delivery cart relations incomplete (${foundDeliveryRelations}/${deliveryRelationChecks.length})`);
+    }
+    
     if (potentialIssues.length > 0) {
       console.warn('⚠️  Potential issues found:');
       potentialIssues.forEach(issue => console.warn(`   - ${issue}`));
@@ -413,7 +549,7 @@ function validateMerge() {
 
 function showUsage() {
   console.log(`
-📚 Hospital Pharmacy Schema Merger v2.1 - Master Data Edition (FINAL)
+📚 Hospital Pharmacy Schema Merger v3.0 - Complete System Edition
 
 Usage:
   node scripts/merge-schemas.js [--check-only]
@@ -424,24 +560,39 @@ Options:
 
 This script merges all .prisma files from prisma/schemas/ into prisma/schema.prisma
 
-🎯 New Features (FIXED):
+🎯 Complete Features (v3.0):
 - ✅ Master Data Models (Personnel, Drug Forms, Groups, Types, Storage)
 - ✅ Admin Panel Support with Role Hierarchy
-- ✅ Fixed All Relation Errors & Missing Opposite Fields
-- ✅ Enhanced Validation for Master Data Integrity
-- ✅ Developer > Director > Group Head > Staff > Student Hierarchy
+- ✅ Enhanced Inventory with ExpiryLot & DeliveryNote
+- ✅ Hospital Delivery Cart System
+- ✅ Progressive Delivery Management
+- ✅ Trip Tracking & GPS Support
+- ✅ Real-time Cart Activity Logging
+- ✅ Route Optimization Support
 
-✅ Fixed Issues:
-- ✅ Drug model now has proper foreign keys to Master Data
-- ✅ Hospital model has proper relations to Master Data
+✅ All Fixed Issues:
+- ✅ Drug model with Master Data foreign keys
+- ✅ Hospital model with Master Data relations
 - ✅ All @relation fields have opposite relations
-- ✅ Master Data models have proper back-references
-- ✅ User model has proper Master Data creation relations
+- ✅ Master Data models with proper back-references
+- ✅ User model with Master Data creation relations
+- ✅ Delivery Cart models with full integration
+- ✅ Progressive Delivery workflow support
+
+🚛 New Delivery Features:
+- ✅ DeliveryCart (Multi-type cart management)
+- ✅ DeliveryTrip (GPS tracking, route planning)
+- ✅ ProgressiveDelivery (Partial drug delivery)
+- ✅ TripCheckpoint (Real-time location tracking)
+- ✅ CartActivityLog (Complete audit trail)
+- ✅ ExpiryLot (Enhanced FEFO management)
+- ✅ DeliveryRoute (Route optimization)
 
 Features:
 - ✅ Duplicate model/enum detection
 - ✅ Comprehensive relation validation
 - ✅ Master Data structure validation
+- ✅ Delivery Cart structure validation
 - ✅ Dependency-aware file ordering
 - ✅ Critical relation integrity checks
 
@@ -484,7 +635,7 @@ if (require.main === module) {
     validateMerge();
     
     console.log(`
-🎉 Schema merge completed successfully!
+🎉 Complete Hospital Pharmacy Schema merge completed successfully!
 
 🎯 Master Data Models Ready:
   - PersonnelType (Role hierarchy management)
@@ -493,11 +644,29 @@ if (require.main === module) {
   - DrugType (High Alert, Narcotic, Controlled)
   - DrugStorage (Room temp, Refrigerated, Frozen)
 
+🚛 Delivery Cart System Ready:
+  - DeliveryCart (Multi-type cart fleet management)
+  - DeliveryTrip (GPS-tracked delivery missions)
+  - ProgressiveDelivery (Partial drug delivery workflow)
+  - TripCheckpoint (Real-time location tracking)
+  - CartActivityLog (Complete audit trail)
+  - ExpiryLot (Enhanced FEFO lot management)
+
 ✅ All Relations Fixed:
   - Drug ↔ Master Data (Form, Group, Type, Storage)
   - Hospital ↔ Master Data (All types)
   - User ↔ PersonnelType
+  - Warehouse ↔ DeliveryCart
+  - Requisition ↔ ProgressiveDelivery
   - Complete back-reference integrity
+
+🚀 Enhanced Features:
+  - Progressive drug delivery (send some drugs first)
+  - Real-time cart tracking with GPS
+  - Multiple delivery trips per requisition
+  - FEFO lot management with ExpiryLot
+  - Emergency requisition auto-creation
+  - Complete delivery audit trail
 
 Next steps:
   1. pnpm db:generate  # Generate Prisma client
@@ -508,18 +677,22 @@ Next steps:
 For production:
   pnpm db:migrate      # Create and apply migration
 
-💡 Admin Panel Features:
+💡 Complete System Features:
   - Hospital management (Developer level)
   - Department/Warehouse management (Director level)  
   - Personnel type management (Director level)
   - Drug master data management (Group Head level)
+  - Delivery cart fleet management
+  - Progressive delivery workflow
+  - Real-time GPS tracking
   - Role-based permissions system
   - Hierarchical approval workflow
 
 🛠️  Troubleshooting:
   - Use 'node scripts/merge-schemas.js --check-only' to validate
   - All relation errors have been fixed
-  - Master data integrity is now complete
+  - Master data integrity is complete
+  - Delivery cart integration is complete
   - Run 'prisma format' if needed for final formatting
 `);
     
@@ -529,8 +702,10 @@ For production:
     console.log('  1. Check for duplicate models in different schema files');
     console.log('  2. Ensure all relations have proper opposite fields');
     console.log('  3. Verify master data models are properly structured');
-    console.log('  4. Check role hierarchy definitions');
-    console.log('  5. Verify file syntax with: prisma format');
+    console.log('  4. Check delivery cart model integrity');
+    console.log('  5. Verify role hierarchy definitions');
+    console.log('  6. Check progressive delivery workflow models');
+    console.log('  7. Verify file syntax with: prisma format');
     process.exit(1);
   }
 }
