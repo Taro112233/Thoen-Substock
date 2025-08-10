@@ -59,7 +59,7 @@ export default function AdminMainPage() {
       title: 'จัดการบุคลากร',
       description: 'ประเภทและสิทธิ์บุคลากร',
       icon: Shield,
-      href: '/admin/personnel',
+      href: '/admin/personnel-types',
       color: 'from-purple-500 to-violet-500',
       count: stats.personnelTypes
     },
