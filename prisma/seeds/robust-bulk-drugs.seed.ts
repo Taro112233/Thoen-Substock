@@ -1,4 +1,4 @@
-// prisma/seeds/robust-bulk-drugs.seed.ts - รองรับข้อมูลว่าง
+// prisma/seeds/robust-bulk-drugs.seed.ts - รองรับข้อมูลว่าง และ warehouses parameter
 import { PrismaClient } from "@prisma/client";
 import fs from 'fs';
 import path from 'path';
@@ -25,7 +25,8 @@ interface BulkDrugInput {
 export async function seedBulkRealDrugs(
   prisma: PrismaClient, 
   hospitals: any[], 
-  masterData: any
+  masterData: any,
+  warehouses?: Record<string, any[]> // เพิ่ม parameter warehouses
 ) {
   console.log("💊 Creating Bulk Real Drug Data for โรงพยาบาลลำปาง...");
   console.log("🛠️ Enhanced with Smart Default Handler");
@@ -35,17 +36,50 @@ export async function seedBulkRealDrugs(
   let totalProcessed = 0;
   let totalValue = 0;
 
-  // Find main warehouse first
-  const mainWarehouse = await prisma.warehouse.findFirst({
-    where: {
-      hospitalId: hospital1.id,
-      warehouseCode: "MAIN"
-    }
-  });
+  // Find main warehouse - รองรับทั้งจาก parameter และจาก database
+  let mainWarehouse;
+  
+  if (warehouses && warehouses[hospital1.id]) {
+    // หา warehouse จาก parameter ที่ส่งมา
+    mainWarehouse = warehouses[hospital1.id].find(w => w.warehouseCode === "MAIN");
+    console.log("🏪 Found main warehouse from parameter");
+  }
+  
+  if (!mainWarehouse) {
+    // หา warehouse จาก database
+    mainWarehouse = await prisma.warehouse.findFirst({
+      where: {
+        hospitalId: hospital1.id,
+        warehouseCode: "MAIN"
+      }
+    });
+    console.log("🏪 Found main warehouse from database");
+  }
 
   if (!mainWarehouse) {
-    throw new Error("❌ Main warehouse not found for hospital");
+    // สร้าง main warehouse ใหม่หากไม่มี
+    console.log("🏪 Creating main warehouse...");
+    try {
+      mainWarehouse = await prisma.warehouse.create({
+        data: {
+          name: "คลังยาหลัก",
+          warehouseCode: "MAIN",
+          type: "CENTRAL",
+          location: "ชั้น 1 อาคารเภสัชกรรม",
+          description: "คลังยาหลักของโรงพยาบาล",
+          capacity: 10000,
+          isActive: true,
+          hospitalId: hospital1.id,
+        }
+      });
+      console.log("✅ Created main warehouse successfully");
+    } catch (error) {
+      console.error("❌ Failed to create main warehouse:", error);
+      throw new Error("❌ Cannot create main warehouse for drug processing");
+    }
   }
+
+  console.log(`🏪 Using warehouse: ${mainWarehouse.name} (${mainWarehouse.warehouseCode})`);
 
   // ================================
   // LOAD AND PROCESS CSV DATA
@@ -86,7 +120,7 @@ export async function seedBulkRealDrugs(
     try {
       await prisma.$transaction(async (tx) => {
         for (const drugData of batch) {
-          // Create Drug (ลบฟิลด์ที่ไม่มีใน schema)
+          // Create Drug
           const drug = await tx.drug.upsert({
             where: {
               hospitalId_hospitalDrugCode: {
@@ -111,7 +145,6 @@ export async function seedBulkRealDrugs(
               isNarcotic: false,
               isHighAlert: drugData.category === "HIGH_ALERT",
               isDangerous: drugData.riskLevel === "HIGH" || drugData.riskLevel === "CRITICAL",
-              // ลบ isRefer ออก - ไม่มีใน schema
             }
           });
 
@@ -122,7 +155,11 @@ export async function seedBulkRealDrugs(
           
           const stockCard = await tx.stockCard.upsert({
             where: {
-              id: `${hospital1.id}-${mainWarehouse.id}-${drug.id}`
+              hospitalId_drugId_warehouseId: {
+                hospitalId: hospital1.id,
+                drugId: drug.id,
+                warehouseId: mainWarehouse.id
+              }
             },
             update: {},
             create: {
@@ -206,6 +243,7 @@ export async function seedBulkRealDrugs(
   console.log(`  ✅ Total drugs processed: ${totalProcessed}`);
   console.log(`  💰 Total inventory value: ${totalValue.toLocaleString()} บาท`);
   console.log(`  🛠️ Auto-fixed fields: ${fixedCount}`);
+  console.log(`  🏪 Warehouse used: ${mainWarehouse.name}`);
   console.log(`  📋 Drug Categories:`);
   Object.entries(categoriesCount).forEach(([category, count]) => {
     console.log(`    - ${category}: ${count} drugs`);
@@ -216,6 +254,7 @@ export async function seedBulkRealDrugs(
     totalProcessed: totalProcessed || 0, 
     totalValue: totalValue || 0, 
     categoriesCount: categoriesCount || {},
+    warehouseUsed: mainWarehouse.name,
     success: true
   };
 }

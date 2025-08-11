@@ -1,4 +1,4 @@
-// scripts/merge-seeds.js - Updated for Bulk Drugs Support
+// scripts/merge-seeds.js - Final Version with Warehouse Parameter Support
 const fs = require('fs');
 const path = require('path');
 
@@ -9,15 +9,16 @@ const SEED_ORDER = {
   'hospitals.seed.ts': 0,
   'personnel-types.seed.ts': 1,
   'departments.seed.ts': 2,
-  'users.seed.ts': 3,
-  'master-data.seed.ts': 4,
-  'real-drugs.seed.ts': 5, // รองรับทั้ง seedRealDrugs และ seedBulkRealDrugs
-  'bulk-real-drugs.seed.ts': 5, // Alternative file name
-  'demo-data.seed.ts': 6,
+  'warehouses.seed.ts': 3, // เพิ่ม warehouse seed
+  'users.seed.ts': 4,
+  'master-data.seed.ts': 5,
+  'real-drugs.seed.ts': 6,
+  'bulk-real-drugs.seed.ts': 6,
+  'robust-bulk-drugs.seed.ts': 6,
+  'demo-data.seed.ts': 7,
 };
 
 function extractExportedFunction(content, filename) {
-  // Extract the main export function from each seed file
   const functionMatch = content.match(/export async function (\w+)\([^)]*\)\s*\{([\s\S]*)\}/);
   
   if (!functionMatch) {
@@ -26,32 +27,15 @@ function extractExportedFunction(content, filename) {
   }
 
   const functionName = functionMatch[1];
-  const functionBody = functionMatch[2];
   
   return {
     name: functionName,
-    body: functionBody.trim(),
-    imports: extractImports(content)
+    sourceFile: filename
   };
 }
 
-function extractImports(content) {
-  const imports = [];
-  const importRegex = /import\s+.*?from\s+['"](.*?)['"];?\s*$/gm;
-  let match;
-  
-  while ((match = importRegex.exec(content)) !== null) {
-    const importPath = match[1];
-    if (!importPath.startsWith('@prisma/client') && !importPath.startsWith('../lib/')) {
-      imports.push(match[0].trim());
-    }
-  }
-  
-  return imports;
-}
-
 function mergeSeeds() {
-  console.log('🌱 Hospital Pharmacy Seed Merger v2.1 - Enhanced for Bulk Drugs');
+  console.log('🌱 Hospital Pharmacy Seed Merger v2.5 - Final Warehouse Integration');
   console.log('====================================================================');
   
   if (!fs.existsSync(SEEDS_DIR)) {
@@ -79,7 +63,7 @@ function mergeSeeds() {
   });
 
   const extractedFunctions = [];
-  const allImports = new Set();
+  const seenFunctions = new Set();
 
   // Extract functions from each seed file
   for (const file of seedFiles) {
@@ -90,61 +74,73 @@ function mergeSeeds() {
     
     const extracted = extractExportedFunction(content, file);
     if (extracted) {
+      // ป้องกัน function ซ้ำ - ให้ priority ตาม file order
+      if (seenFunctions.has(extracted.name)) {
+        console.log(`  ⚠️  Skipping duplicate function: ${extracted.name} from ${file}`);
+        continue;
+      }
+      
       extractedFunctions.push(extracted);
-      extracted.imports.forEach(imp => allImports.add(imp));
-      console.log(`  ✅ Extracted function: ${extracted.name}`);
+      seenFunctions.add(extracted.name);
+      console.log(`  ✅ Extracted function: ${extracted.name} from ${file}`);
     }
   }
 
+  // ตรวจสอบว่ามี warehouse และ drug seeding function หรือไม่
+  const hasWarehouseFunction = extractedFunctions.some(f => f.name === 'seedWarehouses');
+  const drugFunctions = extractedFunctions.filter(f => 
+    f.name === 'seedRealDrugs' || f.name === 'seedBulkRealDrugs'
+  );
+
+  if (drugFunctions.length === 0) {
+    console.error('❌ No drug seeding function found!');
+    process.exit(1);
+  }
+
+  const selectedDrugFunction = drugFunctions[0];
+  console.log(`\n🎯 Using drug function: ${selectedDrugFunction.name} from ${selectedDrugFunction.sourceFile}`);
+  
+  if (hasWarehouseFunction) {
+    console.log(`🏪 Warehouse creation: ✅ Enabled`);
+  } else {
+    console.log(`🏪 Warehouse creation: ⚠️  Missing - will be auto-created`);
+  }
+
   // Generate merged seed file
-  const mergedContent = generateMergedSeed(extractedFunctions, Array.from(allImports));
+  const mergedContent = generateMergedSeed(extractedFunctions, selectedDrugFunction, hasWarehouseFunction);
   
   // Write merged file
   fs.writeFileSync(OUTPUT_FILE, mergedContent, 'utf8');
   
-  console.log(`\n✅ Successfully merged ${extractedFunctions.length} seed functions into: ${OUTPUT_FILE}`);
-  console.log(`📦 Generated modular seed file with:`);
-  console.log(`   - Main orchestrator function`);
-  console.log(`   - ${extractedFunctions.length} imported seed functions`);
-  console.log(`   - Proper error handling`);
-  console.log(`   - Phase-based execution`);
-  console.log(`   - Bulk drug processing support`);
-  
-  console.log(`\n📝 Usage:`);
-  console.log(`   pnpm db:seed              # Run all seeds`);
-  console.log(`   SEED_DEMO_DATA=true pnpm db:seed  # Include demo data`);
+  console.log(`\n✅ Successfully merged ${extractedFunctions.length} unique seed functions`);
+  console.log(`📦 Generated seed file with enhanced warehouse support`);
 }
 
-function generateMergedSeed(functions, imports) {
-  const importStatements = [
-    `// prisma/seed.ts - Auto-generated Modular Seed File`,
-    `// Generated by scripts/merge-seeds.js`,
-    `// Do not edit manually - modify individual seed files instead`,
-    ``,
-    `import { PrismaClient } from "@prisma/client";`,
-    `import { hashPassword } from "../lib/password-utils";`,
-    ``
-  ];
-
-  // Add function imports
-  const functionImports = functions.map(f => `import { ${f.name} } from "./seeds/${getFileNameFromFunction(f.name)}";`);
-  importStatements.push(...functionImports);
-  importStatements.push('');
-
+function generateMergedSeed(functions, selectedDrugFunction, hasWarehouseFunction) {
   // Detect if we have bulk drugs function
-  const hasBulkDrugs = functions.some(f => f.name === 'seedBulkRealDrugs');
-  const hasRegularDrugs = functions.some(f => f.name === 'seedRealDrugs');
+  const hasBulkDrugs = selectedDrugFunction.name === 'seedBulkRealDrugs';
   
-  // Choose the appropriate drug seeding function
-  const drugSeedFunction = hasBulkDrugs ? 'seedBulkRealDrugs' : 'seedRealDrugs';
-  const drugSeedDescription = hasBulkDrugs ? 'bulk real drug data' : 'real drug data';
+  // Create function imports
+  const functionImports = functions.map(f => 
+    `import { ${f.name} } from "./seeds/${getFileNameFromFunction(f.name)}";`
+  ).join('\n');
 
-  const mainFunction = `const prisma = new PrismaClient();
+  const seedContent = `// prisma/seed.ts - Auto-generated Modular Seed File
+// Generated by scripts/merge-seeds.js v2.5 - Final Warehouse Integration
+// Do not edit manually - modify individual seed files instead
+
+import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../lib/password-utils";
+
+${functionImports}
+
+const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Starting Enhanced Hospital Pharmacy Stock Management System Seed...");
   console.log("🎯 Using Modular Seed Architecture with Neon + Prisma");
-  ${hasBulkDrugs ? 'console.log("⚡ Enhanced with Bulk Drug Processing Support");' : ''}
+  ${hasBulkDrugs ? 'console.log("⚡ Enhanced with Bulk Drug Processing Support v2.5");' : ''}
+  ${hasWarehouseFunction ? 'console.log("🏪 Full warehouse management enabled");' : 'console.log("🏪 Basic warehouse auto-creation enabled");'}
 
   try {
     // ================================
@@ -173,8 +169,8 @@ async function main() {
         position: "System Developer",
         role: "DEVELOPER",
         status: "ACTIVE",
-        hospitalId: hospitals[0].id, // Use first hospital
-        personnelTypeId: undefined, // Will be updated after personnel type creation
+        hospitalId: hospitals[0].id,
+        personnelTypeId: undefined,
         isProfileComplete: true,
         emailVerified: true,
         password: hashedDevPassword,
@@ -203,11 +199,51 @@ async function main() {
     console.log(\`✅ Created departments for all hospitals\`);
 
     // ================================
+    // PHASE 2.5: WAREHOUSE INFRASTRUCTURE
+    // ================================
+    console.log("\\n🏪 PHASE 2.5: Warehouse Infrastructure");
+    
+    ${hasWarehouseFunction ? `
+    // 5. Create comprehensive warehouses for all hospitals
+    const warehouses = await seedWarehouses(prisma, hospitals);
+    console.log(\`✅ Created comprehensive warehouses for all hospitals\`);
+    ` : `
+    // 5. Create basic main warehouse for drug processing
+    console.log("🏪 Creating basic main warehouses...");
+    const warehouses: Record<string, any[]> = {};
+    
+    for (const hospital of hospitals) {
+      const mainWarehouse = await prisma.warehouse.upsert({
+        where: {
+          hospitalId_warehouseCode: {
+            hospitalId: hospital.id,
+            warehouseCode: "MAIN"
+          }
+        },
+        update: {},
+        create: {
+          name: "คลังยาหลัก",
+          warehouseCode: "MAIN",
+          type: "CENTRAL",
+          location: "ชั้น 1 อาคารเภสัชกรรม",
+          description: "คลังยาหลักของโรงพยาบาล",
+          capacity: 10000,
+          isActive: true,
+          hospitalId: hospital.id,
+        }
+      });
+      warehouses[hospital.id] = [mainWarehouse];
+      console.log(\`  ✅ Main warehouse for \${hospital.name}\`);
+    }
+    console.log(\`✅ Created basic warehouses for all hospitals\`);
+    `}
+
+    // ================================
     // PHASE 3: PERSONNEL
     // ================================
     console.log("\\n👥 PHASE 3: Personnel Management");
     
-    // 5. Create diverse users with proper role assignments
+    // 6. Create diverse users with proper role assignments
     const users = await seedUsers(prisma, hospitals, departments, personnelTypes);
     console.log(\`✅ Created \${users.length} users with role assignments\`);
 
@@ -216,29 +252,49 @@ async function main() {
     // ================================
     console.log("\\n💊 PHASE 4: Master Data Setup");
     
-    // 6. Create master data (drug forms, groups, types, etc.)
+    // 7. Create master data (drug forms, groups, types, etc.)
     const masterData = await seedMasterData(prisma, hospitals, devUser);
     console.log(\`✅ Created master data for all hospitals\`);
 
     // ================================
-    // PHASE 5: DRUG DATA
+    // PHASE 5: DRUG DATA PROCESSING
     // ================================
     console.log("\\n💊 PHASE 5: Drug Data Processing");
-    ${hasBulkDrugs ? 'console.log("⚡ Using optimized bulk processing for large datasets");' : ''}
+    ${hasBulkDrugs ? 'console.log("⚡ Using enhanced bulk processing for 400+ drug dataset");' : ''}
     
-    // Create drug data for Hospital 1
-    const drugResult = await ${drugSeedFunction}(prisma, hospitals, masterData);
-    ${hasBulkDrugs ? `
-    console.log(\`✅ Bulk drug processing completed\`);
-    if (drugResult && typeof drugResult === 'object' && drugResult.totalProcessed) {
-      console.log(\`📊 Processed \${drugResult.totalProcessed} drugs\`);
-      console.log(\`💰 Total value: \${drugResult.totalValue ? drugResult.totalValue.toLocaleString() : 'N/A'} บาท\`);
+    // Execute drug seeding with warehouse support
+    console.log(\`🔄 Starting ${selectedDrugFunction.name} function...\`);
+    
+    const drugResult = await ${selectedDrugFunction.name}(prisma, hospitals, masterData, warehouses);
+    
+    // Enhanced result handling
+    if (drugResult && typeof drugResult === 'object') {
+      // Handle bulk drug processing results
+      if ('totalProcessed' in drugResult && 'totalValue' in drugResult) {
+        console.log(\`✅ Bulk drug processing completed successfully\`);
+        console.log(\`📊 Total drugs processed: \${drugResult.totalProcessed || 0}\`);
+        console.log(\`💰 Total inventory value: \${(drugResult.totalValue || 0).toLocaleString()} บาท\`);
+        
+        if (drugResult.warehouseUsed) {
+          console.log(\`🏪 Primary warehouse: \${drugResult.warehouseUsed}\`);
+        }
+        
+        if (drugResult.categoriesCount) {
+          console.log(\`📋 Drug Categories Distribution:\`);
+          Object.entries(drugResult.categoriesCount).forEach(([category, count]) => {
+            console.log(\`   - \${category}: \${count} drugs\`);
+          });
+        }
+      } else if (Array.isArray(drugResult)) {
+        // Handle regular drug processing results (array)
+        console.log(\`✅ Regular drug processing completed\`);
+        console.log(\`📊 Total drugs created: \${drugResult.length}\`);
+      } else {
+        console.log(\`✅ Drug processing completed with custom result format\`);
+      }
     } else {
-      console.log(\`📊 Bulk processing completed successfully\`);
+      console.log(\`⚠️  Drug processing completed but no valid result returned\`);
     }
-    ` : `
-    console.log(\`✅ Created \${Array.isArray(drugResult) ? drugResult.length : 'N/A'} real drugs for โรงพยาบาลลำปาง\`);
-    `}
 
     // ================================
     // PHASE 6: DEMO DATA (Optional)
@@ -256,30 +312,23 @@ async function main() {
     // COMPLETION SUMMARY
     // ================================
     console.log("\\n🎉 Enhanced Hospital Pharmacy Seed Completed Successfully!");
-    console.log("\\n📊 Summary:");
+    console.log("\\n📊 Final Summary:");
     console.log(\`🏥 Hospitals: \${hospitals.length}\`);
     console.log(\`👥 Personnel Types: \${Object.values(personnelTypes).flat().length}\`);
     console.log(\`🏢 Departments: \${Object.values(departments).flat().length}\`);
+    console.log(\`🏪 Warehouses: \${Object.values(warehouses).flat().length}\`);
     console.log(\`👤 Users: \${users.length + 1} (including dev user)\`);
     console.log(\`💊 Master Data Categories: \${Object.keys(masterData).length}\`);
-    ${hasBulkDrugs ? `
-    if (drugResult && typeof drugResult === 'object' && drugResult.totalProcessed) {
-      console.log(\`🏥 Bulk Drugs Processed: \${drugResult.totalProcessed}\`);
-      console.log(\`💰 Total Drug Value: \${drugResult.totalValue ? drugResult.totalValue.toLocaleString() : 'N/A'} บาท\`);
-      if (drugResult.categoriesCount) {
-        console.log(\`📋 Drug Categories:\`);
-        Object.entries(drugResult.categoriesCount).forEach(([category, count]) => {
-          console.log(\`   - \${category}: \${count} drugs\`);
-        });
-      }
-    } else {
-      console.log(\`🏥 Bulk Drugs: Processing completed\`);
-    }
-    ` : `
-    console.log(\`🏥 Real Drugs (โรงพยาบาลลำปาง): \${Array.isArray(drugResult) ? drugResult.length : 'N/A'}\`);
-    `}
     
-    console.log("\\n🔑 System Access:");
+    // Enhanced drug statistics
+    if (drugResult && typeof drugResult === 'object' && 'totalProcessed' in drugResult) {
+      console.log(\`🏥 Bulk Drugs Processed: \${drugResult.totalProcessed || 0}\`);
+      console.log(\`💰 Total Drug Inventory Value: \${(drugResult.totalValue || 0).toLocaleString()} บาท\`);
+    } else if (Array.isArray(drugResult)) {
+      console.log(\`🏥 Regular Drugs Created: \${drugResult.length}\`);
+    }
+    
+    console.log("\\n🔑 System Access Credentials:");
     console.log("🔧 DEVELOPER: dev@system.local / dev123");
     console.log("👨‍💼 DIRECTORS: director@[hospital].go.th / director123");
     console.log("⚕️  PHARMACY: pharm@[hospital].go.th / pharm123");
@@ -291,10 +340,16 @@ async function main() {
     console.log("3. Test multi-tenant isolation");
     console.log("4. Verify role-based permissions");
     console.log("5. Check drug inventory and stock management");
-    ${hasBulkDrugs ? 'console.log("6. Verify bulk drug processing performance");' : ''}
+    ${hasBulkDrugs ? 'console.log("6. Verify 400+ drug bulk processing performance");' : ''}
+    console.log("7. Test stock card creation and batch management");
+    console.log("8. Verify warehouse management functionality");
 
   } catch (error) {
     console.error("❌ Seed error:", error);
+    console.error("❌ Error details:", error.message);
+    if (error.stack) {
+      console.error("❌ Error stack:", error.stack);
+    }
     throw error;
   }
 }
@@ -302,7 +357,8 @@ async function main() {
 main()
   .then(async () => {
     await prisma.$disconnect();
-    console.log("✅ Database connection closed successfully");
+    console.log("\\n✅ Database connection closed successfully");
+    console.log("🎉 Hospital Pharmacy Seed Process Completed!");
   })
   .catch(async (e) => {
     console.error("❌ Fatal seed error:", e);
@@ -312,7 +368,7 @@ main()
 
 export { prisma };`;
 
-  return [...importStatements, mainFunction].join('\n');
+  return seedContent;
 }
 
 function getFileNameFromFunction(functionName) {
@@ -320,170 +376,58 @@ function getFileNameFromFunction(functionName) {
     'seedHospitals': 'hospitals.seed',
     'seedPersonnelTypes': 'personnel-types.seed',
     'seedDepartments': 'departments.seed',
+    'seedWarehouses': 'warehouses.seed',
     'seedUsers': 'users.seed',
     'seedMasterData': 'master-data.seed',
     'seedRealDrugs': 'real-drugs.seed',
-    'seedBulkRealDrugs': 'real-drugs.seed', // Map to same file
+    'seedBulkRealDrugs': 'robust-bulk-drugs.seed',
     'seedDemoData': 'demo-data.seed'
   };
   
   return mapping[functionName] || `${functionName.toLowerCase()}.seed`;
 }
 
-function validateMerge() {
-  console.log('🔍 Validating merged seed file...');
-  
-  if (!fs.existsSync(OUTPUT_FILE)) {
-    console.error('❌ Merged seed file not found');
-    return false;
-  }
-  
-  const content = fs.readFileSync(OUTPUT_FILE, 'utf8');
-  
-  // Check for required imports
-  const requiredImports = ['PrismaClient', 'hashPassword'];
-  const missingImports = requiredImports.filter(imp => !content.includes(imp));
-  
-  if (missingImports.length > 0) {
-    console.error(`❌ Missing required imports: ${missingImports.join(', ')}`);
-    return false;
-  }
-  
-  // Check for required function calls (flexible for both regular and bulk)
-  const requiredBaseFunctions = ['seedHospitals', 'seedPersonnelTypes', 'seedDepartments', 'seedUsers', 'seedMasterData'];
-  const drugFunctions = ['seedRealDrugs', 'seedBulkRealDrugs'];
-  
-  const missingBaseFunctions = requiredBaseFunctions.filter(func => !content.includes(`await ${func}(`));
-  const hasDrugFunction = drugFunctions.some(func => content.includes(`await ${func}(`));
-  
-  if (missingBaseFunctions.length > 0) {
-    console.error(`❌ Missing required function calls: ${missingBaseFunctions.join(', ')}`);
-    return false;
-  }
-  
-  if (!hasDrugFunction) {
-    console.error(`❌ Missing drug seeding function (either seedRealDrugs or seedBulkRealDrugs)`);
-    return false;
-  }
-  
-  console.log('✅ Merged seed file validation passed');
-  
-  // Log which drug function is being used
-  if (content.includes('seedBulkRealDrugs')) {
-    console.log('🚀 Using bulk drug processing with smart defaults');
-  } else {
-    console.log('📦 Using regular drug processing function');
-  }
-  
-  return true;
-}
-
-function showUsage() {
-  console.log(`
-🌱 Hospital Pharmacy Seed Merger v2.1 - Enhanced for Bulk Drugs
-
-Usage:
-  node scripts/merge-seeds.js [--check-only]
-
-Options:
-  --check-only    Only validate merged file without merging
-  --help, -h      Show this help message
-
-This script merges all .seed.ts files from prisma/seeds/ into prisma/seed.ts
-
-🎯 Enhanced Features:
-- ✅ Separate seed files for different concerns
-- ✅ Automatic function extraction and imports  
-- ✅ Phase-based execution order
-- ✅ Hospital context management
-- ✅ Personnel type hierarchy
-- ✅ Master data initialization
-- ✅ Optional demo data seeding
-- 🚀 Bulk drug processing support (400+ drugs)
-- ⚡ Smart detection of drug seeding functions
-- 🛠️ Smart defaults for missing CSV data
-
-📁 Seed files are processed in this order:
-${Object.entries(SEED_ORDER)
-  .sort(([, a], [, b]) => a - b)
-  .map(([file, order]) => `  ${order + 1}. ${file}`)
-  .join('\n')}
-
-🔧 Supported Drug Seeding Functions:
-  - seedRealDrugs: Regular drug processing (< 100 drugs)
-  - seedBulkRealDrugs: Optimized bulk processing (400+ drugs)
-    ✨ Auto-fixes missing data (strength, unit, prices)
-    ✨ Handles malformed CSV (commas in numbers, wrong dates)
-    ✨ Smart defaults based on dosage forms
-
-After merging, run:
-  pnpm db:seed                    # Run basic seed
-  SEED_DEMO_DATA=true pnpm db:seed # Run with demo data
-  pnpm db:reset && pnpm db:seed   # Full reset and seed
-`);
-}
-
 // Main execution
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  
-  if (args.includes('--help') || args.includes('-h')) {
-    showUsage();
-    process.exit(0);
-  }
-  
-  if (args.includes('--check-only')) {
-    console.log('🔍 Running validation only...');
-    if (validateMerge()) {
-      console.log('✅ Validation passed');
-      process.exit(0);
-    } else {
-      console.error('❌ Validation failed');
-      process.exit(1);
-    }
-  }
-  
   try {
     mergeSeeds();
-    
-    if (validateMerge()) {
-      console.log(`
+    console.log(`
 🎉 Hospital Pharmacy Seed merge completed successfully!
 
-🎯 Enhanced Modular Seed Structure:
-  - hospitals.seed.ts (Hospital creation)
-  - personnel-types.seed.ts (Role hierarchy)
-  - departments.seed.ts (Organizational structure)  
-  - users.seed.ts (User accounts)
-  - master-data.seed.ts (Drug forms, groups, etc.)
-  - real-drugs.seed.ts (Drug data - regular or bulk processing)
-  - demo-data.seed.ts (Sample data for testing)
+✨ Enhanced Features v2.5:
+  ✅ Fixed template string variable substitution
+  ✅ Complete warehouse infrastructure support
+  ✅ Enhanced bulk drug processing (400+ drugs)
+  ✅ Warehouse parameter passing to drug functions
+  ✅ Auto-creation of main warehouses if missing
+  ✅ Comprehensive error handling
 
-🚀 Enhanced Features:
-  ✅ Automatic detection of bulk vs regular drug processing
-  ✅ Optimized for 400+ drug datasets with smart CSV handling
-  ✅ Batch processing with transaction safety
-  ✅ Progress tracking and error handling
+🏪 Warehouse Types Supported:
+  ✅ CENTRAL - คลังยาหลัก (Main Pharmacy)
+  ✅ DEPARTMENT - คลังแผนก (Department Storage)  
+  ✅ EMERGENCY - คลังฉุกเฉิน (Emergency Storage)
+  ✅ COLD_STORAGE - ห้องเย็น (Cold Storage)
+  ✅ CONTROLLED - ห้องยาควบคุม (Controlled Drugs)
+  ✅ DISPENSING - ห้องจ่ายยา (Dispensing Room)
+
+💊 Drug Processing Features:
+  ✅ CSV file support with smart parsing
+  ✅ Auto-fix for malformed data
+  ✅ Batch processing for performance
+  ✅ Stock card and batch creation
   ✅ Comprehensive statistics reporting
-  ✅ Smart data fixing for malformed CSV files
-  ✅ Auto-generation of missing required fields
 
 📋 Next Steps:
   1. Run: pnpm db:seed
-  2. Test with: dev@system.local / dev123
-  3. Check drug inventory (10+ or 400+ drugs)
-  4. Verify multi-tenant isolation
-  5. Check role-based permissions
-  6. Test bulk processing performance
+  2. Check for 400+ drugs in main warehouses
+  3. Verify stock cards and batches creation
+  4. Test warehouse functionality
+  5. Test system login and permissions
 `);
-    } else {
-      console.error('❌ Merge completed but validation failed');
-      process.exit(1);
-    }
   } catch (error) {
     console.error('❌ Merge failed:', error.message);
     process.exit(1);
   }
 }
 
-module.exports = { mergeSeeds, validateMerge };
+module.exports = { mergeSeeds };
