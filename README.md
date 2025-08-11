@@ -44,10 +44,22 @@ Directory structure:
     │   │   │   │   └── HospitalViewDialog.tsx
     │   │   │   └── types/
     │   │   │       └── hospital.ts
-    │   │   ├── personnel/
+    │   │   ├── personnel-types/
     │   │   │   ├── page.tsx
-    │   │   │   └── components/
-    │   │   │       └── PersonnelTypeList.tsx
+    │   │   │   ├── components/
+    │   │   │   │   ├── PersonnelTypeBulkDialog.tsx
+    │   │   │   │   ├── PersonnelTypeCreateDialog.tsx
+    │   │   │   │   ├── PersonnelTypeDeleteDialog.tsx
+    │   │   │   │   ├── PersonnelTypeEditDialog.tsx
+    │   │   │   │   ├── PersonnelTypeHeader.tsx
+    │   │   │   │   ├── PersonnelTypeImportDialog.tsx
+    │   │   │   │   ├── PersonnelTypeList.tsx
+    │   │   │   │   ├── PersonnelTypePagination.tsx
+    │   │   │   │   ├── PersonnelTypeSearchFilter.tsx
+    │   │   │   │   ├── PersonnelTypeStatsDialog.tsx
+    │   │   │   │   └── PersonnelTypeViewDialog.tsx
+    │   │   │   └── types/
+    │   │   │       └── personnel-type.ts
     │   │   ├── users/
     │   │   │   └── pending/
     │   │   │       └── page.tsx
@@ -71,6 +83,16 @@ Directory structure:
     │   │   │   ├── hospitals/
     │   │   │   │   ├── route.ts
     │   │   │   │   └── [id]/
+    │   │   │   │       └── route.ts
+    │   │   │   ├── personnel-types/
+    │   │   │   │   ├── route.ts
+    │   │   │   │   ├── [id]/
+    │   │   │   │   │   └── route.ts
+    │   │   │   │   ├── bulk/
+    │   │   │   │   │   └── route.ts
+    │   │   │   │   ├── import/
+    │   │   │   │   │   └── route.ts
+    │   │   │   │   └── statistics/
     │   │   │   │       └── route.ts
     │   │   │   ├── stats/
     │   │   │   │   └── route.ts
@@ -236,23 +258,35 @@ Directory structure:
     ├── prisma/
     │   ├── schema.prisma
     │   ├── seed.ts
-    │   └── schemas/
-    │       ├── admin-master-data.prisma
-    │       ├── analytics.prisma
-    │       ├── audit.prisma
-    │       ├── auth.prisma
-    │       ├── hospital-core.prisma
-    │       ├── inventory.prisma
-    │       ├── notifications.prisma
-    │       ├── requisitions.prisma
-    │       ├── shared-enums.prisma
-    │       └── suppliers.prisma
+    │   ├── schemas/
+    │   │   ├── admin-master-data.prisma
+    │   │   ├── analytics.prisma
+    │   │   ├── audit.prisma
+    │   │   ├── auth.prisma
+    │   │   ├── delivery-transport.prisma
+    │   │   ├── enhanced-inventory.prisma
+    │   │   ├── hospital-core.prisma
+    │   │   ├── inventory.prisma
+    │   │   ├── notifications.prisma
+    │   │   ├── requisitions.prisma
+    │   │   ├── shared-enums.prisma
+    │   │   └── suppliers.prisma
+    │   └── seeds/
+    │       ├── demo-data.seed.ts
+    │       ├── departments.seed.ts
+    │       ├── hospitals.seed.ts
+    │       ├── master-data.seed.ts
+    │       ├── personnel-types.seed.ts
+    │       ├── real-drugs.seed.ts
+    │       └── users.seed.ts
     ├── scripts/
     │   ├── create-pending-users.ts
     │   ├── merge-schemas.js
+    │   ├── merge-seeds.js
     │   └── push-auth-schema.sh
     └── types/
         └── next-auth.d.ts
+
 
 # 📌 Project Instructions for Claude: Hospital Pharmacy Stock Management System V2.0
 

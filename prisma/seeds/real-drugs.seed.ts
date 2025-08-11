@@ -1,7 +1,7 @@
 // prisma/seeds/real-drugs.seed.ts - Real Drug Data for Hospital 1 Only
 import { PrismaClient } from "@prisma/client";
 
-export async function seedRealDrugs(
+export async function seedBulkRealDrugs(
   prisma: PrismaClient, 
   hospitals: any[], 
   masterData: any

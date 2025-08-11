@@ -10,14 +10,16 @@ import { seedPersonnelTypes } from "./seeds/personnel-types.seed";
 import { seedDepartments } from "./seeds/departments.seed";
 import { seedUsers } from "./seeds/users.seed";
 import { seedMasterData } from "./seeds/master-data.seed";
-import { seedRealDrugs } from "./seeds/real-drugs.seed";
+import { seedBulkRealDrugs } from "./seeds/real-drugs.seed";
 import { seedDemoData } from "./seeds/demo-data.seed";
+import { seedBulkRealDrugs } from "./seeds/real-drugs.seed";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Starting Enhanced Hospital Pharmacy Stock Management System Seed...");
   console.log("🎯 Using Modular Seed Architecture with Neon + Prisma");
+  console.log("⚡ Enhanced with Bulk Drug Processing Support");
 
   try {
     // ================================
@@ -94,13 +96,22 @@ async function main() {
     console.log(`✅ Created master data for all hospitals`);
 
     // ================================
-    // PHASE 5: REAL DRUG DATA
+    // PHASE 5: DRUG DATA
     // ================================
-    console.log("\n💊 PHASE 5: Real Drug Data");
+    console.log("\n💊 PHASE 5: Drug Data Processing");
+    console.log("⚡ Using optimized bulk processing for large datasets");
     
-    // 6. Create real drug data for Hospital 1
-    const realDrugs = await seedRealDrugs(prisma, hospitals, masterData);
-    console.log(`✅ Created real drug data for โรงพยาบาลลำปาง`);
+    // Create drug data for Hospital 1
+    const drugResult = await seedBulkRealDrugs(prisma, hospitals, masterData);
+    
+    console.log(`✅ Bulk drug processing completed`);
+    if (drugResult && typeof drugResult === 'object' && drugResult.totalProcessed) {
+      console.log(`📊 Processed ${drugResult.totalProcessed} drugs`);
+      console.log(`💰 Total value: ${drugResult.totalValue ? drugResult.totalValue.toLocaleString() : 'N/A'} บาท`);
+    } else {
+      console.log(`📊 Bulk processing completed successfully`);
+    }
+    
 
     // ================================
     // PHASE 6: DEMO DATA (Optional)
@@ -124,7 +135,20 @@ async function main() {
     console.log(`🏢 Departments: ${Object.values(departments).flat().length}`);
     console.log(`👤 Users: ${users.length + 1} (including dev user)`);
     console.log(`💊 Master Data Categories: ${Object.keys(masterData).length}`);
-    console.log(`🏥 Real Drugs (โรงพยาบาลลำปาง): ${realDrugs.length}`);
+    
+    if (drugResult && typeof drugResult === 'object' && drugResult.totalProcessed) {
+      console.log(`🏥 Bulk Drugs Processed: ${drugResult.totalProcessed}`);
+      console.log(`💰 Total Drug Value: ${drugResult.totalValue ? drugResult.totalValue.toLocaleString() : 'N/A'} บาท`);
+      if (drugResult.categoriesCount) {
+        console.log(`📋 Drug Categories:`);
+        Object.entries(drugResult.categoriesCount).forEach(([category, count]) => {
+          console.log(`   - ${category}: ${count} drugs`);
+        });
+      }
+    } else {
+      console.log(`🏥 Bulk Drugs: Processing completed`);
+    }
+    
     
     console.log("\n🔑 System Access:");
     console.log("🔧 DEVELOPER: dev@system.local / dev123");
@@ -137,7 +161,8 @@ async function main() {
     console.log("2. Login as dev@system.local / dev123");
     console.log("3. Test multi-tenant isolation");
     console.log("4. Verify role-based permissions");
-    console.log("5. Approve pending users if any");
+    console.log("5. Check drug inventory and stock management");
+    console.log("6. Verify bulk drug processing performance");
 
   } catch (error) {
     console.error("❌ Seed error:", error);

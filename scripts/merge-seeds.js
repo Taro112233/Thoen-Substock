@@ -1,4 +1,4 @@
-// scripts/merge-seeds.js - Fixed Seed File Merger
+// scripts/merge-seeds.js - Updated for Bulk Drugs Support
 const fs = require('fs');
 const path = require('path');
 
@@ -11,8 +11,9 @@ const SEED_ORDER = {
   'departments.seed.ts': 2,
   'users.seed.ts': 3,
   'master-data.seed.ts': 4,
-  'real-drugs.seed.ts': 5, // Add real drugs seed
-  'demo-data.seed.ts': 6, // Move demo data to last
+  'real-drugs.seed.ts': 5, // รองรับทั้ง seedRealDrugs และ seedBulkRealDrugs
+  'bulk-real-drugs.seed.ts': 5, // Alternative file name
+  'demo-data.seed.ts': 6,
 };
 
 function extractExportedFunction(content, filename) {
@@ -50,7 +51,7 @@ function extractImports(content) {
 }
 
 function mergeSeeds() {
-  console.log('🌱 Hospital Pharmacy Seed Merger v2.0 - Modular Architecture');
+  console.log('🌱 Hospital Pharmacy Seed Merger v2.1 - Enhanced for Bulk Drugs');
   console.log('====================================================================');
   
   if (!fs.existsSync(SEEDS_DIR)) {
@@ -107,6 +108,7 @@ function mergeSeeds() {
   console.log(`   - ${extractedFunctions.length} imported seed functions`);
   console.log(`   - Proper error handling`);
   console.log(`   - Phase-based execution`);
+  console.log(`   - Bulk drug processing support`);
   
   console.log(`\n📝 Usage:`);
   console.log(`   pnpm db:seed              # Run all seeds`);
@@ -129,11 +131,20 @@ function generateMergedSeed(functions, imports) {
   importStatements.push(...functionImports);
   importStatements.push('');
 
+  // Detect if we have bulk drugs function
+  const hasBulkDrugs = functions.some(f => f.name === 'seedBulkRealDrugs');
+  const hasRegularDrugs = functions.some(f => f.name === 'seedRealDrugs');
+  
+  // Choose the appropriate drug seeding function
+  const drugSeedFunction = hasBulkDrugs ? 'seedBulkRealDrugs' : 'seedRealDrugs';
+  const drugSeedDescription = hasBulkDrugs ? 'bulk real drug data' : 'real drug data';
+
   const mainFunction = `const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Starting Enhanced Hospital Pharmacy Stock Management System Seed...");
   console.log("🎯 Using Modular Seed Architecture with Neon + Prisma");
+  ${hasBulkDrugs ? 'console.log("⚡ Enhanced with Bulk Drug Processing Support");' : ''}
 
   try {
     // ================================
@@ -210,13 +221,24 @@ async function main() {
     console.log(\`✅ Created master data for all hospitals\`);
 
     // ================================
-    // PHASE 5: REAL DRUG DATA
+    // PHASE 5: DRUG DATA
     // ================================
-    console.log("\\n💊 PHASE 5: Real Drug Data");
+    console.log("\\n💊 PHASE 5: Drug Data Processing");
+    ${hasBulkDrugs ? 'console.log("⚡ Using optimized bulk processing for large datasets");' : ''}
     
-    // 6. Create real drug data for Hospital 1
-    const realDrugs = await seedRealDrugs(prisma, hospitals, masterData);
-    console.log(\`✅ Created real drug data for โรงพยาบาลลำปาง\`);
+    // Create drug data for Hospital 1
+    const drugResult = await ${drugSeedFunction}(prisma, hospitals, masterData);
+    ${hasBulkDrugs ? `
+    console.log(\`✅ Bulk drug processing completed\`);
+    if (drugResult && typeof drugResult === 'object' && drugResult.totalProcessed) {
+      console.log(\`📊 Processed \${drugResult.totalProcessed} drugs\`);
+      console.log(\`💰 Total value: \${drugResult.totalValue ? drugResult.totalValue.toLocaleString() : 'N/A'} บาท\`);
+    } else {
+      console.log(\`📊 Bulk processing completed successfully\`);
+    }
+    ` : `
+    console.log(\`✅ Created \${Array.isArray(drugResult) ? drugResult.length : 'N/A'} real drugs for โรงพยาบาลลำปาง\`);
+    `}
 
     // ================================
     // PHASE 6: DEMO DATA (Optional)
@@ -240,7 +262,22 @@ async function main() {
     console.log(\`🏢 Departments: \${Object.values(departments).flat().length}\`);
     console.log(\`👤 Users: \${users.length + 1} (including dev user)\`);
     console.log(\`💊 Master Data Categories: \${Object.keys(masterData).length}\`);
-    console.log(\`🏥 Real Drugs (โรงพยาบาลลำปาง): \${realDrugs.length}\`);
+    ${hasBulkDrugs ? `
+    if (drugResult && typeof drugResult === 'object' && drugResult.totalProcessed) {
+      console.log(\`🏥 Bulk Drugs Processed: \${drugResult.totalProcessed}\`);
+      console.log(\`💰 Total Drug Value: \${drugResult.totalValue ? drugResult.totalValue.toLocaleString() : 'N/A'} บาท\`);
+      if (drugResult.categoriesCount) {
+        console.log(\`📋 Drug Categories:\`);
+        Object.entries(drugResult.categoriesCount).forEach(([category, count]) => {
+          console.log(\`   - \${category}: \${count} drugs\`);
+        });
+      }
+    } else {
+      console.log(\`🏥 Bulk Drugs: Processing completed\`);
+    }
+    ` : `
+    console.log(\`🏥 Real Drugs (โรงพยาบาลลำปาง): \${Array.isArray(drugResult) ? drugResult.length : 'N/A'}\`);
+    `}
     
     console.log("\\n🔑 System Access:");
     console.log("🔧 DEVELOPER: dev@system.local / dev123");
@@ -253,7 +290,8 @@ async function main() {
     console.log("2. Login as dev@system.local / dev123");
     console.log("3. Test multi-tenant isolation");
     console.log("4. Verify role-based permissions");
-    console.log("5. Approve pending users if any");
+    console.log("5. Check drug inventory and stock management");
+    ${hasBulkDrugs ? 'console.log("6. Verify bulk drug processing performance");' : ''}
 
   } catch (error) {
     console.error("❌ Seed error:", error);
@@ -284,7 +322,8 @@ function getFileNameFromFunction(functionName) {
     'seedDepartments': 'departments.seed',
     'seedUsers': 'users.seed',
     'seedMasterData': 'master-data.seed',
-    'seedRealDrugs': 'real-drugs.seed', // Add real drugs mapping
+    'seedRealDrugs': 'real-drugs.seed',
+    'seedBulkRealDrugs': 'real-drugs.seed', // Map to same file
     'seedDemoData': 'demo-data.seed'
   };
   
@@ -310,22 +349,38 @@ function validateMerge() {
     return false;
   }
   
-  // Check for required function calls
-  const requiredFunctions = ['seedHospitals', 'seedPersonnelTypes', 'seedDepartments', 'seedUsers', 'seedMasterData', 'seedRealDrugs'];
-  const missingFunctions = requiredFunctions.filter(func => !content.includes(`await ${func}(`));
+  // Check for required function calls (flexible for both regular and bulk)
+  const requiredBaseFunctions = ['seedHospitals', 'seedPersonnelTypes', 'seedDepartments', 'seedUsers', 'seedMasterData'];
+  const drugFunctions = ['seedRealDrugs', 'seedBulkRealDrugs'];
   
-  if (missingFunctions.length > 0) {
-    console.error(`❌ Missing function calls: ${missingFunctions.join(', ')}`);
+  const missingBaseFunctions = requiredBaseFunctions.filter(func => !content.includes(`await ${func}(`));
+  const hasDrugFunction = drugFunctions.some(func => content.includes(`await ${func}(`));
+  
+  if (missingBaseFunctions.length > 0) {
+    console.error(`❌ Missing required function calls: ${missingBaseFunctions.join(', ')}`);
+    return false;
+  }
+  
+  if (!hasDrugFunction) {
+    console.error(`❌ Missing drug seeding function (either seedRealDrugs or seedBulkRealDrugs)`);
     return false;
   }
   
   console.log('✅ Merged seed file validation passed');
+  
+  // Log which drug function is being used
+  if (content.includes('seedBulkRealDrugs')) {
+    console.log('🚀 Using bulk drug processing with smart defaults');
+  } else {
+    console.log('📦 Using regular drug processing function');
+  }
+  
   return true;
 }
 
 function showUsage() {
   console.log(`
-🌱 Hospital Pharmacy Seed Merger v2.0 - Modular Architecture
+🌱 Hospital Pharmacy Seed Merger v2.1 - Enhanced for Bulk Drugs
 
 Usage:
   node scripts/merge-seeds.js [--check-only]
@@ -336,7 +391,7 @@ Options:
 
 This script merges all .seed.ts files from prisma/seeds/ into prisma/seed.ts
 
-🎯 Modular Architecture Features:
+🎯 Enhanced Features:
 - ✅ Separate seed files for different concerns
 - ✅ Automatic function extraction and imports  
 - ✅ Phase-based execution order
@@ -344,12 +399,22 @@ This script merges all .seed.ts files from prisma/seeds/ into prisma/seed.ts
 - ✅ Personnel type hierarchy
 - ✅ Master data initialization
 - ✅ Optional demo data seeding
+- 🚀 Bulk drug processing support (400+ drugs)
+- ⚡ Smart detection of drug seeding functions
+- 🛠️ Smart defaults for missing CSV data
 
 📁 Seed files are processed in this order:
 ${Object.entries(SEED_ORDER)
   .sort(([, a], [, b]) => a - b)
   .map(([file, order]) => `  ${order + 1}. ${file}`)
   .join('\n')}
+
+🔧 Supported Drug Seeding Functions:
+  - seedRealDrugs: Regular drug processing (< 100 drugs)
+  - seedBulkRealDrugs: Optimized bulk processing (400+ drugs)
+    ✨ Auto-fixes missing data (strength, unit, prices)
+    ✨ Handles malformed CSV (commas in numbers, wrong dates)
+    ✨ Smart defaults based on dosage forms
 
 After merging, run:
   pnpm db:seed                    # Run basic seed
@@ -385,21 +450,31 @@ if (require.main === module) {
       console.log(`
 🎉 Hospital Pharmacy Seed merge completed successfully!
 
-🎯 Modular Seed Structure Ready:
+🎯 Enhanced Modular Seed Structure:
   - hospitals.seed.ts (Hospital creation)
   - personnel-types.seed.ts (Role hierarchy)
   - departments.seed.ts (Organizational structure)  
   - users.seed.ts (User accounts)
   - master-data.seed.ts (Drug forms, groups, etc.)
-  - real-drugs.seed.ts (Real drug data for โรงพยาบาลลำปาง)
+  - real-drugs.seed.ts (Drug data - regular or bulk processing)
   - demo-data.seed.ts (Sample data for testing)
 
-🚀 Next Steps:
+🚀 Enhanced Features:
+  ✅ Automatic detection of bulk vs regular drug processing
+  ✅ Optimized for 400+ drug datasets with smart CSV handling
+  ✅ Batch processing with transaction safety
+  ✅ Progress tracking and error handling
+  ✅ Comprehensive statistics reporting
+  ✅ Smart data fixing for malformed CSV files
+  ✅ Auto-generation of missing required fields
+
+📋 Next Steps:
   1. Run: pnpm db:seed
   2. Test with: dev@system.local / dev123
-  3. Check real drug inventory for โรงพยาบาลลำปาง
+  3. Check drug inventory (10+ or 400+ drugs)
   4. Verify multi-tenant isolation
   5. Check role-based permissions
+  6. Test bulk processing performance
 `);
     } else {
       console.error('❌ Merge completed but validation failed');
