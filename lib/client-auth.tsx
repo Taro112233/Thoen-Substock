@@ -1,4 +1,4 @@
-// lib/client-auth.tsx - Enhanced version แก้ปัญหา token sync
+// lib/client-auth.tsx - Improved version with better timing
 'use client';
 
 import React, { useState, useEffect, useContext, createContext, ReactNode, useCallback } from 'react';
@@ -39,7 +39,7 @@ interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
-  forceRefresh: () => Promise<void>; // เพิ่มฟังก์ชัน force refresh
+  forceRefresh: () => Promise<void>;
   isAdmin: boolean;
   isPharmacist: boolean;
   canManageUsers: boolean;
@@ -49,35 +49,13 @@ interface AuthContextType {
 }
 
 export interface LoginCredentials {
-  identifier: string; // email or username
+  identifier: string;
   password: string;
+  hospitalId: string;
   rememberMe?: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Role translations
-export const roleTranslations = {
-  HOSPITAL_ADMIN: 'ผู้ดูแลระบบโรงพยาบาล',
-  PHARMACY_MANAGER: 'ผู้จัดการเภสัชกรรม',
-  SENIOR_PHARMACIST: 'เภสัชกรอาวุโส',
-  STAFF_PHARMACIST: 'เภสัชกรประจำ',
-  DEPARTMENT_HEAD: 'หัวหน้าแผนก',
-  STAFF_NURSE: 'พยาบาลประจำ',
-  PHARMACY_TECHNICIAN: 'เทคนิคเภสัชกรรม',
-  // Admin roles
-  DEVELOPER: 'นักพัฒนาระบบ',
-  DIRECTOR: 'ผู้อำนวยการ',
-  GROUP_HEAD: 'หัวหน้ากลุ่ม'
-} as const;
-
-export const statusTranslations = {
-  PENDING: 'รอการอนุมัติ',
-  ACTIVE: 'ใช้งานได้',
-  INACTIVE: 'ปิดการใช้งานชั่วคราว',
-  SUSPENDED: 'ระงับการใช้งาน',
-  DELETED: 'ลบแล้ว'
-} as const;
 
 // Permission checking functions
 function hasRole(userRole: string | undefined, allowedRoles: string[]): boolean {
@@ -142,7 +120,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         'Content-Type': 'application/json',
       };
 
-      // เมื่อ force refresh ให้บังคับไม่ใช้ cache
       if (forceRefresh) {
         headers['Cache-Control'] = 'no-cache';
         headers['Pragma'] = 'no-cache';
@@ -172,7 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         return data.user;
       } else if (response.status === 401) {
-        // Not authenticated
         console.log('🔍 [AUTH] User not authenticated');
         return null;
       } else {
@@ -205,14 +181,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🔍 [AUTH] Login response:', {
         ok: response.ok,
         status: response.status,
-        hasUser: !!data.user
+        hasUser: !!data.user,
+        redirectDelay: data.redirectDelay
       });
 
       if (response.ok) {
         setUser(data.user);
         
-        // เพิ่ม delay เล็กน้อยเพื่อให้ cookie ถูก set ก่อน redirect
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // ✨ ใช้ delay จาก server หรือ default 1500ms
+        const delay = data.redirectDelay || 1500;
+        console.log(`🔍 [AUTH] Waiting ${delay}ms for cookie to be set...`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
         
         // Redirect based on user status พร้อม from parameter
         if (data.needsApproval || data.user.status === 'PENDING') {
@@ -247,7 +227,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       setError(null);
-      window.location.href = '/auth/login';
+      // เพิ่ม delay เล็กน้อยให้ logout API ทำงานเสร็จ
+      setTimeout(() => {
+        window.location.href = '/auth/login';
+      }, 500);
     }
   };
 
@@ -270,6 +253,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       console.log('🔍 [AUTH] Force refreshing auth state...');
+      
+      // เพิ่ม delay เล็กน้อยเพื่อให้ cookie ตั้งค่าเสร็จ
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const userData = await fetchCurrentUser(true);
       setUser(userData);
       
@@ -298,7 +285,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log('🔍 [AUTH] Initial auth check:', { fromLogin });
 
-        // ถ้ามาจาก login ให้ force refresh
+        // ถ้ามาจาก login ให้รอสักครู่และ force refresh
+        if (fromLogin) {
+          console.log('🔍 [AUTH] Coming from login, waiting for cookie...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
         const userData = await fetchCurrentUser(fromLogin);
         
         if (mounted) {
@@ -313,7 +305,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (mounted) {
           console.warn('Initial auth check failed:', err);
-          // Silent fail for initial load แต่ถ้ามาจาก login ให้แสดง error
           const fromLogin = new URLSearchParams(window.location.search).get('from') === 'login';
           if (fromLogin) {
             setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
@@ -337,7 +328,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && user) {
-        // เมื่อกลับมาที่หน้าและมี user อยู่แล้ว ให้ refresh เบาๆ
         refresh();
       }
     };
@@ -355,7 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     refresh,
-    forceRefresh, // เพิ่ม force refresh function
+    forceRefresh,
     isAdmin: isAdmin(user?.role),
     isPharmacist: isPharmacist(user?.role),
     canManageUsers: canManageUsers(user?.role),
@@ -380,7 +370,7 @@ export function useAuth(): AuthContextType {
   return context;
 }
 
-// Hook สำหรับดึงข้อมูลผู้ใช้ปัจจุบัน (backward compatibility + enhanced)
+// Hook สำหรับดึงข้อมูลผู้ใช้ปัจจุบัน (backward compatibility)
 export function useCurrentUser() {
   const { user, loading, error, logout, refresh, forceRefresh, isAdmin, isPharmacist } = useAuth();
   
@@ -390,7 +380,7 @@ export function useCurrentUser() {
     error,
     logout,
     refresh,
-    forceRefresh, // เพิ่ม force refresh
+    forceRefresh,
     isAdmin,
     isPharmacist,
   };
@@ -430,6 +420,7 @@ export function useLogin() {
   const [formData, setFormData] = useState<LoginCredentials>({
     identifier: '',
     password: '',
+    hospitalId: '',
     rememberMe: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -452,7 +443,9 @@ export function useLogin() {
     }
   };
 
-  const isValid = formData.identifier.trim() !== '' && formData.password.trim() !== '';
+  const isValid = formData.identifier.trim() !== '' && 
+                  formData.password.trim() !== '' && 
+                  formData.hospitalId.trim() !== '';
   const canSubmit = isValid && !loading && !isSubmitting;
 
   return {
@@ -468,10 +461,31 @@ export function useLogin() {
 
 // Utility functions
 export function translateRole(role: string): string {
+  const roleTranslations = {
+    HOSPITAL_ADMIN: 'ผู้ดูแลระบบโรงพยาบาล',
+    PHARMACY_MANAGER: 'ผู้จัดการเภสัชกรรม',
+    SENIOR_PHARMACIST: 'เภสัชกรอาวุโส',
+    STAFF_PHARMACIST: 'เภสัชกรประจำ',
+    DEPARTMENT_HEAD: 'หัวหน้าแผนก',
+    STAFF_NURSE: 'พยาบาลประจำ',
+    PHARMACY_TECHNICIAN: 'เทคนิคเภสัชกรรม',
+    DEVELOPER: 'นักพัฒนาระบบ',
+    DIRECTOR: 'ผู้อำนวยการ',
+    GROUP_HEAD: 'หัวหน้ากลุ่ม'
+  } as const;
+  
   return roleTranslations[role as keyof typeof roleTranslations] || role;
 }
 
 export function translateStatus(status: string): string {
+  const statusTranslations = {
+    PENDING: 'รอการอนุมัติ',
+    ACTIVE: 'ใช้งานได้',
+    INACTIVE: 'ปิดการใช้งานชั่วคราว',
+    SUSPENDED: 'ระงับการใช้งาน',
+    DELETED: 'ลบแล้ว'
+  } as const;
+  
   return statusTranslations[status as keyof typeof statusTranslations] || status;
 }
 

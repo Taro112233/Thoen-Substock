@@ -1,10 +1,9 @@
-// app/api/auth/login/route.ts - Updated เพื่อรองรับ AuthContext
+// app/api/auth/login/route.ts - Improved with better cookie handling
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { SignJWT } from 'jose';
 import { verifyPassword } from "@/lib/password-utils";
 import { loginSchema } from "@/lib/validations/auth";
-import { ZodError } from "zod";
 
 const prisma = new PrismaClient();
 
@@ -17,14 +16,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     console.log('🔍 [DEBUG] Login request:', {
-      identifier: body.identifier || body.username, // รองรับทั้ง identifier และ username
+      identifier: body.identifier || body.username,
       hospitalId: body.hospitalId,
       hasPassword: !!body.password
     });
     
     // แปลงข้อมูลให้ตรงกับ validation schema
     const validationData = {
-      username: body.identifier || body.username, // ใช้ identifier หรือ username
+      username: body.identifier || body.username,
       password: body.password,
       hospitalId: body.hospitalId,
       rememberMe: body.rememberMe || false
@@ -98,23 +97,6 @@ export async function POST(request: NextRequest) {
     
     const isValidPassword = await verifyPassword(validatedData.password, user.password);
     if (!isValidPassword) {
-      // Log failed login attempt (if LoginAttempt model exists)
-      try {
-        await prisma.loginAttempt.create({
-          data: {
-            userId: user.id,
-            email: user.email,
-            ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-            userAgent: request.headers.get('user-agent') || 'unknown',
-            success: false,
-            failureReason: 'INVALID_PASSWORD'
-          }
-        });
-      } catch (e) {
-        // LoginAttempt model might not exist, skip logging
-        console.log('Login attempt logging skipped (model not found)');
-      }
-      
       return NextResponse.json(
         { error: "รหัสผ่านไม่ถูกต้อง" },
         { status: 401 }
@@ -172,113 +154,73 @@ export async function POST(request: NextRequest) {
       departmentId: user.departmentId,
     })
     .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime(validatedData.rememberMe ? '30d' : '24h') // ถ้า remember me ให้ expire 30 วัน
+    .setExpirationTime(validatedData.rememberMe ? '30d' : '7d')
     .setIssuedAt()
     .sign(JWT_SECRET);
-    
+
     console.log('🔍 [DEBUG] JWT Token created:', token.substring(0, 50) + '...');
     
-    // อัปเดตข้อมูลการเข้าสู่ระบบ
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        lastLoginAt: new Date(),
-        lastLoginIP: request.headers.get('x-forwarded-for') || 'unknown',
-        loginCount: { increment: 1 }
-      }
-    });
-    
-    // Log successful login (if LoginAttempt model exists)
-    try {
-      await prisma.loginAttempt.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-          userAgent: request.headers.get('user-agent') || 'unknown',
-          success: true
-        }
-      });
-    } catch (e) {
-      // LoginAttempt model might not exist, skip logging
-      console.log('Login attempt logging skipped (model not found)');
-    }
-    
-    console.log('🔍 [DEBUG] Login successful for user:', user.id);
-    
-    // สร้าง user object สำหรับ response (ตรงกับ AuthContext interface)
-    const responseUser = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      status: user.status,
-      hospitalId: user.hospitalId,
-      departmentId: user.departmentId,
-      phoneNumber: user.phoneNumber,
-      employeeId: user.employeeId,
-      position: user.position,
-      isProfileComplete: user.isProfileComplete,
-      emailVerified: user.emailVerified || false,
-      lastLoginAt: user.lastLoginAt?.toISOString(),
-      createdAt: user.createdAt.toISOString(),
-      hospital: {
-        id: user.hospital.id,
-        name: user.hospital.name,
-        code: user.hospital.hospitalCode
-      },
-      department: user.department ? {
-        id: user.department.id,
-        name: user.department.name,
-        code: user.department.departmentCode
-      } : undefined
-    };
-    
-    // สร้าง Response พร้อม Set Cookie
+    // Create response
     const response = NextResponse.json({
       success: true,
       message: "เข้าสู่ระบบสำเร็จ",
-      user: responseUser,
-      needsApproval: false,
-      needsProfileCompletion: false
+      user: {
+        id: user.id,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        hospitalId: user.hospitalId,
+        departmentId: user.departmentId,
+        phoneNumber: user.phoneNumber,
+        employeeId: user.employeeId,
+        position: user.position,
+        isProfileComplete: user.isProfileComplete,
+        emailVerified: user.emailVerified,
+        lastLoginAt: user.lastLoginAt?.toISOString(),
+        createdAt: user.createdAt.toISOString(),
+        hospital: {
+          id: user.hospital.id,
+          name: user.hospital.name,
+          code: user.hospital.hospitalCode || ''
+        },
+        department: user.department ? {
+          id: user.department.id,
+          name: user.department.name,
+          code: user.department.departmentCode || ''
+        } : undefined
+      },
+      // ✨ เพิ่ม delay hint สำหรับ client
+      redirectDelay: 1000 // milliseconds
     });
-    
-    // Set JWT Cookie
+
+    // Set cookie with proper options
     response.cookies.set('auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: validatedData.rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24, // 30 days หรือ 24 hours
-      path: '/'
+      maxAge: validatedData.rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 7, // 30 days or 7 days
+      path: '/',
     });
-    
+
+    console.log('🔍 [DEBUG] Login successful for user:', user.id);
     console.log('🔍 [DEBUG] Cookie set successfully');
-    
+
+    // Update last login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
+
     return response;
-    
+
   } catch (error) {
-    console.error("Login error:", error);
-    
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        { 
-          error: "ข้อมูลไม่ถูกต้อง", 
-          details: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message
-          }))
-        },
-        { status: 400 }
-      );
-    }
-    
+    console.error('Login error:', error);
     return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" },
+      { error: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ" },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
