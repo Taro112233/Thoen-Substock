@@ -157,6 +157,7 @@ model DeliveryTrip {
   // Relations
   deliveries      ProgressiveDelivery[]
   checkpoints     TripCheckpoint[]
+  cartLogs        CartActivityLog[] // เพิ่ม relation ที่หายไป
   
   @@index([hospitalId, cartId])
   @@index([plannedDate])

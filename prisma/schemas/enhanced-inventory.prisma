@@ -229,6 +229,9 @@ model ExpiryLot {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
+  // Relations - เพิ่ม movements relation ที่หายไป
+  movements       StockMovementHistory[] // เพิ่ม relation นี้
+  
   @@unique([hospitalId, stockCardId, lotNumber, expiryDate])
   @@index([hospitalId, warehouseId])
   @@index([expiryDate])

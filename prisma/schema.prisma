@@ -1,6 +1,6 @@
 // This file is auto-generated. Do not edit manually.
 // Edit files in prisma/schemas/ directory instead.
-// Last generated: 2025-08-10T16:35:21.110Z
+// Last generated: 2025-08-11T05:17:32.450Z
 
 generator client {
   provider = "prisma-client-js"
@@ -2574,6 +2574,9 @@ model ExpiryLot {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
+  // Relations - เพิ่ม movements relation ที่หายไป
+  movements       StockMovementHistory[] // เพิ่ม relation นี้
+  
   @@unique([hospitalId, stockCardId, lotNumber, expiryDate])
   @@index([hospitalId, warehouseId])
   @@index([expiryDate])
@@ -2907,6 +2910,7 @@ model DeliveryTrip {
   // Relations
   deliveries      ProgressiveDelivery[]
   checkpoints     TripCheckpoint[]
+  cartLogs        CartActivityLog[] // เพิ่ม relation ที่หายไป
   
   @@index([hospitalId, cartId])
   @@index([plannedDate])

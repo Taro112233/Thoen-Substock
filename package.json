@@ -1,25 +1,40 @@
 {
-  "name": "money-master",
+  "name": "hospital-pharmacy-system",
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "dev": "pnpm schema:merge && next dev",
+    "build": "pnpm db:generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "db:generate": "pnpm db:merge && prisma generate",
-    "db:push": "pnpm db:merge && prisma db push",
-    "db:migrate": "pnpm db:merge && prisma migrate dev",
-    "db:studio": "prisma studio",
-    "db:merge": "node scripts/merge-schemas.js",
-    "db:seed": "pnpm db:merge && tsx prisma/seed.ts",
-    "db:reset": "pnpm db:merge && prisma db push --force-reset && pnpm db:seed",
-    "db:deploy": "pnpm db:merge && prisma migrate deploy",
+    "postinstall": "pnpm db:generate",
+    
     "type-check": "tsc --noEmit",
-    "dev": "pnpm db:merge && next dev",
-    "build": "pnpm db:generate && next build",
-    "postinstall": "pnpm db:generate"
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    
+    "db:generate": "pnpm schema:merge && prisma generate",
+    "db:push": "pnpm schema:merge && prisma db push",
+    "db:migrate": "pnpm schema:merge && prisma migrate dev",
+    "db:migrate:prod": "pnpm schema:merge && prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:reset": "pnpm schema:merge && prisma db push --force-reset && pnpm seeds:merge && pnpm db:seed:run",
+    
+    "schema:merge": "node scripts/merge-schemas.js",
+    "schema:check": "node scripts/merge-schemas.js --check-only",
+    
+    "seeds:merge": "node scripts/merge-seeds.js",
+    "seeds:check": "node scripts/merge-seeds.js --check-only",
+    "db:seed": "pnpm seeds:merge && pnpm db:seed:run",
+    "db:seed:run": "tsx prisma/seed.ts",
+    "db:seed:demo": "SEED_DEMO_DATA=true pnpm db:seed",
+    
+    "db:setup": "pnpm schema:merge && pnpm db:push && pnpm seeds:merge && pnpm db:seed:run",
+    "db:setup:demo": "pnpm schema:merge && pnpm db:push && pnpm seeds:merge && SEED_DEMO_DATA=true pnpm db:seed:run",
+    "db:full-reset": "pnpm db:reset && pnpm db:setup:demo"
   },
   "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@arcjet/inspect": "1.0.0-beta.9",
