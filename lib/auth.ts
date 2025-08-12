@@ -1,4 +1,4 @@
-// lib/auth.ts
+// lib/auth.ts - Fixed และเพิ่ม verifyAuth function
 // ระบบ JWT Authentication แบบ Simple & Clean
 
 import jwt from 'jsonwebtoken';
@@ -29,6 +29,19 @@ export interface AuthUser {
   hospitalId: string;
   departmentId?: string | null;
 }
+
+// Verification Result Types
+export interface VerifyAuthSuccess {
+  hospitalId: string;
+  user: AuthUser;
+}
+
+export interface VerifyAuthError {
+  error: string;
+  status: number;
+}
+
+export type VerifyAuthResult = VerifyAuthSuccess | VerifyAuthError;
 
 /**
  * สร้าง JWT Token
@@ -136,6 +149,42 @@ export async function getCurrentUser(request?: NextRequest): Promise<AuthUser | 
 }
 
 /**
+ * verifyAuth - สำหรับใช้ใน API routes
+ * คืนค่า hospitalId และ user ถ้าสำเร็จ หรือ error object ถ้าล้มเหลว
+ */
+export async function verifyAuth(request: NextRequest): Promise<VerifyAuthResult> {
+  try {
+    const user = await getCurrentUser(request);
+    
+    if (!user) {
+      return {
+        error: "ไม่ได้รับอนุญาต",
+        status: 401
+      };
+    }
+
+    if (user.status !== 'ACTIVE') {
+      return {
+        error: "บัญชีไม่ได้ใช้งาน",
+        status: 403
+      };
+    }
+
+    return {
+      hospitalId: user.hospitalId,
+      user: user
+    };
+
+  } catch (error) {
+    console.error('❌ verifyAuth error:', error);
+    return {
+      error: "เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์",
+      status: 500
+    };
+  }
+}
+
+/**
  * Check if user has required role
  */
 export function hasRole(user: AuthUser | null, allowedRoles: string[]): boolean {
@@ -173,4 +222,18 @@ export async function canApproveUsers(user: AuthUser | null): Promise<boolean> {
   });
 
   return userData?.personnelType?.canApproveUsers || false;
+}
+
+/**
+ * Type guard function to check if result is success
+ */
+export function isAuthSuccess(result: VerifyAuthResult): result is VerifyAuthSuccess {
+  return 'hospitalId' in result;
+}
+
+/**
+ * Type guard function to check if result is error
+ */
+export function isAuthError(result: VerifyAuthResult): result is VerifyAuthError {
+  return 'error' in result;
 }
