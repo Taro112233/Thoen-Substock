@@ -326,7 +326,7 @@ export default function DashboardPage() {
                 <Button 
                   className="w-full justify-start"
                   variant="outline"
-                  onClick={() => window.location.href = '/warehouse'}
+                  onClick={() => window.location.href = '/dashboard/warehouses'}
                 >
                   <Building className="w-4 h-4 mr-2" />
                   จัดการคลัง
@@ -351,140 +351,6 @@ export default function DashboardPage() {
                     เบิกยา
                   </Button>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* System Status */}
-        <div className="mt-8">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Server className="w-5 h-5" />
-                <span>สถานะระบบ</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm">เชื่อมต่อฐานข้อมูลแล้ว</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm">การยืนยันตัวตนสำเร็จ</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm">ระบบทำงานปกติ</span>
-                </div>
-              </div>
-              
-              {/* Authentication Info */}
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Lock className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-800">ข้อมูลการเข้าสู่ระบบ</span>
-                </div>
-                <div className="text-xs text-blue-700 space-y-1">
-                  <p>• ระบบได้ตรวจสอบสิทธิ์การเข้าถึงผ่าน Middleware แล้ว</p>
-                  <p>• การเชื่อมต่อใช้ HTTPS และ Cookie Security</p>
-                  <p>• Session จะหมดอายุตามการตั้งค่าระบบ</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Quick Navigation Grid */}
-        <div className="mt-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Gauge className="w-5 h-5" />
-                <span>เมนูหลัก</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col space-y-2"
-                  onClick={() => window.location.href = '/pharmacy'}
-                >
-                  <Package className="w-6 h-6 text-blue-600" />
-                  <span className="text-sm">สต็อกยา</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col space-y-2"
-                  onClick={() => window.location.href = '/warehouse'}
-                >
-                  <Building className="w-6 h-6 text-green-600" />
-                  <span className="text-sm">คลัง</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col space-y-2"
-                  onClick={() => window.location.href = '/reports'}
-                >
-                  <BarChart className="w-6 h-6 text-purple-600" />
-                  <span className="text-sm">รายงาน</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col space-y-2"
-                  onClick={() => window.location.href = '/settings'}
-                >
-                  <Settings className="w-6 h-6 text-orange-600" />
-                  <span className="text-sm">ตั้งค่า</span>
-                </Button>
-
-                {isAdmin && (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="h-20 flex-col space-y-2"
-                      onClick={() => window.location.href = '/admin'}
-                    >
-                      <Shield className="w-6 h-6 text-red-600" />
-                      <span className="text-sm">ผู้ดูแล</span>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="h-20 flex-col space-y-2"
-                      onClick={() => window.location.href = '/admin/users'}
-                    >
-                      <Users className="w-6 h-6 text-indigo-600" />
-                      <span className="text-sm">ผู้ใช้</span>
-                    </Button>
-                  </>
-                )}
-
-                {['DEPARTMENT_HEAD', 'STAFF_NURSE'].includes(user.role) && (
-                  <Button
-                    variant="outline"
-                    className="h-20 flex-col space-y-2"
-                    onClick={() => window.location.href = '/requisition'}
-                  >
-                    <FileText className="w-6 h-6 text-teal-600" />
-                    <span className="text-sm">เบิกยา</span>
-                  </Button>
-                )}
-
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col space-y-2"
-                  onClick={() => window.location.href = '/profile'}
-                >
-                  <User className="w-6 h-6 text-gray-600" />
-                  <span className="text-sm">โปรไฟล์</span>
-                </Button>
               </div>
             </CardContent>
           </Card>
