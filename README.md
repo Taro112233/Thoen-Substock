@@ -128,14 +128,35 @@ Directory structure:
     │   │   │   └── register/
     │   │   │       └── route.ts
     │   │   ├── dashboard/
+    │   │   │   ├── requisitions/
+    │   │   │   │   └── route.ts
     │   │   │   └── warehouses/
     │   │   │       ├── route.ts
     │   │   │       └── [id]/
     │   │   │           └── route.ts
     │   │   ├── departments/
     │   │   │   └── route.ts
-    │   │   └── hospitals/
-    │   │       └── route.ts
+    │   │   ├── hospitals/
+    │   │   │   └── route.ts
+    │   │   ├── receiving/
+    │   │   │   ├── items/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── search/
+    │   │   │   │   └── route.ts
+    │   │   │   └── stats/
+    │   │   │       └── route.ts
+    │   │   ├── requisitions/
+    │   │   │   └── [id]/
+    │   │   │       ├── route.ts
+    │   │   │       ├── approve/
+    │   │   │       │   └── route.ts
+    │   │   │       ├── cancel/
+    │   │   │       │   └── route.ts
+    │   │   │       └── reject/
+    │   │   │           └── route.ts
+    │   │   └── stock/
+    │   │       └── transactions/
+    │   │           └── route.ts
     │   ├── auth/
     │   │   ├── layout.tsx
     │   │   ├── components/
@@ -158,6 +179,11 @@ Directory structure:
     │   │   └── ProtectedLayout.tsx
     │   ├── dashboard/
     │   │   ├── page.tsx
+    │   │   ├── receiving/
+    │   │   │   └── page.tsx
+    │   │   ├── requisitions/
+    │   │   │   └── [id]/
+    │   │   │       └── page.tsx
     │   │   └── warehouses/
     │   │       ├── page.tsx
     │   │       └── [id]/
@@ -183,6 +209,10 @@ Directory structure:
     │   ├── layout/
     │   │   ├── ConditionalHeader.tsx
     │   │   └── LayoutProvider.tsx
+    │   ├── receiving/
+    │   │   └── SmartReceivingWidget.tsx
+    │   ├── requisitions/
+    │   │   └── RequisitionList.tsx
     │   ├── showcase/
     │   │   ├── BackgroundDecoration.tsx
     │   │   ├── DemoComponents.tsx
@@ -299,8 +329,6 @@ Directory structure:
     │   └── push-auth-schema.sh
     └── types/
         └── next-auth.d.ts
-
-
 
 # 📌 Project Instructions for Claude: Hospital Pharmacy Stock Management System V2.0
 
