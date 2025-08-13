@@ -102,7 +102,6 @@ model StockBatch {
   hospitalId      String
   stockCardId     String
   stockCard       StockCard     @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
-  deliveryItems   DeliveryItem[]
   
   // ข้อมูล batch
   batchNumber     String        // หมายเลข batch
@@ -140,8 +139,10 @@ model StockBatch {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
-  // Relations - เพิ่ม inverse relations
-  transactions    StockTransaction[]
+  // ✅ Relations - เพิ่ม back-references
+  stockTransactions StockTransaction[]
+  deliveryItems   DeliveryItem[]
+  preferredByRequisitions RequisitionItem[] @relation("PreferredBatch")  // ✅ เพิ่ม back-reference
   stockCountItems StockCountItem[]
   
   @@unique([hospitalId, stockCardId, batchNumber])

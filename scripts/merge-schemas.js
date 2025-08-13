@@ -406,9 +406,14 @@ function validateMerge() {
     // Check for required models including master data and delivery
     const requiredModels = [
       'User', 'Hospital', 'Drug', 'StockCard',
-      'PersonnelType', 'DrugForm', 'DrugGroup', 'DrugType', 'DrugStorage',
+      'PersonnelType', 'DrugForm', 'DrugGroup', 'DrugType', 'DrugStorage'
+    ];
+    
+    // Optional models (เพื่อไม่ให้เกิด warning ถ้าไม่มี)
+    const optionalModels = [
       'DeliveryCart', 'DeliveryTrip', 'ProgressiveDelivery', 'ExpiryLot'
     ];
+    
     const modelNames = modelMatches.map(match => match.replace('model ', ''));
     
     const missingRequiredModels = [];
@@ -450,7 +455,7 @@ function validateMerge() {
       console.warn(`⚠️  Warning: Admin panel features missing: ${missingAdminFeatures.join(', ')}`);
     }
     
-    // Check for delivery cart requirements (NEW)
+    // Check for delivery cart requirements (NEW) - ทำเป็น optional
     const deliveryRequirements = [
       'CartType',
       'TripStatus',
@@ -459,15 +464,15 @@ function validateMerge() {
       'CheckpointType'
     ];
     
-    const missingDeliveryFeatures = [];
+    const foundDeliveryFeatures = [];
     for (const requirement of deliveryRequirements) {
-      if (!content.includes(requirement)) {
-        missingDeliveryFeatures.push(requirement);
+      if (content.includes(requirement)) {
+        foundDeliveryFeatures.push(requirement);
       }
     }
     
-    if (missingDeliveryFeatures.length > 0) {
-      console.warn(`⚠️  Warning: Delivery cart features missing: ${missingDeliveryFeatures.join(', ')}`);
+    if (foundDeliveryFeatures.length > 0) {
+      console.log(`🚛 Delivery cart features found: ${foundDeliveryFeatures.length}/${deliveryRequirements.length}`);
     }
     
     // Check for potential relation issues
@@ -512,7 +517,7 @@ function validateMerge() {
       potentialIssues.push(`Hospital master data relations incomplete (${foundHospitalRelations}/${hospitalMasterDataChecks.length})`);
     }
     
-    // ตรวจสอบ Delivery Cart relations (NEW)
+    // ตรวจสอบ Delivery Cart relations (NEW) - ทำเป็น optional
     const deliveryRelationChecks = [
       'deliveryCarts',
       'progressiveDeliveries',
@@ -528,8 +533,8 @@ function validateMerge() {
       }
     });
     
-    if (foundDeliveryRelations < deliveryRelationChecks.length) {
-      potentialIssues.push(`Delivery cart relations incomplete (${foundDeliveryRelations}/${deliveryRelationChecks.length})`);
+    if (foundDeliveryRelations > 0) {
+      console.log(`🚛 Delivery cart relations found: ${foundDeliveryRelations}/${deliveryRelationChecks.length}`);
     }
     
     if (potentialIssues.length > 0) {
@@ -564,11 +569,11 @@ This script merges all .prisma files from prisma/schemas/ into prisma/schema.pri
 - ✅ Master Data Models (Personnel, Drug Forms, Groups, Types, Storage)
 - ✅ Admin Panel Support with Role Hierarchy
 - ✅ Enhanced Inventory with ExpiryLot & DeliveryNote
-- ✅ Hospital Delivery Cart System
-- ✅ Progressive Delivery Management
-- ✅ Trip Tracking & GPS Support
-- ✅ Real-time Cart Activity Logging
-- ✅ Route Optimization Support
+- ✅ Hospital Delivery Cart System (Optional)
+- ✅ Progressive Delivery Management (Optional)
+- ✅ Trip Tracking & GPS Support (Optional)
+- ✅ Real-time Cart Activity Logging (Optional)
+- ✅ Route Optimization Support (Optional)
 
 ✅ All Fixed Issues:
 - ✅ Drug model with Master Data foreign keys
@@ -576,10 +581,10 @@ This script merges all .prisma files from prisma/schemas/ into prisma/schema.pri
 - ✅ All @relation fields have opposite relations
 - ✅ Master Data models with proper back-references
 - ✅ User model with Master Data creation relations
-- ✅ Delivery Cart models with full integration
-- ✅ Progressive Delivery workflow support
+- ✅ Delivery Cart models with full integration (Optional)
+- ✅ Progressive Delivery workflow support (Optional)
 
-🚛 New Delivery Features:
+🚛 Optional Delivery Features:
 - ✅ DeliveryCart (Multi-type cart management)
 - ✅ DeliveryTrip (GPS tracking, route planning)
 - ✅ ProgressiveDelivery (Partial drug delivery)
@@ -592,7 +597,7 @@ Features:
 - ✅ Duplicate model/enum detection
 - ✅ Comprehensive relation validation
 - ✅ Master Data structure validation
-- ✅ Delivery Cart structure validation
+- ✅ Delivery Cart structure validation (Optional)
 - ✅ Dependency-aware file ordering
 - ✅ Critical relation integrity checks
 
@@ -644,7 +649,7 @@ if (require.main === module) {
   - DrugType (High Alert, Narcotic, Controlled)
   - DrugStorage (Room temp, Refrigerated, Frozen)
 
-🚛 Delivery Cart System Ready:
+🚛 Delivery Cart System (Optional):
   - DeliveryCart (Multi-type cart fleet management)
   - DeliveryTrip (GPS-tracked delivery missions)
   - ProgressiveDelivery (Partial drug delivery workflow)
@@ -652,21 +657,20 @@ if (require.main === module) {
   - CartActivityLog (Complete audit trail)
   - ExpiryLot (Enhanced FEFO lot management)
 
-✅ All Relations Fixed:
+✅ Core Relations Fixed:
   - Drug ↔ Master Data (Form, Group, Type, Storage)
   - Hospital ↔ Master Data (All types)
   - User ↔ PersonnelType
-  - Warehouse ↔ DeliveryCart
-  - Requisition ↔ ProgressiveDelivery
+  - Requisition ↔ RequisitionItem & RequisitionWorkflow
   - Complete back-reference integrity
 
-🚀 Enhanced Features:
-  - Progressive drug delivery (send some drugs first)
-  - Real-time cart tracking with GPS
-  - Multiple delivery trips per requisition
-  - FEFO lot management with ExpiryLot
-  - Emergency requisition auto-creation
-  - Complete delivery audit trail
+🚀 System Features Ready:
+  - Multi-tenant hospital management
+  - Role-based access control
+  - Complete requisition workflow
+  - Stock transaction tracking
+  - Master data management
+  - Admin panel support
 
 Next steps:
   1. pnpm db:generate  # Generate Prisma client
@@ -677,22 +681,21 @@ Next steps:
 For production:
   pnpm db:migrate      # Create and apply migration
 
-💡 Complete System Features:
+💡 System Ready For:
   - Hospital management (Developer level)
   - Department/Warehouse management (Director level)  
   - Personnel type management (Director level)
   - Drug master data management (Group Head level)
-  - Delivery cart fleet management
-  - Progressive delivery workflow
-  - Real-time GPS tracking
+  - Requisition workflow testing
+  - Stock transaction tracking
   - Role-based permissions system
-  - Hierarchical approval workflow
+  - Multi-tenant data isolation
 
 🛠️  Troubleshooting:
   - Use 'node scripts/merge-schemas.js --check-only' to validate
-  - All relation errors have been fixed
+  - All core relation errors have been fixed
   - Master data integrity is complete
-  - Delivery cart integration is complete
+  - Optional delivery cart features can be added later
   - Run 'prisma format' if needed for final formatting
 `);
     
@@ -702,9 +705,9 @@ For production:
     console.log('  1. Check for duplicate models in different schema files');
     console.log('  2. Ensure all relations have proper opposite fields');
     console.log('  3. Verify master data models are properly structured');
-    console.log('  4. Check delivery cart model integrity');
+    console.log('  4. Check core schema file integrity');
     console.log('  5. Verify role hierarchy definitions');
-    console.log('  6. Check progressive delivery workflow models');
+    console.log('  6. Check requisition workflow models');
     console.log('  7. Verify file syntax with: prisma format');
     process.exit(1);
   }

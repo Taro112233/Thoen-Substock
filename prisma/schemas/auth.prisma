@@ -76,48 +76,33 @@ model User {
   lastLoginIP   String?
   loginCount    Int         @default(0)
   
-  // ================================
-  // USER APPROVAL SYSTEM FIELDS
-  // ================================
-  
   // การอนุมัติผู้ใช้งาน
-  approvedAt      DateTime?    // วันที่อนุมัติ
-  approvedBy      String?      // ผู้อนุมัติ (User ID)
-  rejectedAt      DateTime?    // วันที่ปฏิเสธ
-  rejectedBy      String?      // ผู้ปฏิเสธ (User ID)
-  rejectionReason String?      // เหตุผลการปฏิเสธ
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectedAt      DateTime?
+  rejectedBy      String?
+  rejectionReason String?
   
   // การติดตาม changes
-  lastModifiedBy  String?      // ผู้แก้ไขล่าสุด (User ID)
-  statusChangedAt DateTime?    // วันที่เปลี่ยนสถานะล่าสุด
-  statusHistory   Json?        // ประวัติการเปลี่ยนสถานะ
+  lastModifiedBy  String?
+  statusChangedAt DateTime?
+  statusHistory   Json?
   
   // ข้อมูลเพิ่มเติมสำหรับการอนุมัติ
-  applicationNotes String?     // หมายเหตุใบสมัคร
-  approvalNotes   String?      // หมายเหตุการอนุมัติ
-  requestedRole   Role?        // บทบาทที่ขอ (อาจแตกต่างจากที่ได้รับ)
+  applicationNotes String?
+  approvalNotes   String?
+  requestedRole   Role?
   
-  // ================================
-  // AUDIT FIELDS
-  // ================================
-  
+  // Audit fields
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-  createdBy     String?     // ผู้สร้างบัญชี
-  
-  // ================================
-  // BETTER AUTH COMPATIBILITY
-  // ================================
+  createdBy     String?
   
   // Better Auth required relations
   accounts      Account[]
   sessions      Session[]
   
-  // ================================
-  // RELATIONS (All opposite fields)
-  // ================================
-  
-  // Authentication Relations (existing)
+  // Authentication Relations
   refreshTokens            RefreshToken[]
   passwordResetTokens      PasswordResetToken[]
   emailVerificationTokens  EmailVerificationToken[]
@@ -133,9 +118,11 @@ model User {
   stockCountsAsVerifier    StockCount[]     @relation("StockCountVerifier")
   
   // Requisition System
-  requisitionsCreated      Requisition[]    @relation("RequesterRelation")
+  requisitionsCreated      Requisition[]    @relation("RequisitionCreator")
+  requisitionsRequested    Requisition[]    @relation("RequesterRelation")
   requisitionsApproved     Requisition[]    @relation("ApproverRelation")
   requisitionsFulfilled    Requisition[]    @relation("FulfillerRelation")
+  requisitionsReceived     Requisition[]    @relation("ReceiverRelation")
   workflowActions          RequisitionWorkflow[]
   requisitionAttachments   RequisitionAttachment[]
   requisitionTemplatesCreated RequisitionTemplate[]
@@ -169,23 +156,13 @@ model User {
   notificationPreferences  NotificationPreference[]
   notifications            NotificationUser[]
   
-  // ================================
-  // USER APPROVAL RELATIONS
-  // ================================
-  
-  // ผู้ใช้ที่อนุมัติโดยผู้ใช้นี้
+  // User approval relations
   usersApproved           User[] @relation("UserApprover")
   usersRejected           User[] @relation("UserRejecter")
-  
-  // ผู้ที่อนุมัติ/ปฏิเสธผู้ใช้นี้
   approver                User?  @relation("UserApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
   rejecter                User?  @relation("UserRejecter", fields: [rejectedBy], references: [id], onDelete: SetNull)
   
-  // ================================
-  // MASTER DATA MANAGEMENT RELATIONS - Fixed relation names
-  // ================================
-  
-  // Master Data Creation/Management
+  // Master Data Management Relations
   personnelTypesCreated   PersonnelType[] @relation("PersonnelTypeCreator")
   drugFormsCreated        DrugForm[]      @relation("DrugFormCreator")
   drugGroupsCreated       DrugGroup[]     @relation("DrugGroupCreator")
@@ -198,10 +175,6 @@ model User {
   @@index([personnelTypeId])
   @@map("users")
 }
-
-// ================================
-// BETTER AUTH REQUIRED MODELS
-// ================================
 
 model Account {
   id                String  @id @default(uuid())
@@ -217,10 +190,8 @@ model Account {
   id_token          String?
   session_state     String?
   
-  // Relation to User
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // Better Auth requirement
   @@unique([provider, providerAccountId])
   @@map("accounts")
 }
@@ -231,15 +202,12 @@ model Session {
   userId       String
   expires      DateTime
   
-  // Additional session fields
   ipAddress    String?
   userAgent    String?
   isActive     Boolean  @default(true)
   
-  // Relation to User
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // Audit fields
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
@@ -249,25 +217,17 @@ model Session {
   @@map("sessions")
 }
 
-// ================================
-// EXISTING AUTH MODELS (Updated)
-// ================================
-
 model RefreshToken {
   id        String   @id @default(uuid())
   
-  // ความสัมพันธ์กับผู้ใช้
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // ข้อมูล token
   token     String   @unique
   expiresAt DateTime
   
-  // สถานะ
   isRevoked Boolean  @default(false)
   
-  // Audit fields
   createdAt DateTime @default(now())
   
   @@index([userId])
@@ -278,18 +238,14 @@ model RefreshToken {
 model PasswordResetToken {
   id        String   @id @default(uuid())
   
-  // ความสัมพันธ์กับผู้ใช้
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // ข้อมูล token
   token     String   @unique
   expiresAt DateTime
   
-  // สถานะ
   isUsed    Boolean  @default(false)
   
-  // Audit fields
   createdAt DateTime @default(now())
   
   @@index([userId])
@@ -300,18 +256,14 @@ model PasswordResetToken {
 model EmailVerificationToken {
   id        String   @id @default(uuid())
   
-  // ความสัมพันธ์กับผู้ใช้
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // ข้อมูล token
   token     String   @unique
   expiresAt DateTime
   
-  // สถานะ
   isUsed    Boolean  @default(false)
   
-  // Audit fields
   createdAt DateTime @default(now())
   
   @@index([userId])
@@ -322,20 +274,16 @@ model EmailVerificationToken {
 model LoginAttempt {
   id        String   @id @default(uuid())
   
-  // ความสัมพันธ์กับผู้ใช้ (nullable สำหรับ failed attempts)
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // ข้อมูลการพยายามเข้าสู่ระบบ
   email     String
   ipAddress String
   userAgent String?
   
-  // ผลลัพธ์
   success   Boolean
   failureReason String?
   
-  // Audit fields
   createdAt DateTime @default(now())
   
   @@index([userId])

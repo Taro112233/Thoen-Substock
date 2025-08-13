@@ -1,4 +1,4 @@
-// prisma/schemas/requisitions.prisma
+// prisma/schemas/requisitions.prisma - Enhanced with Signature Fields
 // Requisition Management Schema
 // ระบบจัดการการเบิกจ่ายยาสำหรับ Hospital Pharmacy System
 
@@ -61,13 +61,50 @@ model Requisition {
   approvedDate        DateTime?       // วันที่อนุมัติ
   fulfilledDate       DateTime?       // วันที่จ่ายเสร็จ
   
-  // ผู้รับผิดชอบ
+  // ================================
+  // ENHANCED SIGNATURE SYSTEM
+  // ================================
+  
+  // 1. ผู้เบิก (Requester)
   requesterId         String
   requester           User            @relation("RequesterRelation", fields: [requesterId], references: [id], onDelete: Restrict)
+  requesterSignature  String?         // ลายเซ็นดิจิทัล หรือ hash
+  requesterSignedAt   DateTime?       // วันที่ลงชื่อ
+  requesterName       String?         // ชื่อ-สกุล ที่แสดงในใบ
+  requesterPosition   String?         // ตำแหน่งที่แสดงในใบ
+  
+  // 2. ผู้อนุมัติ (Approver)
   approverId          String?
   approver            User?           @relation("ApproverRelation", fields: [approverId], references: [id], onDelete: Restrict)
+  approverSignature   String?         // ลายเซ็นดิจิทัล
+  approverSignedAt    DateTime?       // วันที่อนุมัติและลงชื่อ
+  approverName        String?         // ชื่อ-สกุล ผู้อนุมัติ
+  approverPosition    String?         // ตำแหน่งผู้อนุมัติ
+  
+  // 3. ผู้จ่าย (Dispenser/Fulfiller)
   fulfillerId         String?
   fulfiller           User?           @relation("FulfillerRelation", fields: [fulfillerId], references: [id], onDelete: Restrict)
+  fulfillerSignature  String?         // ลายเซ็นผู้จ่าย
+  fulfillerSignedAt   DateTime?       // วันที่จ่ายและลงชื่อ
+  fulfillerName       String?         // ชื่อ-สกุล ผู้จ่าย
+  fulfillerPosition   String?         // ตำแหน่งผู้จ่าย
+  
+  // 4. ผู้รับ (Receiver)
+  receiverId          String?
+  receiver            User?           @relation("ReceiverRelation", fields: [receiverId], references: [id], onDelete: Restrict)
+  receiverSignature   String?         // ลายเซ็นผู้รับ
+  receiverSignedAt    DateTime?       // วันที่รับและลงชื่อ
+  receiverName        String?         // ชื่อ-สกุล ผู้รับ
+  receiverPosition    String?         // ตำแหน่งผู้รับ
+  
+  // ================================
+  // WORKFLOW TRACKING
+  // ================================
+  
+  // การติดตาม workflow state
+  workflowStage       String          @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, DISPENSED, RECEIVED
+  nextActionRequired  String?         // บอกว่าต้องทำอะไรต่อไป
+  nextActionBy        String?         // ใครต้องทำ action ต่อไป
   
   // สรุปใบเบิก
   totalItems          Int             @default(0)
@@ -78,124 +115,133 @@ model Requisition {
   actualValue         Decimal         @default(0)
   
   // หมายเหตุ
-  requestNotes        String?         // หมายเหตุการเบิก
-  approvalNotes       String?         // หมายเหตุการอนุมัติ
-  fulfillmentNotes    String?         // หมายเหตุการจ่าย
-  rejectionReason     String?         // เหตุผลการปฏิเสธ
+  requestNotes        String?         // หมายเหตุผู้เบิก
+  approvalNotes       String?         // หมายเหตุผู้อนุมัติ
+  fulfillmentNotes    String?         // หมายเหตุผู้จ่าย
+  receivingNotes      String?         // หมายเหตุผู้รับ
   
-  // การติดตาม
+  // การตั้งค่า
   isUrgent            Boolean         @default(false)
-  isRecurring         Boolean         @default(false)
-  recurringPattern    String?         // รูปแบบการเบิกประจำ
+  requiresApproval    Boolean         @default(true)
+  autoApproveLimit    Decimal?        // จำนวนเงินที่อนุมัติอัตโนมัติได้
+  
+  // สถานะพิเศษ
+  isPartiallyFulfilled Boolean        @default(false)
+  isFullyReceived     Boolean         @default(false)
+  hasDiscrepancies    Boolean         @default(false) // มีความผิดปกติ
   
   // Audit fields
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
+  createdBy           String
+  creator             User            @relation("RequisitionCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   
-  // ================================
-  // RELATIONS (Fixed opposite fields)
-  // ================================
+  // ความสัมพันธ์
   items               RequisitionItem[]
-  workflow            RequisitionWorkflow[]
-  transactions        StockTransaction[] // Fixed: เพิ่ม relation กลับ
+  workflows           RequisitionWorkflow[]
   attachments         RequisitionAttachment[]
+  stockTransactions   StockTransaction[]  // ✅ เพิ่ม back-reference
   
   @@index([hospitalId])
   @@index([requestingDepartmentId])
   @@index([fulfillmentWarehouseId])
   @@index([status])
+  @@index([workflowStage])
   @@index([requestedDate])
-  @@index([priority])
+  @@index([requiredDate])
+  @@index([requesterId])
+  @@index([approverId])
+  @@index([fulfillerId])
+  @@index([receiverId])
   @@map("requisitions")
 }
 
+// รายการยาในใบเบิก (แก้ไขเพิ่ม drugId field)
 model RequisitionItem {
+  id                  String          @id @default(uuid())
+  
+  // ความสัมพันธ์
+  requisitionId       String
+  requisition         Requisition     @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  drugId              String          // ✅ เพิ่ม field นี้
+  drug                Drug            @relation(fields: [drugId], references: [id], onDelete: Restrict)
+  stockCardId         String
+  stockCard           StockCard       @relation(fields: [stockCardId], references: [id], onDelete: Restrict)
+  
+  // จำนวนและสถานะ
+  requestedQuantity   Int
+  approvedQuantity    Int?
+  fulfilledQuantity   Int             @default(0)
+  unitPrice           Decimal?
+  totalValue          Decimal?
+  
+  // การจัดการ batch
+  preferredBatchId    String?
+  preferredBatch      StockBatch?     @relation("PreferredBatch", fields: [preferredBatchId], references: [id], onDelete: SetNull)
+  actualBatches       Json?           // บันทึกการจ่ายจาก batch ต่างๆ
+  
+  // สถานะรายการ
+  status              String          @default("PENDING") // PENDING, APPROVED, PARTIALLY_FULFILLED, FULFILLED, CANCELLED
+  priority            Int             @default(1)         // ลำดับความสำคัญ
+  
+  // หมายเหตุ
+  notes               String?
+  fulfillmentNotes    String?         // หมายเหตุการจ่าย
+  
+  // การติดตาม
+  requestedAt         DateTime        @default(now())
+  approvedAt          DateTime?
+  fulfilledAt         DateTime?
+  
+  // Audit fields
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  
+  // ✅ Relations - เพิ่ม back-reference
+  progressiveDeliveryItems ProgressiveDeliveryItem[]
+  
+  @@index([requisitionId])
+  @@index([drugId])  // ✅ เพิ่ม index
+  @@index([stockCardId])
+  @@index([status])
+  @@map("requisition_items")
+}
+
+// การติดตาม workflow (ไม่เปลี่ยนแปลง)
+model RequisitionWorkflow {
   id              String      @id @default(uuid())
   
   // ความสัมพันธ์
   requisitionId   String
   requisition     Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  drugId          String
-  drug            Drug        @relation(fields: [drugId], references: [id], onDelete: Cascade)
-  stockCardId     String?
-  stockCard       StockCard?  @relation(fields: [stockCardId], references: [id], onDelete: SetNull)
-  progressiveDeliveries ProgressiveDeliveryItem[]
   
-  // จำนวน
-  requestedQty    Int         // จำนวนที่เบิก
-  approvedQty     Int?        // จำนวนที่อนุมัติ
-  fulfilledQty    Int         @default(0) // จำนวนที่จ่ายแล้ว
+  // การเปลี่ยนแปลงสถานะ
+  fromStatus      String?     // สถานะเดิม
+  toStatus        String      // สถานะใหม่
+  action          String      // การกระทำ เช่น SUBMIT, APPROVE, REJECT, FULFILL
   
-  // ราคา
-  unitCost        Decimal?    // ต้นทุนต่อหน่วย
-  totalCost       Decimal     @default(0) // ต้นทุนรวม
+  // ผู้ดำเนินการ
+  actionBy        String
+  actor           User        @relation(fields: [actionBy], references: [id], onDelete: Restrict)
   
-  // สถานะรายการ
-  status          String      @default("PENDING") // "PENDING", "APPROVED", "PARTIAL", "COMPLETED", "CANCELLED"
+  // รายละเอียด
+  notes           String?
+  reason          String?     // เหตุผล (สำหรับการปฏิเสธ)
+  attachments     Json?       // ไฟล์แนบ
   
-  // การระบุ batch (สำหรับการจ่าย)
-  preferredBatch  String?     // batch ที่ต้องการ
-  actualBatches   Json?       // batch ที่จ่ายจริง (array of {batchId, quantity})
-  
-  // หมายเหตุ
-  requestNotes    String?     // หมายเหตุการเบิก
-  approvalNotes   String?     // หมายเหตุการอนุมัติ
-  fulfillmentNotes String?    // หมายเหตุการจ่าย
+  // การติดตาม
+  actionAt        DateTime    @default(now())
   
   // Audit fields
   createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
   
   @@index([requisitionId])
-  @@index([drugId])
-  @@index([status])
-  @@map("requisition_items")
-}
-
-enum WorkflowAction {
-  CREATE          // สร้างใบเบิก
-  SUBMIT          // ส่งใบเบิก
-  REVIEW          // ตรวจสอบ
-  APPROVE         // อนุมัติ
-  REJECT          // ปฏิเสธ
-  FULFILL         // จ่ายยา
-  PARTIAL_FULFILL // จ่ายบางส่วน
-  COMPLETE        // เสร็จสิ้น
-  CANCEL          // ยกเลิก
-  REQUEST_INFO    // ขอข้อมูลเพิ่มเติม
-  PROVIDE_INFO    // ให้ข้อมูลเพิ่มเติม
-}
-
-model RequisitionWorkflow {
-  id              String          @id @default(uuid())
-  
-  // ความสัมพันธ์
-  requisitionId   String
-  requisition     Requisition     @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  
-  // การดำเนินการ
-  action          WorkflowAction
-  fromStatus      RequisitionStatus?
-  toStatus        RequisitionStatus?
-  
-  // รายละเอียด
-  comments        String?
-  attachments     Json?           // array of file paths/URLs
-  
-  // การติดตาม
-  processedAt     DateTime        @default(now())
-  ipAddress       String?
-  userAgent       String?
-  
-  @@index([requisitionId])
-  @@index([userId])
-  @@index([action])
-  @@index([processedAt])
+  @@index([actionBy])
+  @@index([actionAt])
   @@map("requisition_workflows")
 }
 
+// ไฟล์แนบ (ไม่เปลี่ยนแปลง)
 model RequisitionAttachment {
   id              String      @id @default(uuid())
   
@@ -208,12 +254,11 @@ model RequisitionAttachment {
   // ข้อมูลไฟล์
   fileName        String
   originalName    String
+  filePath        String
   fileSize        Int
   mimeType        String
-  filePath        String      // path in storage
   
-  // รายละเอียด
-  description     String?
+  // ประเภทเอกสาร
   category        String?     // "PRESCRIPTION", "AUTHORIZATION", "SUPPORTING_DOC", "OTHER"
   
   // สถานะ
@@ -228,6 +273,7 @@ model RequisitionAttachment {
   @@map("requisition_attachments")
 }
 
+// Template สำหรับการเบิกประจำ (ไม่เปลี่ยนแปลง)
 model RequisitionTemplate {
   id              String      @id @default(uuid())
   
