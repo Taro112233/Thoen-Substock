@@ -69,6 +69,10 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+// Import new components
+import RequisitionList from "@/components/requisitions/RequisitionList";
+import SmartReceivingWidget from "@/components/receiving/SmartReceivingWidget";
+
 // Types - แก้ไขตาม schema
 interface StockItem {
   id: string;
@@ -113,6 +117,13 @@ interface Transaction {
   notes?: string | null;
 }
 
+interface RequisitionSummary {
+  incoming: number;
+  outgoing: number;
+  pending: number;
+  completed: number;
+}
+
 interface WarehouseDetail {
   id: string;
   name: string;
@@ -150,6 +161,7 @@ interface WarehouseDetail {
   updatedAt: string;
   stockCards: StockItem[];
   recentTransactions: Transaction[];
+  requisitionSummary: RequisitionSummary;
   statistics: {
     totalDrugs: number;
     totalStock: number;
@@ -374,7 +386,7 @@ export default function WarehouseDetailDashboard() {
       </motion.div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -457,6 +469,27 @@ export default function WarehouseDetailDashboard() {
             </CardContent>
           </Card>
         </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">ใบเบิกรอ</CardTitle>
+              <FileText className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">
+                {warehouse.requisitionSummary?.pending || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                รวม {(warehouse.requisitionSummary?.incoming || 0) + (warehouse.requisitionSummary?.outgoing || 0)} ใบ
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       {/* Main Content Tabs */}
@@ -475,6 +508,12 @@ export default function WarehouseDetailDashboard() {
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
               >
                 สต็อกสินค้า
+              </TabsTrigger>
+              <TabsTrigger 
+                value="requisitions" 
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
+              >
+                ใบเบิก & รับสินค้า
               </TabsTrigger>
               <TabsTrigger 
                 value="transactions" 
@@ -709,6 +748,53 @@ export default function WarehouseDetailDashboard() {
                     </TableBody>
                   </Table>
                 </div>
+              </div>
+            </TabsContent>
+
+            {/* NEW: Requisitions & Receiving Tab */}
+            <TabsContent value="requisitions" className="space-y-6">
+              <div>
+                {/* Tabs สำหรับแยกใบเบิกเข้า/ออก และระบบรับสินค้า */}
+                <Tabs defaultValue="incoming" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="incoming">
+                      ใบเบิกรับเข้า ({warehouse.requisitionSummary?.incoming || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="outgoing">
+                      ใบเบิกส่งออก ({warehouse.requisitionSummary?.outgoing || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="receiving">
+                      รับสินค้า
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  {/* ใบเบิกรับเข้า */}
+                  <TabsContent value="incoming">
+                    <RequisitionList 
+                      warehouseId={warehouse.id}
+                      viewType="incoming"
+                      onRequisitionClick={(requisition) => {
+                        router.push(`/dashboard/requisitions/${requisition.id}`);
+                      }}
+                    />
+                  </TabsContent>
+                  
+                  {/* ใบเบิกส่งออก */}
+                  <TabsContent value="outgoing">
+                    <RequisitionList 
+                      warehouseId={warehouse.id}
+                      viewType="outgoing"
+                      onRequisitionClick={(requisition) => {
+                        router.push(`/dashboard/requisitions/${requisition.id}`);
+                      }}
+                    />
+                  </TabsContent>
+                  
+                  {/* ระบบรับสินค้า Smart Search */}
+                  <TabsContent value="receiving">
+                    <SmartReceivingWidget warehouseId={warehouse.id} />
+                  </TabsContent>
+                </Tabs>
               </div>
             </TabsContent>
 

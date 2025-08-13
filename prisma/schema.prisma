@@ -1,6 +1,6 @@
 // This file is auto-generated. Do not edit manually.
 // Edit files in prisma/schemas/ directory instead.
-// Last generated: 2025-08-12T14:25:14.953Z
+// Last generated: 2025-08-13T09:27:04.285Z
 
 generator client {
   provider = "prisma-client-js"
