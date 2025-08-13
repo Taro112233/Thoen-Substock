@@ -290,6 +290,7 @@ Directory structure:
     │   ├── auth-utils.ts
     │   ├── auth.ts
     │   ├── client-auth.tsx
+    │   ├── dashboard-auth.ts
     │   ├── mock-data.ts
     │   ├── password-utils.ts
     │   ├── prisma.ts
@@ -319,6 +320,7 @@ Directory structure:
     │       ├── master-data.seed.ts
     │       ├── personnel-types.seed.ts
     │       ├── real-drugs.seed.ts
+    │       ├── requisitions-transactions.seed.ts
     │       ├── robust-bulk-drugs.seed.ts
     │       ├── users.seed.ts
     │       └── warehouses.seed.ts
