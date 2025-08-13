@@ -1,226 +1,336 @@
 // app/api/dashboard/warehouses/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { verifyAuth } from "@/lib/auth";
+import { NextRequest, NextResponse } from 'next/server';
+import { validateDashboardAuth, withDashboardAuth, DashboardUser } from '@/lib/dashboard-auth';
+import { PrismaClient } from '@prisma/client';
 
+const prisma = new PrismaClient();
+
+// GET - รายการคลังทั้งหมดสำหรับ Dashboard
 export async function GET(request: NextRequest) {
-  try {
-    // Verify authentication
-    const authResult = await verifyAuth(request);
-    if ('error' in authResult) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: authResult.status }
-      );
-    }
+  return withDashboardAuth(request, async (user: DashboardUser, hospitalId: string) => {
+    try {
+      console.log('🔍 [DASHBOARD WAREHOUSES API] GET warehouses list');
+      console.log('✅ [DASHBOARD WAREHOUSES API] User:', {
+        id: user.id,
+        role: user.role,
+        hospitalId: user.hospitalId
+      });
 
-    const { hospitalId } = authResult;
+      const { searchParams } = new URL(request.url);
+      const search = searchParams.get('search');
+      const type = searchParams.get('type');
+      const active = searchParams.get('active');
+      const page = parseInt(searchParams.get('page') || '1');
+      const limit = parseInt(searchParams.get('limit') || '20');
+      const skip = (page - 1) * limit;
 
-    // Fetch all warehouses with aggregated data
-    const [warehouses, summary] = await Promise.all([
-      // Get warehouses with metrics
-      prisma.warehouse.findMany({
-        where: {
-          hospitalId: hospitalId,
-        },
+      // Build where clause for multi-tenant isolation
+      const where: any = {
+        hospitalId: hospitalId, // Multi-tenant security
+      };
+
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { warehouseCode: { contains: search, mode: 'insensitive' } },
+          { location: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
+      if (type) {
+        where.type = type;
+      }
+
+      if (active !== null) {
+        where.isActive = active === 'true';
+      }
+
+      // Get warehouses with aggregated data
+      const warehouses = await prisma.warehouse.findMany({
+        where,
         include: {
           manager: {
             select: {
               id: true,
               firstName: true,
               lastName: true,
+              email: true,
+              role: true
             }
           },
           _count: {
             select: {
               stockCards: true,
+              stockTransactions: true
             }
           }
         },
-        orderBy: {
-          name: 'asc'
-        }
-      }),
+        orderBy: { name: 'asc' },
+        skip,
+        take: limit
+      });
 
-      // Get summary statistics
-      prisma.warehouse.aggregate({
-        where: {
-          hospitalId: hospitalId,
-        },
-        _count: {
-          _all: true,
-        },
-        _sum: {
-          totalValue: true,
-          totalItems: true,
-        }
-      })
-    ]);
+      // Calculate metrics for each warehouse
+      const warehousesWithMetrics = await Promise.all(
+        warehouses.map(async (warehouse) => {
+          const now = new Date();
+          const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+          const ninetyDaysFromNow = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
 
-    // Calculate metrics for each warehouse
-    const warehousesWithMetrics = await Promise.all(
-      warehouses.map(async (warehouse) => {
-        // Get stock metrics
-        const [stockMetrics, lowStockCount, expiringCount, requisitions] = await Promise.all([
-          // Stock value and count
-          prisma.stockCard.aggregate({
-            where: {
-              warehouseId: warehouse.id,
-              isActive: true,
-            },
-            _sum: {
-              currentStock: true,
-              totalValue: true,
-            },
-            _count: {
-              _all: true,
-            }
-          }),
+          // Get stock metrics
+          const [
+            totalStockData,
+            lowStockCount,
+            expiringIn30Days,
+            expiringIn60Days,
+            expiringIn90Days,
+            pendingRequisitions,
+            recentTransactions
+          ] = await Promise.all([
+            // Total stock and value
+            prisma.stockCard.aggregate({
+              where: {
+                warehouseId: warehouse.id,
+                isActive: true
+              },
+              _sum: {
+                currentStock: true,
+                totalValue: true
+              },
+              _count: true
+            }),
 
-          // Low stock items
-          prisma.stockCard.count({
-            where: {
-              warehouseId: warehouse.id,
-              isActive: true,
-              lowStockAlert: true,
-            }
-          }),
-
-          // Expiring items (within 90 days)
-          prisma.stockBatch.count({
-            where: {
-              stockCard: {
+            // Low stock alerts
+            prisma.stockCard.count({
+              where: {
                 warehouseId: warehouse.id,
                 isActive: true,
+                lowStockAlert: true
+              }
+            }),
+
+            // Expiring in 30 days
+            prisma.stockBatch.count({
+              where: {
+                stockCard: {
+                  warehouseId: warehouse.id,
+                  isActive: true
+                },
+                currentQty: { gt: 0 },
+                expiryDate: {
+                  gte: now,
+                  lte: thirtyDaysFromNow
+                }
+              }
+            }),
+
+            // Expiring in 60 days
+            prisma.stockBatch.count({
+              where: {
+                stockCard: {
+                  warehouseId: warehouse.id,
+                  isActive: true
+                },
+                currentQty: { gt: 0 },
+                expiryDate: {
+                  gte: thirtyDaysFromNow,
+                  lte: new Date(now.getTime() + (60 * 24 * 60 * 60 * 1000))
+                }
+              }
+            }),
+
+            // Expiring in 90 days
+            prisma.stockBatch.count({
+              where: {
+                stockCard: {
+                  warehouseId: warehouse.id,
+                  isActive: true
+                },
+                currentQty: { gt: 0 },
+                expiryDate: {
+                  gte: new Date(now.getTime() + (60 * 24 * 60 * 60 * 1000)),
+                  lte: ninetyDaysFromNow
+                }
+              }
+            }),
+
+            // Pending requisitions
+            prisma.requisition.count({
+              where: {
+                fulfillmentWarehouseId: warehouse.id,
+                status: {
+                  in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED']
+                }
+              }
+            }),
+
+            // Recent transactions (last 5)
+            prisma.stockTransaction.findMany({
+              where: {
+                warehouseId: warehouse.id
               },
-              currentQty: { gt: 0 },
-              expiryDate: {
-                lte: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-                gte: new Date(),
-              }
-            }
-          }),
-
-          // Pending requisitions
-          prisma.requisition.count({
-            where: {
-              fulfillmentWarehouseId: warehouse.id,
-              status: {
-                in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED']
-              }
-            }
-          })
-        ]);
-
-        // Get recent activity
-        const recentActivity = await prisma.stockTransaction.findMany({
-          where: {
-            warehouseId: warehouse.id,
-          },
-          select: {
-            transactionType: true,
-            quantity: true,
-            createdAt: true,
-            drug: {
               select: {
-                name: true,
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 3
-        });
+                id: true,
+                transactionType: true,
+                quantity: true,
+                createdAt: true,
+                drug: {
+                  select: {
+                    name: true,
+                    hospitalDrugCode: true
+                  }
+                }
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 5
+            })
+          ]);
 
-        // Calculate capacity usage
-        const capacityUsage = warehouse.capacity 
-          ? ((stockMetrics._sum.currentStock || 0) / Number(warehouse.capacity)) * 100
-          : 0;
-
-        // Calculate turnover rate (placeholder - would need more complex calculation)
-        const turnoverRate = 4.2; // Example value
-
-        return {
-          ...warehouse,
-          metrics: {
-            stockValue: stockMetrics._sum.totalValue || 0,
-            itemCount: stockMetrics._sum.currentStock || 0,
+          const metrics = {
+            totalStock: totalStockData._sum.currentStock || 0,
+            totalValue: Number(totalStockData._sum.totalValue) || 0,
+            totalItems: totalStockData._count || 0,
             lowStockItems: lowStockCount,
-            expiringItems: expiringCount,
-            pendingRequisitions: requisitions,
-            capacityUsage: capacityUsage,
-            turnoverRate: turnoverRate,
-            accuracy: 98.5, // Example value
+            expiringItems: expiringIn30Days + expiringIn60Days + expiringIn90Days,
+            expiringIn30Days,
+            expiringIn60Days,
+            expiringIn90Days,
+            pendingRequisitions,
+            criticalAlerts: lowStockCount + expiringIn30Days
+          };
+
+          return {
+            id: warehouse.id,
+            name: warehouse.name,
+            warehouseCode: warehouse.warehouseCode,
+            type: warehouse.type,
+            location: warehouse.location,
+            address: warehouse.address,
+            isActive: warehouse.isActive,
+            isMaintenance: warehouse.isMaintenance,
+            hasTemperatureControl: warehouse.hasTemperatureControl,
+            minTemperature: warehouse.minTemperature ? Number(warehouse.minTemperature) : null,
+            maxTemperature: warehouse.maxTemperature ? Number(warehouse.maxTemperature) : null,
+            hasHumidityControl: warehouse.hasHumidityControl,
+            minHumidity: warehouse.minHumidity ? Number(warehouse.minHumidity) : null,
+            maxHumidity: warehouse.maxHumidity ? Number(warehouse.maxHumidity) : null,
+            securityLevel: warehouse.securityLevel,
+            accessControl: warehouse.accessControl,
+            cctv: warehouse.cctv,
+            alarm: warehouse.alarm,
+            area: warehouse.area ? Number(warehouse.area) : null,
+            capacity: warehouse.capacity ? Number(warehouse.capacity) : null,
+            totalValue: Number(warehouse.totalValue) || 0,
+            totalItems: Number(warehouse.totalItems) || 0,
+            lastStockCount: warehouse.lastStockCount?.toISOString(),
+            description: warehouse.description,
+            notes: warehouse.notes,
+            createdAt: warehouse.createdAt.toISOString(),
+            updatedAt: warehouse.updatedAt.toISOString(),
+            manager: warehouse.manager ? {
+              id: warehouse.manager.id,
+              firstName: warehouse.manager.firstName,
+              lastName: warehouse.manager.lastName,
+              email: warehouse.manager.email,
+              role: warehouse.manager.role
+            } : null,
+            metrics,
+            recentTransactions: recentTransactions.map(tx => ({
+              id: tx.id,
+              transactionType: tx.transactionType,
+              quantity: tx.quantity || 0,
+              createdAt: tx.createdAt.toISOString(),
+              drug: tx.drug
+            })),
+            _count: warehouse._count
+          };
+        })
+      );
+
+      // Get summary statistics
+      const [summary, totalCount, warehouseTypes] = await Promise.all([
+        // Overall summary
+        prisma.warehouse.aggregate({
+          where: { hospitalId },
+          _sum: {
+            totalValue: true,
+            totalItems: true
           },
-          recentActivity: recentActivity.map(activity => ({
-            type: activity.transactionType,
-            description: `${activity.transactionType} - ${activity.drug.name} (${Math.abs(activity.quantity)} ชิ้น)`,
-            timestamp: activity.createdAt.toISOString(),
+          _count: {
+            _all: true
+          }
+        }),
+
+        // Total count for pagination
+        prisma.warehouse.count({ where }),
+
+        // Warehouse types distribution
+        prisma.warehouse.groupBy({
+          by: ['type'],
+          where: { hospitalId },
+          _count: {
+            type: true
+          }
+        })
+      ]);
+
+      const activeWarehouses = warehouses.filter(w => w.isActive).length;
+      const criticalAlerts = warehousesWithMetrics.reduce(
+        (sum, w) => sum + w.metrics.criticalAlerts, 
+        0
+      );
+      const lowStockAlerts = warehousesWithMetrics.reduce(
+        (sum, w) => sum + w.metrics.lowStockItems, 
+        0
+      );
+      const expiringAlerts = warehousesWithMetrics.reduce(
+        (sum, w) => sum + w.metrics.expiringItems, 
+        0
+      );
+      const pendingRequisitions = warehousesWithMetrics.reduce(
+        (sum, w) => sum + w.metrics.pendingRequisitions, 
+        0
+      );
+
+      const responseData = {
+        warehouses: warehousesWithMetrics,
+        summary: {
+          totalWarehouses: summary._count._all || 0,
+          activeWarehouses: activeWarehouses,
+          totalStockValue: Number(summary._sum.totalValue) || 0,
+          totalItems: Number(summary._sum.totalItems) || 0,
+          criticalAlerts: criticalAlerts,
+          lowStockAlerts: lowStockAlerts,
+          expiringAlerts: expiringAlerts,
+          pendingRequisitions: pendingRequisitions,
+          warehouseTypes: warehouseTypes.map(wt => ({
+            type: wt.type,
+            count: wt._count.type
           }))
-        };
-      })
-    );
+        },
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasNext: page * limit < totalCount,
+          hasPrev: page > 1
+        }
+      };
 
-    // Calculate summary by warehouse type
-    const warehouseTypes = warehouses.reduce((acc, warehouse) => {
-      const existing = acc.find(t => t.type === warehouse.type);
-      if (existing) {
-        existing.count++;
-        existing.value += Number(warehouse.totalValue);
-      } else {
-        acc.push({
-          type: warehouse.type,
-          count: 1,
-          value: Number(warehouse.totalValue)
-        });
-      }
-      return acc;
-    }, [] as Array<{ type: string; count: number; value: number }>);
+      console.log('✅ [DASHBOARD WAREHOUSES API] Response prepared with', warehouses.length, 'warehouses');
 
-    // Count active warehouses
-    const activeWarehouses = warehouses.filter(w => w.isActive).length;
+      return NextResponse.json(responseData);
 
-    // Calculate alerts
-    const criticalAlerts = warehousesWithMetrics.reduce(
-      (sum, w) => sum + (w.metrics.lowStockItems > 10 ? 1 : 0), 
-      0
-    );
-    const lowStockAlerts = warehousesWithMetrics.reduce(
-      (sum, w) => sum + w.metrics.lowStockItems, 
-      0
-    );
-    const expiringAlerts = warehousesWithMetrics.reduce(
-      (sum, w) => sum + w.metrics.expiringItems, 
-      0
-    );
-    const pendingRequisitions = warehousesWithMetrics.reduce(
-      (sum, w) => sum + w.metrics.pendingRequisitions, 
-      0
-    );
-
-    const responseData = {
-      warehouses: warehousesWithMetrics,
-      summary: {
-        totalWarehouses: warehouses.length,
-        activeWarehouses: activeWarehouses,
-        totalStockValue: summary._sum.totalValue || 0,
-        totalItems: summary._sum.totalItems || 0,
-        criticalAlerts: criticalAlerts,
-        lowStockAlerts: lowStockAlerts,
-        expiringAlerts: expiringAlerts,
-        pendingRequisitions: pendingRequisitions,
-        warehouseTypes: warehouseTypes,
-      }
-    };
-
-    return NextResponse.json(responseData);
-
-  } catch (error) {
-    console.error("Dashboard warehouse fetch error:", error);
-    return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการดึงข้อมูล" },
-      { status: 500 }
-    );
-  }
+    } catch (error) {
+      console.error('[DASHBOARD WAREHOUSES API] Error:', error);
+      return NextResponse.json(
+        { 
+          error: 'เกิดข้อผิดพลาดในการดึงข้อมูลคลัง',
+          details: process.env.NODE_ENV === 'development' ? String(error) : undefined
+        },
+        { status: 500 }
+      );
+    }
+  });
 }
