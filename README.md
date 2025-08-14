@@ -174,6 +174,7 @@ Directory structure:
     │   │   ├── receiving/
     │   │   │   └── page.tsx
     │   │   ├── requisitions/
+    │   │   │   ├── page.tsx
     │   │   │   ├── [id]/
     │   │   │   │   └── page.tsx
     │   │   │   └── new/
