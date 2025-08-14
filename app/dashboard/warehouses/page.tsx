@@ -33,7 +33,8 @@ import {
   Settings,
   Map,
   Zap,
-  Star
+  Star,
+  Database
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -103,7 +104,7 @@ interface DashboardSummary {
   }[];
 }
 
-// Warehouse Type Config
+// Warehouse Type Config with dashboard-consistent colors
 const warehouseTypeConfig = {
   CENTRAL: { 
     label: "คลังกลาง", 
@@ -140,10 +141,10 @@ const warehouseTypeConfig = {
   COLD_STORAGE: { 
     label: "คลังยาแช่เย็น", 
     icon: Thermometer, 
-    color: "from-cyan-500 to-cyan-600",
-    bgLight: "bg-cyan-50",
-    textColor: "text-cyan-700",
-    borderColor: "border-cyan-200"
+    color: "from-indigo-500 to-indigo-600",
+    bgLight: "bg-indigo-50",
+    textColor: "text-indigo-700",
+    borderColor: "border-indigo-200"
   }
 };
 
@@ -282,98 +283,57 @@ export default function WarehousesOverviewDashboard() {
     };
   };
 
+  // Loading State - Match dashboard style
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="space-y-8">
-            {/* Header Skeleton */}
-            <div className="space-y-4">
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-4 w-96" />
-            </div>
-            
-            {/* Summary Cards Skeleton */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(4)].map((_, i) => (
-                <Card key={i} className="shadow-lg">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-20" />
-                        <Skeleton className="h-8 w-16" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                      <Skeleton className="h-12 w-12 rounded-lg" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            
-            {/* Warehouse Cards Skeleton */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <Card key={i} className="shadow-lg">
-                  <CardHeader>
-                    <div className="flex items-center space-x-3">
-                      <Skeleton className="h-10 w-10 rounded-lg" />
-                      <div className="space-y-2">
-                        <Skeleton className="h-5 w-32" />
-                        <Skeleton className="h-4 w-24" />
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-32 w-full" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center p-8">
+          <div className="relative">
+            <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-6"></div>
+            <div className="absolute inset-0 w-12 h-12 border-4 border-blue-200 rounded-full mx-auto"></div>
           </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">กำลังโหลดข้อมูล</h2>
+          <p className="text-gray-600">กรุณารอสักครู่...</p>
         </div>
       </div>
     );
   }
 
+  // Error State - Match dashboard style
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-center min-h-96">
-            <div className="text-center p-8 max-w-md">
-              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                <AlertTriangle className="w-10 h-10 text-red-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-red-800 mb-4">เกิดข้อผิดพลาด</h2>
-              <p className="text-red-600 mb-6 text-lg leading-relaxed">{error}</p>
-              <div className="space-y-3">
-                <Button 
-                  onClick={handleRefresh}
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-2"
-                  disabled={isRefreshing}
-                >
-                  {isRefreshing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      กำลังรีเฟรช...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      ลองใหม่อีกครั้ง
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => router.push('/dashboard')}
-                  className="w-full"
-                >
-                  กลับหน้าหลัก
-                </Button>
-              </div>
-            </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-pink-100">
+        <div className="text-center p-8 max-w-md">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <AlertTriangle className="w-10 h-10 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-red-800 mb-4">เกิดข้อผิดพลาด</h2>
+          <p className="text-red-600 mb-6 text-lg leading-relaxed">{error}</p>
+          <div className="space-y-3">
+            <Button 
+              onClick={handleRefresh}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2"
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  กำลังรีเฟรช...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  ลองใหม่อีกครั้ง
+                </>
+              )}
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/dashboard')}
+              className="w-full"
+            >
+              กลับหน้าหลัก
+            </Button>
           </div>
         </div>
       </div>
@@ -381,33 +341,36 @@ export default function WarehousesOverviewDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
-          {/* Header Section */}
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-8 text-white relative overflow-hidden shadow-xl">
+          {/* Success notification if just navigated from somewhere */}
+          {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'dashboard' && (
+            <div className="fixed top-4 right-4 z-50">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="text-green-800 font-medium">เข้าสู่หน้าจัดการคลังสำเร็จ!</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Header Section - Use same gradient style as dashboard */}
+          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg p-6 text-white relative overflow-hidden">
             <div className="relative z-10">
               <div className="flex justify-between items-center">
                 <div>
-                  <h1 className="text-3xl font-bold mb-2">จัดการคลังยา</h1>
-                  <p className="text-indigo-100 mb-4">
-                    ระบบจัดการคลังยาและพื้นที่เก็บยาทั้งหมดในโรงพยาบาล
+                  <h2 className="text-2xl font-bold mb-2">
+                    ระบบจัดการคลังยา
+                  </h2>
+                  <p className="text-white/90 mb-1">
+                    จัดการคลังยาและพื้นที่เก็บยาทั้งหมดในโรงพยาบาล
                   </p>
                   {summary && (
-                    <div className="flex items-center space-x-6 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <Warehouse className="h-4 w-4" />
-                        <span>{formatNumber(summary.totalWarehouses)} คลัง</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="h-4 w-4" />
-                        <span>{formatCurrency(summary.totalStockValue)}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Package className="h-4 w-4" />
-                        <span>{formatNumber(summary.totalItems)} รายการ</span>
-                      </div>
-                    </div>
+                    <p className="text-white/80 text-sm">
+                      คลังทั้งหมด {formatNumber(summary.totalWarehouses)} คลัง • มูลค่า {formatCurrency(summary.totalStockValue)}
+                    </p>
                   )}
                 </div>
                 <div className="flex space-x-3">
@@ -426,9 +389,9 @@ export default function WarehousesOverviewDashboard() {
                   </Button>
                   <Button 
                     onClick={() => router.push('/dashboard/warehouses/new')}
-                    className="bg-white text-indigo-600 hover:bg-gray-50 gap-2 shadow-lg"
+                    className="bg-white text-indigo-600 hover:bg-gray-50"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-4 w-4 mr-2" />
                     เพิ่มคลังใหม่
                   </Button>
                 </div>
@@ -438,74 +401,62 @@ export default function WarehousesOverviewDashboard() {
             <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 bg-white/5 rounded-full"></div>
           </div>
 
-          {/* Summary Cards */}
+          {/* Quick Stats - Same style as dashboard */}
           {summary && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+              <Card className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-blue-100">คลังทั้งหมด</p>
-                      <p className="text-3xl font-bold">{formatNumber(summary.totalWarehouses)}</p>
-                      <p className="text-xs text-blue-200">
-                        ใช้งาน {formatNumber(summary.activeWarehouses)} คลัง
-                      </p>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">สถานะระบบ</p>
+                      <p className="text-2xl font-bold text-green-600">ออนไลน์</p>
                     </div>
-                    <div className="h-14 w-14 rounded-xl bg-white/20 flex items-center justify-center">
-                      <Warehouse className="h-7 w-7 text-white" />
+                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <Activity className="w-6 h-6 text-green-600" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-green-500 to-green-600 text-white">
+              <Card className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-green-100">มูลค่าสต็อกรวม</p>
-                      <p className="text-2xl font-bold">{formatCurrency(summary.totalStockValue)}</p>
-                      <p className="text-xs text-green-200">
-                        {formatNumber(summary.totalItems)} รายการ
-                      </p>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">คลังทั้งหมด</p>
+                      <p className="text-2xl font-bold text-blue-600">{formatNumber(summary.totalWarehouses)}</p>
                     </div>
-                    <div className="h-14 w-14 rounded-xl bg-white/20 flex items-center justify-center">
-                      <DollarSign className="h-7 w-7 text-white" />
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Warehouse className="w-6 h-6 text-blue-600" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-red-500 to-red-600 text-white">
+              <Card className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-red-100">แจ้งเตือนสำคัญ</p>
-                      <p className="text-3xl font-bold text-white">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">มูลค่าสต็อก</p>
+                      <p className="text-2xl font-bold text-purple-600">{formatCurrency(summary.totalStockValue)}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-6 h-6 text-purple-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-lg transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">แจ้งเตือน</p>
+                      <p className="text-2xl font-bold text-orange-600">
                         {formatNumber(summary.criticalAlerts + summary.lowStockAlerts)}
                       </p>
-                      <p className="text-xs text-red-200">
-                        หมดอายุ {formatNumber(summary.expiringAlerts)} รายการ
-                      </p>
                     </div>
-                    <div className="h-14 w-14 rounded-xl bg-white/20 flex items-center justify-center">
-                      <AlertTriangle className="h-7 w-7 text-white" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-orange-500 to-orange-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-orange-100">คำขอรอดำเนินการ</p>
-                      <p className="text-3xl font-bold text-white">
-                        {formatNumber(summary.pendingRequisitions)}
-                      </p>
-                      <p className="text-xs text-orange-200">รอการอนุมัติ</p>
-                    </div>
-                    <div className="h-14 w-14 rounded-xl bg-white/20 flex items-center justify-center">
-                      <FileText className="h-7 w-7 text-white" />
+                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <AlertTriangle className="w-6 h-6 text-orange-600" />
                     </div>
                   </div>
                 </CardContent>
@@ -514,7 +465,7 @@ export default function WarehousesOverviewDashboard() {
           )}
 
           {/* Search and Filter */}
-          <Card className="shadow-lg border-0">
+          <Card className="hover:shadow-lg transition-shadow">
             <CardContent className="p-6">
               <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                 <div className="flex-1 relative">
@@ -523,20 +474,9 @@ export default function WarehousesOverviewDashboard() {
                     placeholder="ค้นหาคลัง (ชื่อ, รหัส, สถานที่)..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-11 bg-gray-50 border-gray-200 focus:bg-white"
+                    className="pl-10"
                   />
                 </div>
-                
-                <Tabs value={selectedType} onValueChange={setSelectedType} className="w-full lg:w-auto">
-                  <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 bg-gray-100">
-                    <TabsTrigger value="all" className="text-xs">ทั้งหมด</TabsTrigger>
-                    <TabsTrigger value="CENTRAL" className="text-xs">คลังกลาง</TabsTrigger>
-                    <TabsTrigger value="DEPARTMENT" className="text-xs">คลังแผนก</TabsTrigger>
-                    <TabsTrigger value="EMERGENCY" className="text-xs">ฉุกเฉิน</TabsTrigger>
-                    <TabsTrigger value="CRITICAL" className="text-xs">ยาควบคุม</TabsTrigger>
-                    <TabsTrigger value="COLD_STORAGE" className="text-xs">แช่เย็น</TabsTrigger>
-                  </TabsList>
-                </Tabs>
               </div>
             </CardContent>
           </Card>
@@ -556,12 +496,12 @@ export default function WarehousesOverviewDashboard() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <Card className="hover:shadow-2xl transition-all duration-300 cursor-pointer group border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+                    <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group">
                       <CardHeader className="pb-4">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center space-x-3">
                             <div className={cn(
-                              "p-3 rounded-xl bg-gradient-to-br shadow-lg",
+                              "p-3 rounded-lg bg-gradient-to-br",
                               typeConfig.color
                             )}>
                               <IconComponent className="h-6 w-6 text-white" />
@@ -577,8 +517,7 @@ export default function WarehousesOverviewDashboard() {
                           </div>
                           <div className="flex flex-col gap-2 items-end">
                             {warehouse.isActive ? (
-                              <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-200">
-                                <Activity className="h-3 w-3 mr-1" />
+                              <Badge className="bg-green-100 text-green-700 border-green-200">
                                 ใช้งาน
                               </Badge>
                             ) : (
@@ -588,14 +527,7 @@ export default function WarehousesOverviewDashboard() {
                             )}
                             {warehouse.isMaintenance && (
                               <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">
-                                <Settings className="h-3 w-3 mr-1" />
                                 บำรุงรักษา
-                              </Badge>
-                            )}
-                            {warehouse.hasTemperatureControl && (
-                              <Badge className="bg-blue-100 text-blue-700 border-blue-200">
-                                <Thermometer className="h-3 w-3 mr-1" />
-                                {safeToFixed(warehouse.minTemperature, 0)}-{safeToFixed(warehouse.maxTemperature, 0)}°C
                               </Badge>
                             )}
                           </div>
@@ -603,159 +535,80 @@ export default function WarehousesOverviewDashboard() {
                       </CardHeader>
                       
                       <CardContent className="space-y-6">
-                        {/* Main Metrics */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
-                            <p className="text-xs font-medium text-blue-600 mb-1">มูลค่าสต็อก</p>
-                            <p className="text-lg font-bold text-blue-800">
-                              {formatCurrency(warehouse.metrics.stockValue)}
-                            </p>
-                          </div>
-                          <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
-                            <p className="text-xs font-medium text-green-600 mb-1">จำนวนรายการ</p>
-                            <p className="text-lg font-bold text-green-800">
-                              {formatNumber(warehouse.metrics.itemCount)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Alert Metrics */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-4 rounded-xl border border-yellow-200">
-                            <p className="text-xs font-medium text-yellow-600 mb-1">สต็อกต่ำ</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-lg font-bold text-yellow-800">
-                                {formatNumber(warehouse.metrics.lowStockItems)}
-                              </p>
-                              {warehouse.metrics.lowStockItems > 0 && (
-                                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                              )}
-                            </div>
-                          </div>
-                          <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl border border-orange-200">
-                            <p className="text-xs font-medium text-orange-600 mb-1">ใกล้หมดอายุ</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-lg font-bold text-orange-800">
-                                {formatNumber(warehouse.metrics.expiringItems)}
-                              </p>
-                              {warehouse.metrics.expiringItems > 0 && (
-                                <Clock className="h-4 w-4 text-orange-600" />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Performance Metrics */}
+                        {/* User Info & Actions - Similar to dashboard page */}
                         <div className="space-y-4">
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <p className="text-xs font-medium text-gray-600">อัตราการหมุนเวียน</p>
-                              <p className="text-xs font-bold text-gray-800">
-                                {formatPercentage(warehouse.metrics.turnoverRate)}
-                              </p>
+                          <div className="grid grid-cols-1 gap-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">มูลค่าสต็อก:</span>
+                              <span className="font-medium">{formatCurrency(warehouse.metrics.stockValue)}</span>
                             </div>
-                            <Progress 
-                              value={warehouse.metrics.turnoverRate} 
-                              className="h-2 bg-gray-200"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <p className="text-xs font-medium text-gray-600">ความแม่นยำ</p>
-                              <p className="text-xs font-bold text-gray-800">
-                                {formatPercentage(warehouse.metrics.accuracy)}
-                              </p>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">จำนวนรายการ:</span>
+                              <span className="font-medium">{formatNumber(warehouse.metrics.itemCount)}</span>
                             </div>
-                            <Progress 
-                              value={warehouse.metrics.accuracy} 
-                              className="h-2 bg-gray-200"
-                            />
-                          </div>
-
-                          {warehouse.capacity && (
-                            <div>
-                              <div className="flex justify-between items-center mb-2">
-                                <p className="text-xs font-medium text-gray-600">การใช้งานพื้นที่</p>
-                                <p className="text-xs font-bold text-gray-800">
-                                  {formatPercentage(warehouse.metrics.capacityUsage)}
-                                </p>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">สต็อกต่ำ:</span>
+                              <Badge className={warehouse.metrics.lowStockItems > 0 ? "bg-yellow-100 text-yellow-800 border-yellow-200" : "bg-green-100 text-green-800 border-green-200"}>
+                                {formatNumber(warehouse.metrics.lowStockItems)} รายการ
+                              </Badge>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">ใกล้หมดอายุ:</span>
+                              <Badge className={warehouse.metrics.expiringItems > 0 ? "bg-orange-100 text-orange-800 border-orange-200" : "bg-green-100 text-green-800 border-green-200"}>
+                                {formatNumber(warehouse.metrics.expiringItems)} รายการ
+                              </Badge>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">ความแม่นยำ:</span>
+                              <span className="font-medium">{formatPercentage(warehouse.metrics.accuracy)}</span>
+                            </div>
+                            {warehouse.hasTemperatureControl && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">อุณหภูมิ:</span>
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                  <Thermometer className="h-3 w-3 mr-1" />
+                                  {safeToFixed(warehouse.minTemperature, 0)}-{safeToFixed(warehouse.maxTemperature, 0)}°C
+                                </Badge>
                               </div>
-                              <Progress 
-                                value={warehouse.metrics.capacityUsage} 
-                                className="h-2 bg-gray-200"
-                              />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Quick Actions - Same style as dashboard */}
+                        <div className="space-y-3">
+                          <Button 
+                            className="w-full justify-start"
+                            onClick={() => router.push(`/dashboard/warehouses/${warehouse.id}`)}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            ดูรายละเอียด
+                          </Button>
+                          
+                          <Button 
+                            className="w-full justify-start"
+                            variant="outline"
+                            onClick={() => router.push(`/dashboard/warehouses/${warehouse.id}/stocks`)}
+                          >
+                            <Package className="w-4 h-4 mr-2" />
+                            นับสต็อก
+                          </Button>
+
+                          {warehouse.manager && (
+                            <div className="pt-4 border-t border-gray-100">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                                  <Users className="h-4 w-4 text-indigo-600" />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-medium text-gray-600">ผู้รับผิดชอบ</p>
+                                  <p className="text-sm font-semibold text-gray-800">
+                                    {warehouse.manager.firstName} {warehouse.manager.lastName}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
-
-                        {/* Quick Actions */}
-                        <div className="pt-4 border-t border-gray-100">
-                          <div className="flex gap-2">
-                            <Button 
-                              onClick={() => router.push(`/dashboard/warehouses/${warehouse.id}`)}
-                              size="sm" 
-                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8"
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              ดูรายละเอียด
-                            </Button>
-                            <Button 
-                              onClick={() => router.push(`/dashboard/warehouses/${warehouse.id}/stocks`)}
-                              size="sm" 
-                              variant="outline" 
-                              className="flex-1 text-xs h-8 border-gray-300"
-                            >
-                              <Package className="h-3 w-3 mr-1" />
-                              จัดการสต็อก
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Recent Activity */}
-                        {warehouse.recentActivity && warehouse.recentActivity.length > 0 && (
-                          <div className="pt-4 border-t border-gray-100">
-                            <p className="text-xs font-medium text-gray-600 mb-3">กิจกรรมล่าสุด</p>
-                            <div className="space-y-2">
-                              {warehouse.recentActivity.slice(0, 2).map((activity, index) => (
-                                <div key={index} className="flex items-start gap-2">
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-xs text-gray-700 leading-relaxed">
-                                      {activity.description}
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      {new Date(activity.timestamp).toLocaleDateString('th-TH', {
-                                        year: 'numeric',
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
-                                    </p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Manager Info */}
-                        {warehouse.manager && (
-                          <div className="pt-4 border-t border-gray-100">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                                <Users className="h-4 w-4 text-indigo-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs font-medium text-gray-600">ผู้รับผิดชอบ</p>
-                                <p className="text-sm font-semibold text-gray-800">
-                                  {warehouse.manager.firstName} {warehouse.manager.lastName}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </CardContent>
                     </Card>
                   </motion.div>
