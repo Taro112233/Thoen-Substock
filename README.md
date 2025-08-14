@@ -136,27 +136,19 @@ Directory structure:
     │   │   │           └── route.ts
     │   │   ├── departments/
     │   │   │   └── route.ts
+    │   │   ├── drugs/
+    │   │   │   └── search/
+    │   │   │       └── route.ts
     │   │   ├── hospitals/
     │   │   │   └── route.ts
-    │   │   ├── receiving/
-    │   │   │   ├── items/
-    │   │   │   │   └── route.ts
-    │   │   │   ├── search/
-    │   │   │   │   └── route.ts
-    │   │   │   └── stats/
-    │   │   │       └── route.ts
-    │   │   ├── requisitions/
-    │   │   │   └── [id]/
-    │   │   │       ├── route.ts
-    │   │   │       ├── approve/
-    │   │   │       │   └── route.ts
-    │   │   │       ├── cancel/
-    │   │   │       │   └── route.ts
-    │   │   │       └── reject/
-    │   │   │           └── route.ts
-    │   │   └── stock/
-    │   │       └── transactions/
-    │   │           └── route.ts
+    │   │   └── requisitions/
+    │   │       ├── route.ts
+    │   │       └── [id]/
+    │   │           ├── route.ts
+    │   │           ├── approve/
+    │   │           │   └── route.ts
+    │   │           └── fulfill/
+    │   │               └── route.ts
     │   ├── auth/
     │   │   ├── layout.tsx
     │   │   ├── components/
@@ -182,7 +174,9 @@ Directory structure:
     │   │   ├── receiving/
     │   │   │   └── page.tsx
     │   │   ├── requisitions/
-    │   │   │   └── [id]/
+    │   │   │   ├── [id]/
+    │   │   │   │   └── page.tsx
+    │   │   │   └── new/
     │   │   │       └── page.tsx
     │   │   └── warehouses/
     │   │       ├── page.tsx
@@ -206,6 +200,8 @@ Directory structure:
     │   │   ├── StatCard.tsx
     │   │   └── drugs/
     │   │       └── drug-form.tsx
+    │   ├── forms/
+    │   │   └── RequisitionForm.tsx
     │   ├── layout/
     │   │   ├── ConditionalHeader.tsx
     │   │   └── LayoutProvider.tsx
