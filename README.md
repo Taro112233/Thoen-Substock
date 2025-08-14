@@ -270,6 +270,7 @@ Directory structure:
     │       ├── table.tsx
     │       ├── tabs.tsx
     │       ├── textarea.tsx
+    │       ├── toast.tsx
     │       ├── toggle-group.tsx
     │       ├── toggle.tsx
     │       ├── tooltip.tsx
@@ -277,7 +278,8 @@ Directory structure:
     ├── data/
     │   └── bulk-drugs.csv
     ├── hooks/
-    │   └── use-mobile.ts
+    │   ├── use-mobile.ts
+    │   └── use-toast.ts
     ├── lib/
     │   ├── admin-utils.ts
     │   ├── api-helpers.ts
