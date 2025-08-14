@@ -317,10 +317,10 @@ export default function DashboardPage() {
                 <Button 
                   className="w-full justify-start"
                   variant="outline"
-                  onClick={() => window.location.href = '/pharmacy'}
+                  onClick={() => window.location.href = '/dashboard/warehouses'}
                 >
                   <Package className="w-4 h-4 mr-2" />
-                  จัดการสต็อกยา
+                  จัดการคลัง
                 </Button>
 
                 <Button 
@@ -328,8 +328,8 @@ export default function DashboardPage() {
                   variant="outline"
                   onClick={() => window.location.href = '/dashboard/warehouses'}
                 >
-                  <Building className="w-4 h-4 mr-2" />
-                  จัดการคลัง
+                  <Package className="w-4 h-4 mr-2" />
+                  ระบบจัดการใบเบิกยา
                 </Button>
 
                 <Button 
@@ -338,7 +338,7 @@ export default function DashboardPage() {
                   onClick={() => window.location.href = '/reports'}
                 >
                   <BarChart className="w-4 h-4 mr-2" />
-                  รายงานและสถิติ
+                  ระบบนับสต็อกยา
                 </Button>
 
                 {['DEPARTMENT_HEAD', 'STAFF_NURSE'].includes(user.role) && (
