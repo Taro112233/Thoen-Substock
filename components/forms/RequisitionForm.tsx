@@ -1,4 +1,3 @@
-// components/forms/RequisitionForm.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -62,7 +61,7 @@ import {
   Hash,
   Target
 } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 // Types
 interface Drug {
@@ -90,14 +89,30 @@ interface RequisitionItem {
   notes?: string;
 }
 
-// Form validation schema
+// Mock data สำหรับแผนก
+const mockDepartments = [
+  { id: '1', name: 'แผนกผู้ป่วยใน' },
+  { id: '2', name: 'แผนกผู้ป่วยนอก' },
+  { id: '3', name: 'แผนกฉุกเฉิน' },
+  { id: '4', name: 'แผนกไอซียู' },
+  { id: '5', name: 'แผนกห้องผ่าตัด' },
+];
+
+// Mock data สำหรับคลัง
+const mockWarehouses = [
+  { id: '1', name: 'เภสัชกรรมกลาง', type: 'MAIN_PHARMACY' },
+  { id: '2', name: 'คลังยาแผนกผู้ป่วยใน', type: 'DEPARTMENT_STOCK' },
+  { id: '3', name: 'คลังยาฉุกเฉิน', type: 'EMERGENCY_STOCK' },
+];
+
+// Form validation schema - ใช้ field ง่ายๆ
 const requisitionFormSchema = z.object({
   requisitionNumber: z.string().min(1, 'เลขที่ใบเบิกจำเป็นต้องระบุ'),
-  name: z.string().min(1, 'ชื่อใบเบิกจำเป็นต้องระบุ'),
   purpose: z.string().min(1, 'วัตถุประสงค์จำเป็นต้องระบุ'),
   type: z.enum(['REGULAR', 'EMERGENCY', 'SCHEDULED', 'RETURN']),
   priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
   requiredDate: z.string().min(1, 'วันที่ต้องการจำเป็นต้องระบุ'),
+  requestingDepartmentId: z.string().min(1, 'แผนกที่เบิกจำเป็นต้องระบุ'),
   fulfillmentWarehouseId: z.string().min(1, 'คลังที่จ่ายจำเป็นต้องระบุ'),
   items: z.array(z.object({
     drugId: z.string(),
@@ -113,13 +128,6 @@ const requisitionFormSchema = z.object({
 });
 
 type RequisitionFormData = z.infer<typeof requisitionFormSchema>;
-
-// Mock data
-const mockWarehouses = [
-  { id: '1', name: 'เภสัชกรรมกลาง', type: 'MAIN_PHARMACY' },
-  { id: '2', name: 'คลังยาแผนกผู้ป่วยใน', type: 'DEPARTMENT_STOCK' },
-  { id: '3', name: 'คลังยาฉุกเฉิน', type: 'EMERGENCY_STOCK' },
-];
 
 // Drug Search Modal Component
 interface DrugSearchModalProps {
@@ -295,11 +303,11 @@ export default function RequisitionForm() {
     resolver: zodResolver(requisitionFormSchema),
     defaultValues: {
       requisitionNumber: '',
-      name: '',
       purpose: '',
       type: 'REGULAR',
       priority: 'NORMAL',
       requiredDate: format(new Date(), 'yyyy-MM-dd'),
+      requestingDepartmentId: '',
       fulfillmentWarehouseId: '',
       items: [],
       notes: ''
@@ -362,8 +370,21 @@ export default function RequisitionForm() {
     try {
       setLoading(true);
       
+      // แปลงข้อมูลให้ตรงกับ API
       const submitData = {
-        ...data,
+        requisitionNumber: data.requisitionNumber,
+        purpose: data.purpose,
+        type: data.type,
+        priority: data.priority,
+        requiredDate: data.requiredDate,
+        requestingDepartmentId: data.requestingDepartmentId,
+        fulfillmentWarehouseId: data.fulfillmentWarehouseId,
+        items: data.items.map(item => ({
+          drugId: item.drugId,
+          requestedQuantity: item.requestedQuantity,
+          notes: item.notes
+        })),
+        notes: data.notes,
         saveAsDraft
       };
 
@@ -394,7 +415,6 @@ export default function RequisitionForm() {
       toast({
         title: "เกิดข้อผิดพลาด",
         description: error instanceof Error ? error.message : "ไม่สามารถบันทึกใบเบิกได้ กรุณาลองใหม่",
-        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -456,12 +476,15 @@ export default function RequisitionForm() {
 
                 <FormField
                   control={form.control}
-                  name="name"
+                  name="purpose"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ชื่อใบเบิก</FormLabel>
+                      <FormLabel className="flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        วัตถุประสงค์
+                      </FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="เบิกยาประจำเดือน มกราคม 2024" />
+                        <Input {...field} placeholder="สำหรับการรักษาผู้ป่วย" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -469,41 +492,24 @@ export default function RequisitionForm() {
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="purpose"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <Target className="h-4 w-4" />
-                      วัตถุประสงค์
-                    </FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="สำหรับการรักษาผู้ป่วย" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="type"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>ประเภทการเบิก</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="เลือกประเภท" />
+                            <SelectValue placeholder="เลือกประเภทการเบิก" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="REGULAR">เบิกปกติ</SelectItem>
-                          <SelectItem value="EMERGENCY">เบิกฉุกเฉิน</SelectItem>
-                          <SelectItem value="SCHEDULED">เบิกตามตาราง</SelectItem>
-                          <SelectItem value="RETURN">ส่งคืนยา</SelectItem>
+                          <SelectItem value="REGULAR">การเบิกปกติ</SelectItem>
+                          <SelectItem value="EMERGENCY">การเบิกฉุกเฉิน</SelectItem>
+                          <SelectItem value="SCHEDULED">การเบิกตามตารางเวลา</SelectItem>
+                          <SelectItem value="RETURN">การส่งคืนยา</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -517,10 +523,10 @@ export default function RequisitionForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>ระดับความสำคัญ</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="เลือกระดับ" />
+                            <SelectValue placeholder="เลือกระดับความสำคัญ" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -534,7 +540,67 @@ export default function RequisitionForm() {
                     </FormItem>
                   )}
                 />
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="requestingDepartmentId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        แผนกที่เบิก
+                      </FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="เลือกแผนกที่เบิก" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {mockDepartments.map(dept => (
+                            <SelectItem key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="fulfillmentWarehouseId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        คลังที่จ่าย
+                      </FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="เลือกคลังที่จ่าย" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {mockWarehouses.map(warehouse => (
+                            <SelectItem key={warehouse.id} value={warehouse.id}>
+                              {warehouse.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="requiredDate"
@@ -552,34 +618,6 @@ export default function RequisitionForm() {
                   )}
                 />
               </div>
-
-              <FormField
-                control={form.control}
-                name="fulfillmentWarehouseId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <Package className="h-4 w-4" />
-                      คลังที่จ่าย
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="เลือกคลังที่ต้องการให้จ่ายยา" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {mockWarehouses.map(warehouse => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>
-                            {warehouse.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </CardContent>
           </Card>
 
@@ -703,7 +741,7 @@ export default function RequisitionForm() {
             </CardContent>
           </Card>
 
-          {/* Notes */}
+          {/* Additional Notes */}
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>หมายเหตุเพิ่มเติม</CardTitle>

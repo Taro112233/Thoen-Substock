@@ -1,6 +1,6 @@
 // This file is auto-generated. Do not edit manually.
 // Edit files in prisma/schemas/ directory instead.
-// Last generated: 2025-08-14T09:03:28.459Z
+// Last generated: 2025-08-14T12:29:19.351Z
 
 generator client {
   provider = "prisma-client-js"
@@ -1252,7 +1252,7 @@ model DrugAllergen {
 // ==========================================
 
 // prisma/schemas/inventory.prisma
-// Inventory Management Schema
+// Inventory Management Schema - FIXED VERSION
 // ระบบจัดการคลังยาและสต็อกสำหรับ Hospital Pharmacy System
 
 enum TransactionType {
@@ -1307,13 +1307,14 @@ model StockTransaction {
   toWarehouseId    String?         // คลังปลายทาง
   toWarehouse      Warehouse?      @relation("TransferTo", fields: [toWarehouseId], references: [id], onDelete: SetNull)
   
-  // ผู้ดำเนินการ
-  performedBy      String
-  performer        User            @relation(fields: [performedBy], references: [id], onDelete: Restrict)
+  // ผู้ดำเนินการ - FIXED: เปลี่ยนจาก performedBy เป็น performer
+  performer        String          // ✅ FIXED: เปลี่ยนชื่อ field
+  performerUser    User            @relation("StockTransactionPerformer", fields: [performer], references: [id], onDelete: Restrict)
   
   // การอนุมัติ (สำหรับรายการที่ต้องอนุมัติ)
   requiresApproval Boolean         @default(false)
   approvedBy       String?
+  approverUser     User?           @relation("StockTransactionApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
   approvedAt       DateTime?
   
   // ความสัมพันธ์กับใบเบิก
@@ -1324,6 +1325,7 @@ model StockTransaction {
   isSystemGenerated Boolean        @default(false) // สร้างโดยระบบอัตโนมัติ
   ipAddress        String?
   userAgent        String?
+  transactionDate  DateTime        @default(now()) // ✅ FIXED: เพิ่ม field นี้ที่ missing
   
   // Audit fields
   createdAt        DateTime        @default(now())
@@ -1333,8 +1335,8 @@ model StockTransaction {
   @@index([drugId])
   @@index([stockCardId])
   @@index([transactionType])
-  @@index([createdAt])
-  @@index([performedBy])
+  @@index([transactionDate]) // ✅ FIXED: ใช้ transactionDate แทน createdAt
+  @@index([performer])       // ✅ FIXED: ใช้ performer แทน performedBy
   @@index([requisitionId])
   @@map("stock_transactions")
 }
@@ -1392,10 +1394,10 @@ model StockBatch {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
-  // ✅ Relations - เพิ่ม back-references
+  // Relations - Back-references
   stockTransactions StockTransaction[]
   deliveryItems   DeliveryItem[]
-  preferredByRequisitions RequisitionItem[] @relation("PreferredBatch")  // ✅ เพิ่ม back-reference
+  preferredByRequisitions RequisitionItem[] @relation("PreferredBatch")
   stockCountItems StockCountItem[]
   
   @@unique([hospitalId, stockCardId, batchNumber])
@@ -1503,7 +1505,7 @@ model StockCount {
   // สถานะ
   status          CountStatus   @default(PLANNED)
   
-  // ผู้รับผิดชอบ
+  // ผู้รับผิดชอบ - FIXED: เปลี่ยนชื่อ relation
   countedBy       String
   counter         User          @relation("StockCounter", fields: [countedBy], references: [id], onDelete: Restrict)
   verifiedBy      String?
@@ -1517,6 +1519,7 @@ model StockCount {
   // การอนุมัติ
   requiresApproval Boolean      @default(false)
   approvedBy      String?
+  approverUser    User?         @relation("StockCountApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
   approvedAt      DateTime?
   
   // หมายเหตุ
@@ -1577,7 +1580,7 @@ model StockCountItem {
 // REQUISITIONS
 // ==========================================
 
-// prisma/schemas/requisitions.prisma - Enhanced with Signature Fields
+// prisma/schemas/requisitions.prisma - FIXED VERSION
 // Requisition Management Schema
 // ระบบจัดการการเบิกจ่ายยาสำหรับ Hospital Pharmacy System
 
@@ -1692,12 +1695,14 @@ model Requisition {
   totalFulfilledQty   Int             @default(0)
   estimatedValue      Decimal         @default(0)
   actualValue         Decimal         @default(0)
+  totalDispensedValue Decimal         @default(0) // ✅ FIXED: เพิ่ม field ที่ missing
   
   // หมายเหตุ
-  requestNotes        String?         // หมายเหตุผู้เบิก
+  notes               String?         // ✅ FIXED: ใช้ notes แทน requestNotes
   approvalNotes       String?         // หมายเหตุผู้อนุมัติ
   fulfillmentNotes    String?         // หมายเหตุผู้จ่าย
   receivingNotes      String?         // หมายเหตุผู้รับ
+  rejectionReason     String?         // ✅ FIXED: เพิ่ม field สำหรับเหตุผลการปฏิเสธ
   
   // การตั้งค่า
   isUrgent            Boolean         @default(false)
@@ -1719,7 +1724,7 @@ model Requisition {
   items               RequisitionItem[]
   workflows           RequisitionWorkflow[]
   attachments         RequisitionAttachment[]
-  stockTransactions   StockTransaction[]  // ✅ เพิ่ม back-reference
+  stockTransactions   StockTransaction[]
   
   @@index([hospitalId])
   @@index([requestingDepartmentId])
@@ -1735,14 +1740,14 @@ model Requisition {
   @@map("requisitions")
 }
 
-// รายการยาในใบเบิก (แก้ไขเพิ่ม drugId field)
+// รายการยาในใบเบิก
 model RequisitionItem {
   id                  String          @id @default(uuid())
   
   // ความสัมพันธ์
   requisitionId       String
   requisition         Requisition     @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  drugId              String          // ✅ เพิ่ม field นี้
+  drugId              String
   drug                Drug            @relation(fields: [drugId], references: [id], onDelete: Restrict)
   stockCardId         String
   stockCard           StockCard       @relation(fields: [stockCardId], references: [id], onDelete: Restrict)
@@ -1776,17 +1781,17 @@ model RequisitionItem {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   
-  // ✅ Relations - เพิ่ม back-reference
+  // Relations - Back-references
   progressiveDeliveryItems ProgressiveDeliveryItem[]
   
   @@index([requisitionId])
-  @@index([drugId])  // ✅ เพิ่ม index
+  @@index([drugId])
   @@index([stockCardId])
   @@index([status])
   @@map("requisition_items")
 }
 
-// การติดตาม workflow (ไม่เปลี่ยนแปลง)
+// การติดตาม workflow - FIXED VERSION
 model RequisitionWorkflow {
   id              String      @id @default(uuid())
   
@@ -1797,30 +1802,29 @@ model RequisitionWorkflow {
   // การเปลี่ยนแปลงสถานะ
   fromStatus      String?     // สถานะเดิม
   toStatus        String      // สถานะใหม่
-  action          String      // การกระทำ เช่น SUBMIT, APPROVE, REJECT, FULFILL
   
-  // ผู้ดำเนินการ
-  actionBy        String
-  actor           User        @relation(fields: [actionBy], references: [id], onDelete: Restrict)
+  // ผู้ดำเนินการ - FIXED: เปลี่ยนจาก actionBy เป็น userId
+  userId          String      // ✅ FIXED: ใช้ userId แทน actionBy
+  user            User        @relation("RequisitionWorkflowUser", fields: [userId], references: [id], onDelete: Restrict)
   
   // รายละเอียด
-  notes           String?
+  comments        String?     // ✅ FIXED: ใช้ comments แทน notes
   reason          String?     // เหตุผล (สำหรับการปฏิเสธ)
   attachments     Json?       // ไฟล์แนบ
   
   // การติดตาม
-  actionAt        DateTime    @default(now())
+  processedAt     DateTime    @default(now()) // ✅ FIXED: ใช้ processedAt แทน actionAt
   
   // Audit fields
   createdAt       DateTime    @default(now())
   
   @@index([requisitionId])
-  @@index([actionBy])
-  @@index([actionAt])
+  @@index([userId])    // ✅ FIXED: ใช้ userId แทน actionBy
+  @@index([processedAt]) // ✅ FIXED: ใช้ processedAt แทน actionAt
   @@map("requisition_workflows")
 }
 
-// ไฟล์แนบ (ไม่เปลี่ยนแปลง)
+// ไฟล์แนบ
 model RequisitionAttachment {
   id              String      @id @default(uuid())
   
@@ -1828,7 +1832,7 @@ model RequisitionAttachment {
   requisitionId   String
   requisition     Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
   uploadedBy      String
-  uploader        User        @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+  uploader        User        @relation("RequisitionAttachmentUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
   
   // ข้อมูลไฟล์
   fileName        String
@@ -1852,7 +1856,7 @@ model RequisitionAttachment {
   @@map("requisition_attachments")
 }
 
-// Template สำหรับการเบิกประจำ (ไม่เปลี่ยนแปลง)
+// Template สำหรับการเบิกประจำ
 model RequisitionTemplate {
   id              String      @id @default(uuid())
   
@@ -1860,9 +1864,9 @@ model RequisitionTemplate {
   hospitalId      String
   hospital        Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   departmentId    String
-  department      Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  department      Department  @relation("RequisitionTemplateDepartment", fields: [departmentId], references: [id], onDelete: Cascade)
   createdBy       String
-  creator         User        @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  creator         User        @relation("RequisitionTemplateCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   
   // ข้อมูลเทมเพลต
   templateName    String

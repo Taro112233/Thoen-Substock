@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log('🔍 [REQUISITION DETAIL API] GET requisition:', params.id);
+    console.log('🔍 [DETAIL API] GET requisition:', params.id);
     
     const authResult = await validateUserAuth(request);
     if (!authResult.user) {
@@ -20,7 +20,6 @@ export async function GET(
 
     const { user } = authResult;
 
-    // ดึงข้อมูลใบเบิก
     const requisition = await prisma.requisition.findFirst({
       where: {
         id: params.id,
@@ -62,7 +61,7 @@ export async function GET(
             }
           },
           orderBy: {
-            orderIndex: 'asc'
+            priority: 'asc' // ใช้ priority แทน itemIndex
           }
         }
       }
@@ -75,7 +74,7 @@ export async function GET(
       );
     }
 
-    console.log(`✅ [REQUISITION DETAIL API] Retrieved requisition: ${requisition.id}`);
+    console.log(`✅ [DETAIL API] Retrieved requisition: ${requisition.id}`);
 
     return NextResponse.json({
       success: true,
@@ -83,7 +82,7 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('❌ [REQUISITION DETAIL API] GET Error:', error);
+    console.error('❌ [DETAIL API] GET Error:', error);
     return NextResponse.json(
       { error: 'เกิดข้อผิดพลาดในการดึงข้อมูลใบเบิก' },
       { status: 500 }
@@ -93,13 +92,13 @@ export async function GET(
   }
 }
 
-// PUT - อัปเดตสถานะใบเบิก (แบบง่าย)
+// PUT - อัปเดตสถานะใบเบิก
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log('📝 [REQUISITION DETAIL API] PUT update requisition:', params.id);
+    console.log('📝 [DETAIL API] PUT update requisition:', params.id);
     
     const authResult = await validateUserAuth(request);
     if (!authResult.user) {
@@ -109,7 +108,6 @@ export async function PUT(
     const { user } = authResult;
     const body = await request.json();
     
-    // อัปเดตสถานะหรือข้อมูลพื้นฐาน
     const updatedRequisition = await prisma.requisition.update({
       where: { 
         id: params.id,
@@ -117,12 +115,12 @@ export async function PUT(
       },
       data: {
         status: body.status || undefined,
-        notes: body.notes || undefined,
+        notes: body.notes || undefined, // ใช้ notes field ที่มีจริง
         updatedAt: new Date()
       }
     });
 
-    console.log(`✅ [REQUISITION DETAIL API] Updated requisition: ${updatedRequisition.id}`);
+    console.log(`✅ [DETAIL API] Updated requisition: ${updatedRequisition.id}`);
 
     return NextResponse.json({
       success: true,
@@ -131,7 +129,7 @@ export async function PUT(
     });
 
   } catch (error) {
-    console.error('❌ [REQUISITION DETAIL API] PUT Error:', error);
+    console.error('❌ [DETAIL API] PUT Error:', error);
     return NextResponse.json(
       { error: 'เกิดข้อผิดพลาดในการอัปเดตใบเบิก' },
       { status: 500 }
@@ -141,13 +139,13 @@ export async function PUT(
   }
 }
 
-// DELETE - ลบใบเบิก (แบบง่าย)
+// DELETE - ลบใบเบิก
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log('🗑️ [REQUISITION DETAIL API] DELETE requisition:', params.id);
+    console.log('🗑️ [DETAIL API] DELETE requisition:', params.id);
     
     const authResult = await validateUserAuth(request);
     if (!authResult.user) {
@@ -156,7 +154,6 @@ export async function DELETE(
 
     const { user } = authResult;
 
-    // ตรวจสอบใบเบิกที่มีอยู่
     const existingRequisition = await prisma.requisition.findFirst({
       where: {
         id: params.id,
@@ -171,20 +168,17 @@ export async function DELETE(
       );
     }
 
-    // ลบใบเบิกและรายการทั้งหมด
     await prisma.$transaction(async (tx) => {
-      // ลบรายการยาก่อน
       await tx.requisitionItem.deleteMany({
         where: { requisitionId: params.id }
       });
 
-      // ลบใบเบิก
       await tx.requisition.delete({
         where: { id: params.id }
       });
     });
 
-    console.log(`✅ [REQUISITION DETAIL API] Deleted requisition: ${params.id}`);
+    console.log(`✅ [DETAIL API] Deleted requisition: ${params.id}`);
 
     return NextResponse.json({
       success: true,
@@ -192,7 +186,7 @@ export async function DELETE(
     });
 
   } catch (error) {
-    console.error('❌ [REQUISITION DETAIL API] DELETE Error:', error);
+    console.error('❌ [DETAIL API] DELETE Error:', error);
     return NextResponse.json(
       { error: 'เกิดข้อผิดพลาดในการลบใบเบิก' },
       { status: 500 }
