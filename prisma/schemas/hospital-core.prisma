@@ -343,7 +343,7 @@ model Drug {
   // รูปแบบยา
   dosageForm      String          // รูปแบบ (tablet, capsule, injection, etc.)
   strength        String?         // ความแรง (500mg, 10mg/ml, etc.)
-  unit            String          // หน่วยนับ (tablet, vial, bottle, etc.)
+  unit            String?         // หน่วยนับ (tablet, vial, bottle, etc.)
   
   // การจำแนกประเภท
   therapeuticClass String?        // หมวดยาตามการรักษา

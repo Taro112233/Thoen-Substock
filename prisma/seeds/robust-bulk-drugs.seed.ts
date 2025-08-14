@@ -1,4 +1,4 @@
-// prisma/seeds/robust-bulk-drugs.seed.ts - รองรับข้อมูลว่าง และ warehouses parameter
+// prisma/seeds/robust-bulk-drugs.seed.ts - Modified for โรงพยาบาลเถิน
 import { PrismaClient } from "@prisma/client";
 import fs from 'fs';
 import path from 'path';
@@ -8,8 +8,8 @@ interface BulkDrugInput {
   name: string;
   genericName: string;
   dosageForm: string;
-  strength: string;
-  unit: string;
+  strength?: string | null; // เปลี่ยนเป็น optional และ nullable
+  unit?: string | null; // เปลี่ยนเป็น optional และ nullable
   currentStock: number;
   packageSize: number;
   pricePerBox: number;
@@ -26,39 +26,37 @@ export async function seedBulkRealDrugs(
   prisma: PrismaClient, 
   hospitals: any[], 
   masterData: any,
-  warehouses?: Record<string, any[]> // เพิ่ม parameter warehouses
+  warehouses?: Record<string, any[]>
 ) {
-  console.log("💊 Creating Bulk Real Drug Data for โรงพยาบาลลำปาง...");
-  console.log("🛠️ Enhanced with Smart Default Handler");
+  console.log("💊 Creating Bulk Drug Data for โรงพยาบาลเถิน...");
+  console.log("🏪 All drugs will be stored in คลังยาหลัก (MAIN warehouse)");
+  console.log("🔧 Strength & Unit: null for drugs without values");
 
-  const hospital1 = hospitals[0];
+  const hospital = hospitals[0]; // โรงพยาบาลเถิน
   const BATCH_SIZE = 25;
   let totalProcessed = 0;
   let totalValue = 0;
 
-  // Find main warehouse - รองรับทั้งจาก parameter และจาก database
+  // Find main warehouse (คลังยาหลัก) only
   let mainWarehouse;
   
-  if (warehouses && warehouses[hospital1.id]) {
-    // หา warehouse จาก parameter ที่ส่งมา
-    mainWarehouse = warehouses[hospital1.id].find(w => w.warehouseCode === "MAIN");
-    console.log("🏪 Found main warehouse from parameter");
+  if (warehouses && warehouses[hospital.id]) {
+    mainWarehouse = warehouses[hospital.id].find(w => w.warehouseCode === "MAIN");
+    console.log("🏪 Found คลังยาหลัก from parameter");
   }
   
   if (!mainWarehouse) {
-    // หา warehouse จาก database
     mainWarehouse = await prisma.warehouse.findFirst({
       where: {
-        hospitalId: hospital1.id,
+        hospitalId: hospital.id,
         warehouseCode: "MAIN"
       }
     });
-    console.log("🏪 Found main warehouse from database");
+    console.log("🏪 Found คลังยาหลัก from database");
   }
 
   if (!mainWarehouse) {
-    // สร้าง main warehouse ใหม่หากไม่มี
-    console.log("🏪 Creating main warehouse...");
+    console.log("🏪 Creating คลังยาหลัก...");
     try {
       mainWarehouse = await prisma.warehouse.create({
         data: {
@@ -66,45 +64,39 @@ export async function seedBulkRealDrugs(
           warehouseCode: "MAIN",
           type: "CENTRAL",
           location: "ชั้น 1 อาคารเภสัชกรรม",
-          description: "คลังยาหลักของโรงพยาบาล",
-          capacity: 10000,
+          description: "คลังยาหลักของโรงพยาบาลเถิน",
+          capacity: 5000,
           isActive: true,
-          hospitalId: hospital1.id,
+          hospitalId: hospital.id,
         }
       });
-      console.log("✅ Created main warehouse successfully");
+      console.log("✅ Created คลังยาหลัก successfully");
     } catch (error) {
-      console.error("❌ Failed to create main warehouse:", error);
+      console.error("❌ Failed to create คลังยาหลัก:", error);
       throw new Error("❌ Cannot create main warehouse for drug processing");
     }
   }
 
   console.log(`🏪 Using warehouse: ${mainWarehouse.name} (${mainWarehouse.warehouseCode})`);
 
-  // ================================
-  // LOAD AND PROCESS CSV DATA
-  // ================================
+  // Load and process drug data
   let bulkDrugs: BulkDrugInput[] = [];
   
   try {
     bulkDrugs = await loadAndCleanDrugsFromCSV();
     console.log(`📊 Loaded and cleaned ${bulkDrugs.length} drugs from CSV file`);
   } catch (csvError) {
-    console.log("📝 CSV file not found or invalid, using hardcoded sample data");
-    bulkDrugs = getHardcodedDrugs();
-    console.log(`📊 Using ${bulkDrugs.length} hardcoded sample drugs`);
+    console.log("📝 CSV file not found, using sample data");
+    bulkDrugs = getSampleDrugs();
+    console.log(`📊 Using ${bulkDrugs.length} sample drugs`);
   }
 
-  // ================================
-  // VALIDATION WITH SMART FIXES
-  // ================================
+  // Validation with improved null handling
   console.log("🔍 Validating and fixing drug data...");
   const { cleanedDrugs, fixedCount } = smartFixDrugData(bulkDrugs);
   console.log(`✅ Data validated successfully (${fixedCount} items auto-fixed)`);
 
-  // ================================
-  // BATCH PROCESSING
-  // ================================
+  // Batch processing
   console.log(`📦 Total drugs to process: ${cleanedDrugs.length}`);
   
   const drugBatches: BulkDrugInput[][] = [];
@@ -120,25 +112,26 @@ export async function seedBulkRealDrugs(
     try {
       await prisma.$transaction(async (tx) => {
         for (const drugData of batch) {
-          // Create Drug
+          // Create Drug with proper null handling
           const drug = await tx.drug.upsert({
             where: {
               hospitalId_hospitalDrugCode: {
-                hospitalId: hospital1.id,
+                hospitalId: hospital.id,
                 hospitalDrugCode: drugData.hospitalDrugCode
               }
             },
             update: {},
             create: {
-              hospitalId: hospital1.id,
+              hospitalId: hospital.id,
               hospitalDrugCode: drugData.hospitalDrugCode,
               name: drugData.name,
               genericName: drugData.genericName,
               brandName: drugData.brandName || drugData.name,
               dosageForm: drugData.dosageForm,
-              strength: drugData.strength,
-              unit: drugData.unit,
-              notes: drugData.notes || `${drugData.strength} ${drugData.unit} ${drugData.dosageForm.toLowerCase()}`,
+              // ใช้ null แทน default values สำหรับ strength และ unit
+              strength: drugData.strength || null,
+              unit: drugData.unit || '',
+              notes: drugData.notes || generateNotes(drugData),
               isActive: true,
               requiresPrescription: drugData.requiresPrescription,
               isControlled: false,
@@ -148,7 +141,7 @@ export async function seedBulkRealDrugs(
             }
           });
 
-          // Create Stock Card
+          // Create Stock Card - ทุกยาไป คลังยาหลัก เท่านั้น
           const currentStock = drugData.currentStock;
           const packageSize = drugData.packageSize;
           const pricePerBox = drugData.pricePerBox;
@@ -156,16 +149,16 @@ export async function seedBulkRealDrugs(
           const stockCard = await tx.stockCard.upsert({
             where: {
               hospitalId_drugId_warehouseId: {
-                hospitalId: hospital1.id,
+                hospitalId: hospital.id,
                 drugId: drug.id,
-                warehouseId: mainWarehouse.id
+                warehouseId: mainWarehouse.id // ไปคลังยาหลักเท่านั้น
               }
             },
             update: {},
             create: {
-              cardNumber: `SC-BULK-${drugData.hospitalDrugCode}`,
-              hospitalId: hospital1.id,
-              warehouseId: mainWarehouse.id,
+              cardNumber: `SC-MAIN-${drugData.hospitalDrugCode}`,
+              hospitalId: hospital.id,
+              warehouseId: mainWarehouse.id, // ไปคลังยาหลักเท่านั้น
               drugId: drug.id,
               currentStock,
               reservedStock: 0,
@@ -186,7 +179,7 @@ export async function seedBulkRealDrugs(
             },
             update: {},
             create: {
-              hospitalId: hospital1.id,
+              hospitalId: hospital.id,
               stockCardId: stockCard.id,
               batchNumber: `BATCH-${drugData.hospitalDrugCode}-${drugData.expiryDate.replace(/-/g, '')}`,
               expiryDate: new Date(drugData.expiryDate),
@@ -202,7 +195,7 @@ export async function seedBulkRealDrugs(
               status: "ACTIVE",
               qcStatus: "PASSED",
               qcDate: new Date(),
-              qcNotes: `CSV Import - Package size: ${packageSize} units`,
+              qcNotes: `Thoen Hospital Import - Package size: ${packageSize} units`,
               storageLocation: getStorageLocationSafe(drugData.dosageForm),
               storageCondition: getStorageConditionSafe(drugData.category, drugData.dosageForm),
             }
@@ -217,6 +210,7 @@ export async function seedBulkRealDrugs(
 
       console.log(`  ✅ Batch ${batchIndex + 1} completed (${batch.length} drugs)`);
       console.log(`  📊 Progress: ${totalProcessed}/${cleanedDrugs.length} drugs processed`);
+      console.log(`  🏪 All drugs added to: คลังยาหลัก`);
       
       if (batchIndex < drugBatches.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -228,9 +222,7 @@ export async function seedBulkRealDrugs(
     }
   }
 
-  // ================================
-  // SUMMARY STATISTICS
-  // ================================
+  // Summary statistics
   const categoriesCount = {
     MODERN: cleanedDrugs.filter(d => d.category === "MODERN").length,
     HERBAL: cleanedDrugs.filter(d => d.category === "HERBAL").length,
@@ -238,111 +230,44 @@ export async function seedBulkRealDrugs(
     REFER: cleanedDrugs.filter(d => d.category === "REFER").length,
   };
 
+  const strengthStats = {
+    withStrength: cleanedDrugs.filter(d => d.strength && d.strength !== "").length,
+    withoutStrength: cleanedDrugs.filter(d => !d.strength || d.strength === "").length,
+  };
+
   console.log(`\n🎉 Bulk drug seeding completed successfully!`);
   console.log(`📊 Final Statistics:`);
   console.log(`  ✅ Total drugs processed: ${totalProcessed}`);
   console.log(`  💰 Total inventory value: ${totalValue.toLocaleString()} บาท`);
-  console.log(`  🛠️ Auto-fixed fields: ${fixedCount}`);
-  console.log(`  🏪 Warehouse used: ${mainWarehouse.name}`);
+  console.log(`  🏪 Warehouse: ${mainWarehouse.name} (All drugs stored here)`);
   console.log(`  📋 Drug Categories:`);
   Object.entries(categoriesCount).forEach(([category, count]) => {
     console.log(`    - ${category}: ${count} drugs`);
   });
+  console.log(`  🔧 Strength & Unit Statistics:`);
+  console.log(`    - With strength/unit: ${strengthStats.withStrength} drugs`);
+  console.log(`    - Without strength/unit (null): ${strengthStats.withoutStrength} drugs`);
   
-  // Return data ในรูปแบบที่ merge script คาดหวัง
   return { 
     totalProcessed: totalProcessed || 0, 
     totalValue: totalValue || 0, 
     categoriesCount: categoriesCount || {},
     warehouseUsed: mainWarehouse.name,
+    strengthStats,
     success: true
   };
 }
 
-// ================================
-// ENHANCED CSV LOADER
-// ================================
-
-async function loadAndCleanDrugsFromCSV(): Promise<BulkDrugInput[]> {
-  const csvPaths = [
-    path.join(process.cwd(), 'data', 'bulk-drugs.csv'),
-    path.join(process.cwd(), 'prisma', 'data', 'bulk-drugs.csv'),
-    path.join(process.cwd(), 'bulk-drugs.csv'),
-  ];
-
-  let csvContent = '';
-  for (const csvPath of csvPaths) {
-    try {
-      if (fs.existsSync(csvPath)) {
-        csvContent = fs.readFileSync(csvPath, 'utf8');
-        console.log(`📁 Found CSV file at: ${csvPath}`);
-        break;
-      }
-    } catch (error) {
-      continue;
-    }
+// Helper functions
+function generateNotes(drugData: BulkDrugInput): string {
+  const parts = [];
+  if (drugData.strength && drugData.unit) {
+    parts.push(`${drugData.strength} ${drugData.unit}`);
   }
-
-  if (!csvContent) {
-    throw new Error('CSV file not found');
-  }
-
-  // Parse CSV
-  const lines = csvContent.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  parts.push(drugData.dosageForm.toLowerCase());
   
-  console.log(`📋 CSV Headers: ${headers.join(', ')}`);
-  console.log(`📄 CSV has ${lines.length - 1} data rows`);
-
-  const drugs: BulkDrugInput[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i]);
-    
-    if (values.length < headers.length) {
-      console.warn(`⚠️  Row ${i + 1} has only ${values.length} values, padding with empty strings`);
-      // Pad with empty strings
-      while (values.length < headers.length) {
-        values.push('');
-      }
-    }
-
-    const drugData: any = {};
-    headers.forEach((header, index) => {
-      const value = values[index] || ''; // Default to empty string
-      drugData[header] = convertValueWithDefaults(header, value);
-    });
-
-    // Build drug object with smart defaults
-    const drug: BulkDrugInput = {
-      hospitalDrugCode: drugData.hospitalDrugCode || `AUTO_${i}`,
-      name: drugData.name || drugData.genericName || `Drug ${i}`,
-      genericName: drugData.genericName || drugData.name || `Generic ${i}`,
-      dosageForm: drugData.dosageForm || drugData.form || 'TAB',
-      strength: String(drugData.strength || '0'),
-      unit: drugData.unit || 'mg',
-      currentStock: Number(drugData.currentStock || drugData.stock || 1),
-      packageSize: Number(drugData.packageSize || drugData.package || 100),
-      pricePerBox: Number(drugData.pricePerBox || drugData.price || 100),
-      expiryDate: standardizeDate(drugData.expiryDate || drugData.expiry || '2028-12-31'),
-      category: standardizeCategory(drugData.category || 'MODERN'),
-      requiresPrescription: convertBoolean(drugData.requiresPrescription),
-      riskLevel: standardizeRiskLevel(drugData.riskLevel || 'LOW'),
-      brandName: drugData.brandName || drugData.name,
-      indication: drugData.indication || '',
-      notes: drugData.notes || '',
-    };
-
-    drugs.push(drug);
-  }
-
-  console.log(`✅ Successfully parsed ${drugs.length} drugs from CSV`);
-  return drugs;
+  return parts.join(' ') || `${drugData.dosageForm} form`;
 }
-
-// ================================
-// SMART DATA FIXING
-// ================================
 
 function smartFixDrugData(drugs: BulkDrugInput[]): { cleanedDrugs: BulkDrugInput[], fixedCount: number } {
   let fixedCount = 0;
@@ -382,14 +307,14 @@ function smartFixDrugData(drugs: BulkDrugInput[]): { cleanedDrugs: BulkDrugInput
       wasFixed = true;
     }
 
-    // Fix strength and unit based on dosage form
-    if (!fixed.strength || fixed.strength === '0') {
-      fixed.strength = getDefaultStrength(fixed.dosageForm);
+    // Handle strength and unit - set to null if empty or invalid
+    if (!fixed.strength || fixed.strength.trim() === '' || fixed.strength === '0') {
+      fixed.strength = null;
       wasFixed = true;
     }
     
-    if (!fixed.unit) {
-      fixed.unit = getDefaultUnit(fixed.dosageForm);
+    if (!fixed.unit || fixed.unit.trim() === '') {
+      fixed.unit = null;
       wasFixed = true;
     }
 
@@ -404,10 +329,163 @@ function smartFixDrugData(drugs: BulkDrugInput[]): { cleanedDrugs: BulkDrugInput
   return { cleanedDrugs, fixedCount };
 }
 
-// ================================
-// HELPER FUNCTIONS
-// ================================
+async function loadAndCleanDrugsFromCSV(): Promise<BulkDrugInput[]> {
+  const csvPaths = [
+    path.join(process.cwd(), 'data', 'bulk-drugs.csv'),
+    path.join(process.cwd(), 'prisma', 'data', 'bulk-drugs.csv'),
+    path.join(process.cwd(), 'bulk-drugs.csv'),
+  ];
 
+  let csvContent = '';
+  for (const csvPath of csvPaths) {
+    try {
+      if (fs.existsSync(csvPath)) {
+        csvContent = fs.readFileSync(csvPath, 'utf8');
+        console.log(`📁 Found CSV file at: ${csvPath}`);
+        break;
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+
+  if (!csvContent) {
+    throw new Error('CSV file not found');
+  }
+
+  // Parse CSV
+  const lines = csvContent.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  
+  console.log(`📋 CSV Headers: ${headers.join(', ')}`);
+  console.log(`📄 CSV has ${lines.length - 1} data rows`);
+
+  const drugs: BulkDrugInput[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    
+    if (values.length < headers.length) {
+      console.warn(`⚠️  Row ${i + 1} has only ${values.length} values, padding with empty strings`);
+      while (values.length < headers.length) {
+        values.push('');
+      }
+    }
+
+    const drugData: any = {};
+    headers.forEach((header, index) => {
+      const value = values[index] || '';
+      drugData[header] = convertValueWithDefaults(header, value);
+    });
+
+    // Build drug object with null handling for strength/unit
+    const drug: BulkDrugInput = {
+      hospitalDrugCode: drugData.hospitalDrugCode || `AUTO_${i}`,
+      name: drugData.name || drugData.genericName || `Drug ${i}`,
+      genericName: drugData.genericName || drugData.name || `Generic ${i}`,
+      dosageForm: drugData.dosageForm || drugData.form || 'TAB',
+      strength: drugData.strength && drugData.strength !== '0' ? String(drugData.strength) : null,
+      unit: drugData.unit && drugData.unit !== '' ? drugData.unit : null,
+      currentStock: Number(drugData.currentStock || drugData.stock || 1),
+      packageSize: Number(drugData.packageSize || drugData.package || 100),
+      pricePerBox: Number(drugData.pricePerBox || drugData.price || 100),
+      expiryDate: standardizeDate(drugData.expiryDate || drugData.expiry || '2028-12-31'),
+      category: standardizeCategory(drugData.category || 'MODERN'),
+      requiresPrescription: convertBoolean(drugData.requiresPrescription),
+      riskLevel: standardizeRiskLevel(drugData.riskLevel || 'LOW'),
+      brandName: drugData.brandName || drugData.name,
+      indication: drugData.indication || '',
+      notes: drugData.notes || '',
+    };
+
+    drugs.push(drug);
+  }
+
+  console.log(`✅ Successfully parsed ${drugs.length} drugs from CSV`);
+  return drugs;
+}
+
+function getSampleDrugs(): BulkDrugInput[] {
+  return [
+    {
+      hospitalDrugCode: "TH001",
+      name: "Paracetamol",
+      genericName: "Paracetamol",
+      dosageForm: "TAB",
+      strength: "500",
+      unit: "mg",
+      currentStock: 100,
+      packageSize: 100,
+      pricePerBox: 120.00,
+      expiryDate: "2028-05-10",
+      category: "MODERN",
+      requiresPrescription: false,
+      riskLevel: "LOW",
+    },
+    {
+      hospitalDrugCode: "TH002",
+      name: "Amoxicillin",
+      genericName: "Amoxicillin",
+      dosageForm: "CAP",
+      strength: "250",
+      unit: "mg",
+      currentStock: 50,
+      packageSize: 100,
+      pricePerBox: 200.00,
+      expiryDate: "2027-08-31",
+      category: "MODERN",
+      requiresPrescription: true,
+      riskLevel: "MEDIUM",
+    },
+    {
+      hospitalDrugCode: "TH003",
+      name: "ยาชงขิง",
+      genericName: "ยาชงขิง",
+      dosageForm: "POW",
+      strength: null, // ไม่มีความแรง
+      unit: null, // ไม่มีหน่วย
+      currentStock: 30,
+      packageSize: 50,
+      pricePerBox: 80.00,
+      expiryDate: "2028-02-02",
+      category: "HERBAL",
+      requiresPrescription: false,
+      riskLevel: "LOW",
+    },
+    {
+      hospitalDrugCode: "TH004",
+      name: "Normal Saline",
+      genericName: "Sodium Chloride",
+      dosageForm: "BAG",
+      strength: null, // ไม่มีความแรง
+      unit: null, // ไม่มีหน่วย
+      currentStock: 20,
+      packageSize: 20,
+      pricePerBox: 400.00,
+      expiryDate: "2026-12-31",
+      category: "MODERN",
+      requiresPrescription: true,
+      riskLevel: "LOW",
+    },
+    {
+      hospitalDrugCode: "TH005",
+      name: "Insulin Human",
+      genericName: "Insulin Human",
+      dosageForm: "INJ",
+      strength: "100",
+      unit: "IU/ml",
+      currentStock: 10,
+      packageSize: 5,
+      pricePerBox: 800.00,
+      expiryDate: "2025-06-30",
+      category: "HIGH_ALERT",
+      requiresPrescription: true,
+      riskLevel: "CRITICAL",
+    }
+  ];
+}
+
+// Helper utility functions
 function parseCSVLine(line: string): string[] {
   const result = [];
   let current = '';
@@ -427,24 +505,20 @@ function parseCSVLine(line: string): string[] {
   }
   
   result.push(current.trim());
-  return result.map(val => val.replace(/^"|"$/g, '')); // Remove surrounding quotes
+  return result.map(val => val.replace(/^"|"$/g, ''));
 }
 
 function convertValueWithDefaults(header: string, value: string): any {
-  // Handle empty values
   if (!value || value.trim() === '') {
     return getDefaultValue(header);
   }
 
-  // Convert numeric fields
-  if (['currentStock', 'packageSize', 'pricePerBox', 'strength'].includes(header)) {
-    // Remove commas from numbers like "20,865.00"
+  if (['currentStock', 'packageSize', 'pricePerBox'].includes(header)) {
     const cleanNumber = value.replace(/,/g, '');
     const num = parseFloat(cleanNumber);
     return isNaN(num) ? getDefaultValue(header) : num;
   }
   
-  // Convert boolean fields
   if (['requiresPrescription'].includes(header)) {
     return convertBoolean(value);
   }
@@ -458,8 +532,8 @@ function getDefaultValue(header: string): any {
     name: '',
     genericName: '',
     dosageForm: 'TAB',
-    strength: '500',
-    unit: 'mg',
+    strength: null, // เปลี่ยนเป็น null
+    unit: null, // เปลี่ยนเป็น null
     currentStock: 1,
     packageSize: 100,
     pricePerBox: 100,
@@ -475,32 +549,12 @@ function getDefaultValue(header: string): any {
   return defaults[header] || '';
 }
 
-function getDefaultStrength(dosageForm: string): string {
-  const strengthMap: Record<string, string> = {
-    'TAB': '500', 'CAP': '250', 'INJ': '1', 'SYR': '120',
-    'CRE': '10', 'OIN': '5', 'POW': '1', 'BAG': '500',
-  };
-  return strengthMap[dosageForm] || '100';
-}
-
-function getDefaultUnit(dosageForm: string): string {
-  const unitMap: Record<string, string> = {
-    'TAB': 'mg', 'CAP': 'mg', 'INJ': 'ml', 'SYR': 'ml',
-    'CRE': 'g', 'OIN': 'g', 'POW': 'g', 'BAG': 'ml',
-  };
-  return unitMap[dosageForm] || 'mg';
-}
-
 function standardizeDate(dateStr: string): string {
-  // Handle various date formats and convert to YYYY-MM-DD
   if (dateStr.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
-    // Already in YYYY-MM-DD format, just standardize
     const [year, month, day] = dateStr.split('-');
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
-  
-  // Handle other formats...
-  return '2028-12-31'; // Default far future date
+  return '2028-12-31';
 }
 
 function standardizeCategory(category: string): "MODERN" | "HERBAL" | "HIGH_ALERT" | "REFER" {
@@ -525,7 +579,7 @@ function convertBoolean(value: any): boolean {
     const lower = value.toLowerCase();
     return ['true', 'yes', '1', 'y', 'ใช่', 'จริง'].includes(lower);
   }
-  return true; // Default to true for prescription required
+  return true;
 }
 
 function getStorageLocationSafe(dosageForm: string): string {
@@ -545,55 +599,4 @@ function getStorageConditionSafe(category: string, dosageForm: string): string {
   if (dosageForm === "INJ") return "CONTROLLED_ROOM";
   if (category === "HERBAL") return "DRY_PLACE";
   return "ROOM_TEMPERATURE";
-}
-
-// Fallback hardcoded data
-function getHardcodedDrugs(): BulkDrugInput[] {
-  return [
-    {
-      hospitalDrugCode: "1670056",
-      name: "Ursodeoxycholic acid",
-      genericName: "Ursodeoxycholic acid", 
-      dosageForm: "TAB",
-      strength: "250",
-      unit: "mg",
-      currentStock: 2,
-      packageSize: 100,
-      pricePerBox: 650.00,
-      expiryDate: "2028-05-10",
-      category: "MODERN",
-      requiresPrescription: true,
-      riskLevel: "MEDIUM",
-    },
-    {
-      hospitalDrugCode: "1670065",
-      name: "Alteplase(Actilyse)",
-      genericName: "Alteplase",
-      dosageForm: "INJ",
-      strength: "50",
-      unit: "ml",
-      currentStock: 2,
-      packageSize: 1,
-      pricePerBox: 20865.00,
-      expiryDate: "2026-08-31",
-      category: "HIGH_ALERT",
-      requiresPrescription: true,
-      riskLevel: "CRITICAL",
-    },
-    {
-      hospitalDrugCode: "2012010",
-      name: "ยาชงขิง",
-      genericName: "ยาชงขิง",
-      dosageForm: "POW",
-      strength: "20",
-      unit: "g",
-      currentStock: 43,
-      packageSize: 100,
-      pricePerBox: 65.00,
-      expiryDate: "2028-02-02",
-      category: "HERBAL",
-      requiresPrescription: false,
-      riskLevel: "LOW",
-    }
-  ];
 }
