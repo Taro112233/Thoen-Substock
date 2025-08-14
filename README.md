@@ -191,6 +191,8 @@ Directory structure:
     │       ├── auth-client.ts
     │       └── auth.ts
     ├── components/
+    │   ├── RequisitionCard.tsx
+    │   ├── StatsCards.tsx
     │   ├── admin/
     │   │   ├── AdminBreadcrumb.tsx
     │   │   ├── AdminHeader.tsx
@@ -328,8 +330,11 @@ Directory structure:
     │   ├── merge-schemas.js
     │   ├── merge-seeds.js
     │   └── push-auth-schema.sh
-    └── types/
-        └── next-auth.d.ts
+    ├── types/
+    │   ├── next-auth.d.ts
+    │   └── requisitions.ts
+    └── utils/
+        └── requisitions.ts
 
 # 📌 Project Instructions for Claude: Hospital Pharmacy Stock Management System V2.0
 
