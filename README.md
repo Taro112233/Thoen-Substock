@@ -182,7 +182,14 @@ Directory structure:
     │   │   └── warehouses/
     │   │       ├── page.tsx
     │   │       └── [id]/
-    │   │           └── page.tsx
+    │   │           ├── page.tsx
+    │   │           └── components/
+    │   │               └── stock/
+    │   │                   ├── StockEditModal.tsx
+    │   │                   ├── StockManagementTab.tsx
+    │   │                   ├── StockSummaryCards.tsx
+    │   │                   ├── StockTable.tsx
+    │   │                   └── types.ts
     │   ├── showcase/
     │   │   ├── page.tsx
     │   │   └── mockup/
@@ -296,6 +303,8 @@ Directory structure:
     │   ├── password-utils.ts
     │   ├── prisma.ts
     │   ├── utils.ts
+    │   ├── services/
+    │   │   └── stockService.ts
     │   └── validations/
     │       └── auth.ts
     ├── prisma/
