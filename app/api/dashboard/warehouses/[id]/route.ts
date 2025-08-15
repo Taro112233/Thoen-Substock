@@ -63,7 +63,7 @@ export async function GET(
             },
             where: { isActive: true },
             orderBy: { updatedAt: 'desc' },
-            take: 20
+            take: 1000
           },
           stockTransactions: {
             select: {

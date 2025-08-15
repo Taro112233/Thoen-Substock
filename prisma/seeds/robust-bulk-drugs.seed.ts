@@ -1,4 +1,4 @@
-// prisma/seeds/robust-bulk-drugs.seed.ts - Modified for โรงพยาบาลเถิน
+// prisma/seeds/robust-bulk-drugs.seed.ts - Fixed Version
 import { PrismaClient } from "@prisma/client";
 import fs from 'fs';
 import path from 'path';
@@ -8,8 +8,8 @@ interface BulkDrugInput {
   name: string;
   genericName: string;
   dosageForm: string;
-  strength?: string | null; // เปลี่ยนเป็น optional และ nullable
-  unit?: string | null; // เปลี่ยนเป็น optional และ nullable
+  strength?: string | null;
+  unit?: string | null;
   currentStock: number;
   packageSize: number;
   pricePerBox: number;
@@ -20,6 +20,36 @@ interface BulkDrugInput {
   brandName?: string;
   indication?: string;
   notes?: string;
+}
+
+// 🆕 Helper Functions
+function getPackageUnit(dosageForm: string, unit: string | null): string {
+  const packageUnits: Record<string, string> = {
+    "TAB": "tablets",
+    "CAP": "capsules", 
+    "INJ": "vials",
+    "AMP": "ampoules",
+    "BAG": "bags",
+    "LVP": "bags",
+    "POW": "sachets",
+    "SAC": "sachets",
+    "CRE": "tubes",
+    "OIN": "tubes",
+    "GEL": "tubes",
+    "SYR": "bottles",
+    "LIQ": "bottles",
+    "SOL": "bottles",
+    "SUSP": "bottles",
+    "DROPS": "bottles",
+    "SPRAY": "bottles"
+  };
+  
+  return packageUnits[dosageForm] || "units";
+}
+
+function generatePackDescription(packageSize: number, dosageForm: string): string {
+  const unit = getPackageUnit(dosageForm, null);
+  return `${packageSize} ${unit} per box`;
 }
 
 export async function seedBulkRealDrugs(
@@ -112,7 +142,7 @@ export async function seedBulkRealDrugs(
     try {
       await prisma.$transaction(async (tx) => {
         for (const drugData of batch) {
-          // Create Drug with proper null handling
+          // Create Drug with proper null handling และ packageSize
           const drug = await tx.drug.upsert({
             where: {
               hospitalId_hospitalDrugCode: {
@@ -128,9 +158,15 @@ export async function seedBulkRealDrugs(
               genericName: drugData.genericName,
               brandName: drugData.brandName || drugData.name,
               dosageForm: drugData.dosageForm,
-              // ใช้ null แทน default values สำหรับ strength และ unit
-              strength: drugData.strength || null,
-              unit: drugData.unit || '',
+              
+              // 🔧 แก้ไข: ใช้ empty string แทน null ตาม schema
+              strength: drugData.strength || "",
+              unit: drugData.unit || "",
+              
+              // 🆕 เพิ่มข้อมูล packaging (ถ้า schema รองรับ)
+              packageSize: drugData.packageSize,
+              packageUnit: getPackageUnit(drugData.dosageForm, drugData.unit || null),
+              
               notes: drugData.notes || generateNotes(drugData),
               isActive: true,
               requiresPrescription: drugData.requiresPrescription,
@@ -141,7 +177,7 @@ export async function seedBulkRealDrugs(
             }
           });
 
-          // Create Stock Card - ทุกยาไป คลังยาหลัก เท่านั้น
+          // Create Stock Card พร้อม reference ไปยัง packageSize
           const currentStock = drugData.currentStock;
           const packageSize = drugData.packageSize;
           const pricePerBox = drugData.pricePerBox;
@@ -151,14 +187,14 @@ export async function seedBulkRealDrugs(
               hospitalId_drugId_warehouseId: {
                 hospitalId: hospital.id,
                 drugId: drug.id,
-                warehouseId: mainWarehouse.id // ไปคลังยาหลักเท่านั้น
+                warehouseId: mainWarehouse.id
               }
             },
             update: {},
             create: {
               cardNumber: `SC-MAIN-${drugData.hospitalDrugCode}`,
               hospitalId: hospital.id,
-              warehouseId: mainWarehouse.id, // ไปคลังยาหลักเท่านั้น
+              warehouseId: mainWarehouse.id,
               drugId: drug.id,
               currentStock,
               reservedStock: 0,
@@ -169,10 +205,13 @@ export async function seedBulkRealDrugs(
               averageCost: pricePerBox / packageSize,
               totalValue: currentStock * pricePerBox,
               isActive: true,
+              
+              // 🆕 เพิ่มหมายเหตุเกี่ยวกับ package size
+              notes: `Package size: ${packageSize} ${getPackageUnit(drugData.dosageForm, drugData.unit || null)} per box`
             }
           });
 
-          // Create Stock Batch
+          // 🔧 แก้ไข: Create Stock Batch โดยปิด object ให้ถูกต้อง
           await tx.stockBatch.upsert({
             where: {
               id: `${drug.id}-${drugData.expiryDate.replace(/-/g, '')}`
@@ -183,10 +222,13 @@ export async function seedBulkRealDrugs(
               stockCardId: stockCard.id,
               batchNumber: `BATCH-${drugData.hospitalDrugCode}-${drugData.expiryDate.replace(/-/g, '')}`,
               expiryDate: new Date(drugData.expiryDate),
+              
+              // คำนวณจำนวนเป็นหน่วยย่อย (ไม่ใช่กล่อง)
               initialQty: currentStock * packageSize,
               currentQty: currentStock * packageSize,
               reservedQty: 0,
               availableQty: currentStock * packageSize,
+              
               supplierId: null,
               purchaseOrderId: null,
               invoiceNo: null,
@@ -195,7 +237,10 @@ export async function seedBulkRealDrugs(
               status: "ACTIVE",
               qcStatus: "PASSED",
               qcDate: new Date(),
-              qcNotes: `Thoen Hospital Import - Package size: ${packageSize} units`,
+              
+              // 🆝 เพิ่มข้อมูล package size ใน QC notes
+              qcNotes: `Thoen Hospital Import - ${currentStock} boxes x ${packageSize} ${getPackageUnit(drugData.dosageForm, drugData.unit || null)} = ${currentStock * packageSize} units total`,
+              
               storageLocation: getStorageLocationSafe(drugData.dosageForm),
               storageCondition: getStorageConditionSafe(drugData.category, drugData.dosageForm),
             }
@@ -246,7 +291,7 @@ export async function seedBulkRealDrugs(
   });
   console.log(`  🔧 Strength & Unit Statistics:`);
   console.log(`    - With strength/unit: ${strengthStats.withStrength} drugs`);
-  console.log(`    - Without strength/unit (null): ${strengthStats.withoutStrength} drugs`);
+  console.log(`    - Without strength/unit (empty): ${strengthStats.withoutStrength} drugs`);
   
   return { 
     totalProcessed: totalProcessed || 0, 
@@ -261,10 +306,18 @@ export async function seedBulkRealDrugs(
 // Helper functions
 function generateNotes(drugData: BulkDrugInput): string {
   const parts = [];
+  
   if (drugData.strength && drugData.unit) {
     parts.push(`${drugData.strength} ${drugData.unit}`);
   }
+  
   parts.push(drugData.dosageForm.toLowerCase());
+  
+  // เพิ่มข้อมูล package size
+  if (drugData.packageSize) {
+    const packageUnit = getPackageUnit(drugData.dosageForm, drugData.unit || null);
+    parts.push(`(${drugData.packageSize} ${packageUnit}/box)`);
+  }
   
   return parts.join(' ') || `${drugData.dosageForm} form`;
 }
@@ -307,7 +360,7 @@ function smartFixDrugData(drugs: BulkDrugInput[]): { cleanedDrugs: BulkDrugInput
       wasFixed = true;
     }
 
-    // Handle strength and unit - set to null if empty or invalid
+    // 🔧 แก้ไข: Handle strength and unit - set to null if empty (จะแปลงเป็น empty string ใน create)
     if (!fixed.strength || fixed.strength.trim() === '' || fixed.strength === '0') {
       fixed.strength = null;
       wasFixed = true;
@@ -442,8 +495,8 @@ function getSampleDrugs(): BulkDrugInput[] {
       name: "ยาชงขิง",
       genericName: "ยาชงขิง",
       dosageForm: "POW",
-      strength: null, // ไม่มีความแรง
-      unit: null, // ไม่มีหน่วย
+      strength: null,
+      unit: null,
       currentStock: 30,
       packageSize: 50,
       pricePerBox: 80.00,
@@ -457,8 +510,8 @@ function getSampleDrugs(): BulkDrugInput[] {
       name: "Normal Saline",
       genericName: "Sodium Chloride",
       dosageForm: "BAG",
-      strength: null, // ไม่มีความแรง
-      unit: null, // ไม่มีหน่วย
+      strength: null,
+      unit: null,
       currentStock: 20,
       packageSize: 20,
       pricePerBox: 400.00,
@@ -532,8 +585,8 @@ function getDefaultValue(header: string): any {
     name: '',
     genericName: '',
     dosageForm: 'TAB',
-    strength: null, // เปลี่ยนเป็น null
-    unit: null, // เปลี่ยนเป็น null
+    strength: null,
+    unit: null,
     currentStock: 1,
     packageSize: 100,
     pricePerBox: 100,
