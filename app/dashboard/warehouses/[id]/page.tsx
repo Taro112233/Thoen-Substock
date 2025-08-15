@@ -1,4 +1,4 @@
-// app/dashboard/warehouses/[id]/page.tsx - Fixed null safety
+// app/dashboard/warehouses/[id]/page.tsx - Updated with Stock Management Module
 "use client";
 
 import { useState, useEffect } from "react";
@@ -68,6 +68,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+
+// Import Stock Management Components
+import { StockManagementTab } from "./components/stock/StockManagementTab";
 
 // Types - แก้ไขตาม schema และ API response
 interface StockItem {
@@ -759,14 +762,14 @@ export default function WarehouseDetailDashboard() {
                                 <span className="font-medium">{formatCurrency(category.value)}</span>
                               </div>
                               <Progress value={category.percentage} className="h-2" />
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                              <div className="flex justify-between text-xs text-gray-500">
                                 <span>{category.count} รายการ</span>
                                 <span>{category.percentage.toFixed(1)}%</span>
                               </div>
                             </div>
                           ))
                         ) : (
-                          <p className="text-sm text-muted-foreground">ยังไม่มีข้อมูลหมวดหมู่</p>
+                          <p className="text-sm text-gray-500">ยังไม่มีข้อมูลหมวดหมู่</p>
                         )}
                       </div>
                     </CardContent>
@@ -781,10 +784,10 @@ export default function WarehouseDetailDashboard() {
                       <div className="space-y-4">
                         {warehouse.expiryAnalysis && warehouse.expiryAnalysis.length > 0 ? (
                           warehouse.expiryAnalysis.map((range) => (
-                            <div key={range.range} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                            <div key={range.range} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
                               <div>
                                 <p className="text-sm font-medium">{range.range}</p>
-                                <p className="text-xs text-muted-foreground">{range.count} รายการ</p>
+                                <p className="text-xs text-gray-500">{range.count} รายการ</p>
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-semibold">{formatCurrency(range.value)}</p>
@@ -792,7 +795,7 @@ export default function WarehouseDetailDashboard() {
                             </div>
                           ))
                         ) : (
-                          <p className="text-sm text-muted-foreground">ยังไม่มีข้อมูลการวิเคราะห์</p>
+                          <p className="text-sm text-gray-500">ยังไม่มีข้อมูลการวิเคราะห์</p>
                         )}
                       </div>
                     </CardContent>
@@ -811,22 +814,22 @@ export default function WarehouseDetailDashboard() {
                             const Icon = config.icon;
                             
                             return (
-                              <div key={transaction.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                              <div key={transaction.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors">
                                 <div className="flex items-center gap-3">
-                                  <div className={cn("p-2 rounded-full bg-muted", config.color)}>
+                                  <div className={cn("p-2 rounded-full bg-gray-100", config.color)}>
                                     <Icon className="h-4 w-4" />
                                   </div>
                                   <div>
                                     <p className="text-sm font-medium">
                                       {transaction.drug?.name || 'ไม่ระบุชื่อยา'}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-gray-500">
                                       {config.label} • {Math.abs(transaction.quantity)} ชิ้น
                                     </p>
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-xs text-muted-foreground">
+                                  <p className="text-xs text-gray-500">
                                     {formatDateTime(transaction.createdAt)}
                                   </p>
                                   {transaction.performer && (
@@ -839,7 +842,7 @@ export default function WarehouseDetailDashboard() {
                             );
                           })
                         ) : (
-                          <p className="text-sm text-muted-foreground">ยังไม่มีการเคลื่อนไหว</p>
+                          <p className="text-sm text-gray-500">ยังไม่มีการเคลื่อนไหว</p>
                         )}
                       </div>
                     </CardContent>
@@ -848,120 +851,9 @@ export default function WarehouseDetailDashboard() {
               </div>
             </TabsContent>
 
-            {/* Stock Tab */}
+            {/* Stock Tab - ใช้ StockManagementTab component */}
             <TabsContent value="stock" className="space-y-6">
-              <div className="space-y-4">
-                {/* Search and Filter */}
-                <div className="flex gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="ค้นหาชื่อยา, รหัสยา..."
-                      className="pl-8"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                  <Button variant="outline" className="gap-2">
-                    <Filter className="h-4 w-4" />
-                    กรอง
-                  </Button>
-                </div>
-
-                {/* Stock Cards Table */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">รายการสต็อก</CardTitle>
-                    <CardDescription>
-                      แสดง {warehouse.stockCards?.length || 0} รายการจากทั้งหมด {warehouse._counts.stockCards} รายการ
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {warehouse.stockCards && warehouse.stockCards.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>รหัสยา</TableHead>
-                            <TableHead>ชื่อยา</TableHead>
-                            <TableHead className="text-right">สต็อกปัจจุบัน</TableHead>
-                            <TableHead className="text-right">จุดสั่งซื้อ</TableHead>
-                            <TableHead className="text-right">มูลค่า</TableHead>
-                            <TableHead>สถานะ</TableHead>
-                            <TableHead className="text-right">อัปเดตล่าสุด</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {warehouse.stockCards
-                            .filter((item) =>
-                              searchTerm === "" ||
-                              item.drug.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              item.drug.hospitalDrugCode.toLowerCase().includes(searchTerm.toLowerCase())
-                            )
-                            .map((item) => (
-                              <TableRow key={item.id}>
-                                <TableCell>
-                                  <div className="font-mono text-sm">
-                                    {item.drug.hospitalDrugCode}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div>
-                                    <p className="font-medium">{item.drug.name}</p>
-                                    <p className="text-sm text-muted-foreground">
-                                      {item.drug.strength} {item.drug.dosageForm}
-                                    </p>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="font-medium">
-                                    {item.currentStock.toLocaleString()}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {item.drug.unit}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {item.reorderPoint.toLocaleString()}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {formatCurrency(item.totalValue)}
-                                </TableCell>
-                                <TableCell>
-                                  {item.lowStockAlert ? (
-                                    <Badge variant="destructive" className="gap-1">
-                                      <AlertTriangle className="h-3 w-3" />
-                                      สต็อกต่ำ
-                                    </Badge>
-                                  ) : item.currentStock === 0 ? (
-                                    <Badge variant="outline" className="gap-1">
-                                      <AlertCircle className="h-3 w-3" />
-                                      หมด
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="default" className="gap-1">
-                                      <CheckCircle className="h-3 w-3" />
-                                      ปกติ
-                                    </Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="text-sm">
-                                    {item.lastUpdated ? formatDateTime(item.lastUpdated) : 'ไม่ระบุ'}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <div className="text-center py-8">
-                        <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">ยังไม่มีข้อมูลสต็อก</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+              <StockManagementTab warehouseId={params.id as string} />
             </TabsContent>
 
             {/* Transactions Tab */}
@@ -1012,7 +904,7 @@ export default function WarehouseDetailDashboard() {
                                   <p className="text-sm font-medium">
                                     {transaction.drug?.name || 'ไม่ระบุชื่อยา'}
                                   </p>
-                                  <p className="text-xs text-muted-foreground">
+                                  <p className="text-xs text-gray-500">
                                     {transaction.drug?.hospitalDrugCode || 'ไม่ระบุรหัส'}
                                   </p>
                                 </div>
@@ -1037,7 +929,7 @@ export default function WarehouseDetailDashboard() {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <div className="text-sm text-muted-foreground">
+                                <div className="text-sm text-gray-500">
                                   {transaction.reference || transaction.description || '-'}
                                 </div>
                               </TableCell>
@@ -1048,8 +940,8 @@ export default function WarehouseDetailDashboard() {
                     </Table>
                   ) : (
                     <div className="text-center py-8">
-                      <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">ยังไม่มีประวัติการเคลื่อนไหว</p>
+                      <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">ยังไม่มีประวัติการเคลื่อนไหว</p>
                     </div>
                   )}
                 </CardContent>
