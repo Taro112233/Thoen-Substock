@@ -133,7 +133,10 @@ Directory structure:
     │   │   │   └── warehouses/
     │   │   │       ├── route.ts
     │   │   │       └── [id]/
-    │   │   │           └── route.ts
+    │   │   │           ├── route.ts
+    │   │   │           └── stock-cards/
+    │   │   │               └── [stockCardId]/
+    │   │   │                   └── route.ts
     │   │   ├── departments/
     │   │   │   └── route.ts
     │   │   ├── drugs/
@@ -292,7 +295,9 @@ Directory structure:
     │   └── warehouse-mock.ts
     ├── hooks/
     │   ├── use-mobile.ts
-    │   └── use-toast.ts
+    │   ├── use-toast.ts
+    │   ├── useStockCard.ts
+    │   └── useStockCards.ts
     ├── lib/
     │   ├── admin-utils.ts
     │   ├── api-helpers.ts
@@ -343,6 +348,7 @@ Directory structure:
     ├── types/
     │   ├── next-auth.d.ts
     │   ├── requisitions.ts
+    │   ├── stock-card.ts
     │   └── warehouse.ts
     └── utils/
         ├── requisitions.ts
