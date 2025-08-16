@@ -1,4 +1,6 @@
-// prisma/seeds/robust-bulk-drugs.seed.ts - Fixed Version
+// prisma/seeds/robust-bulk-drugs.seed.ts - Enhanced with Package Pricing
+// เพิ่มการคำนวณและเก็บราคาระดับ package
+
 import { PrismaClient } from "@prisma/client";
 import fs from 'fs';
 import path from 'path';
@@ -22,7 +24,7 @@ interface BulkDrugInput {
   notes?: string;
 }
 
-// 🆕 Helper Functions
+// 🆕 Helper Functions สำหรับ Package Management
 function getPackageUnit(dosageForm: string, unit: string | null): string {
   const packageUnits: Record<string, string> = {
     "TAB": "tablets",
@@ -47,9 +49,14 @@ function getPackageUnit(dosageForm: string, unit: string | null): string {
   return packageUnits[dosageForm] || "units";
 }
 
-function generatePackDescription(packageSize: number, dosageForm: string): string {
-  const unit = getPackageUnit(dosageForm, null);
-  return `${packageSize} ${unit} per box`;
+function calculatePackagePricing(pricePerBox: number, packageSize: number) {
+  const unitCost = pricePerBox / packageSize;  // ต้นทุนต่อหน่วย
+  const packageCost = pricePerBox;             // ต้นทุนต่อแพ็ค (เท่ากับ pricePerBox)
+  
+  return {
+    unitCost,      // ราคาต่อหน่วย
+    packageCost    // ราคาต่อแพ็ค
+  };
 }
 
 export async function seedBulkRealDrugs(
@@ -58,16 +65,17 @@ export async function seedBulkRealDrugs(
   masterData: any,
   warehouses?: Record<string, any[]>
 ) {
-  console.log("💊 Creating Bulk Drug Data for โรงพยาบาลเถิน...");
-  console.log("🏪 All drugs will be stored in คลังยาหลัก (MAIN warehouse)");
-  console.log("🔧 Strength & Unit: null for drugs without values");
+  console.log("💊 Creating Enhanced Bulk Drug Data with Package Pricing...");
+  console.log("🏪 All drugs stored in คลังยาหลัก (MAIN warehouse)");
+  console.log("📦 Enhanced with package-level pricing calculations");
 
   const hospital = hospitals[0]; // โรงพยาบาลเถิน
   const BATCH_SIZE = 25;
   let totalProcessed = 0;
   let totalValue = 0;
+  let totalPackages = 0;
 
-  // Find main warehouse (คลังยาหลัก) only
+  // Find or create main warehouse
   let mainWarehouse;
   
   if (warehouses && warehouses[hospital.id]) {
@@ -142,6 +150,12 @@ export async function seedBulkRealDrugs(
     try {
       await prisma.$transaction(async (tx) => {
         for (const drugData of batch) {
+          // Calculate package pricing
+          const { unitCost, packageCost } = calculatePackagePricing(
+            drugData.pricePerBox, 
+            drugData.packageSize
+          );
+
           // Create Drug with proper null handling และ packageSize
           const drug = await tx.drug.upsert({
             where: {
@@ -177,7 +191,7 @@ export async function seedBulkRealDrugs(
             }
           });
 
-          // Create Stock Card พร้อม reference ไปยัง packageSize
+          // 🆕 Create Enhanced Stock Card พร้อม package pricing
           const currentStock = drugData.currentStock;
           const packageSize = drugData.packageSize;
           const pricePerBox = drugData.pricePerBox;
@@ -196,22 +210,43 @@ export async function seedBulkRealDrugs(
               hospitalId: hospital.id,
               warehouseId: mainWarehouse.id,
               drugId: drug.id,
+              
+              // จำนวนสต็อก (ในหน่วย package/box)
               currentStock,
               reservedStock: 0,
               availableStock: currentStock,
               minStock: Math.max(Math.floor(currentStock * 0.2), 5),
               maxStock: Math.max(currentStock * 3, 50),
               reorderPoint: Math.max(Math.floor(currentStock * 0.3), 3),
-              averageCost: pricePerBox / packageSize,
-              totalValue: currentStock * pricePerBox,
+              
+              // 🆕 ข้อมูล Package
+              packageSize: packageSize,
+              packageUnit: getPackageUnit(drugData.dosageForm, drugData.unit || null),
+              
+              // 🆕 ราคาต่อหน่วย
+              averageCost: unitCost,
+              lastCost: unitCost,
+              
+              // 🆕 ราคาต่อแพ็ค
+              packageCost: packageCost,
+              lastPackageCost: packageCost,
+              pricePerBox: drugData.pricePerBox, // 🆕 เก็บราคาต่อกล่องตรงๆ
+              
+              // มูลค่ารวม (คำนวณจากจำนวน package × ราคาต่อ package)
+              totalValue: currentStock * packageCost,
+              
+              // การใช้งาน
+              monthlyUsage: Math.floor(currentStock * packageSize * 0.1), // 10% ต่อเดือน (หน่วย)
+              monthlyPackageUsage: Math.floor(currentStock * 0.1), // 10% ต่อเดือน (แพ็ค)
+              
               isActive: true,
               
-              // 🆕 เพิ่มหมายเหตุเกี่ยวกับ package size
-              notes: `Package size: ${packageSize} ${getPackageUnit(drugData.dosageForm, drugData.unit || null)} per box`
+              // 🆕 เพิ่มหมายเหตุเกี่ยวกับ package
+              notes: `${packageSize} ${getPackageUnit(drugData.dosageForm, drugData.unit || null)} per package | ฿${packageCost.toFixed(2)}/package | ฿${unitCost.toFixed(2)}/unit`
             }
           });
 
-          // 🔧 แก้ไข: Create Stock Batch โดยปิด object ให้ถูกต้อง
+          // 🔧 Create Stock Batch with enhanced data
           await tx.stockBatch.upsert({
             where: {
               id: `${drug.id}-${drugData.expiryDate.replace(/-/g, '')}`
@@ -223,7 +258,7 @@ export async function seedBulkRealDrugs(
               batchNumber: `BATCH-${drugData.hospitalDrugCode}-${drugData.expiryDate.replace(/-/g, '')}`,
               expiryDate: new Date(drugData.expiryDate),
               
-              // คำนวณจำนวนเป็นหน่วยย่อย (ไม่ใช่กล่อง)
+              // คำนวณจำนวนเป็นหน่วยย่อย (total units)
               initialQty: currentStock * packageSize,
               currentQty: currentStock * packageSize,
               reservedQty: 0,
@@ -238,8 +273,8 @@ export async function seedBulkRealDrugs(
               qcStatus: "PASSED",
               qcDate: new Date(),
               
-              // 🆝 เพิ่มข้อมูล package size ใน QC notes
-              qcNotes: `Thoen Hospital Import - ${currentStock} boxes x ${packageSize} ${getPackageUnit(drugData.dosageForm, drugData.unit || null)} = ${currentStock * packageSize} units total`,
+              // 🆝 เพิ่มข้อมูล package ใน QC notes
+              qcNotes: `Import Data - ${currentStock} packages × ${packageSize} units = ${currentStock * packageSize} total units | Cost: ฿${packageCost.toFixed(2)}/package`,
               
               storageLocation: getStorageLocationSafe(drugData.dosageForm),
               storageCondition: getStorageConditionSafe(drugData.category, drugData.dosageForm),
@@ -247,7 +282,8 @@ export async function seedBulkRealDrugs(
           });
 
           totalProcessed++;
-          totalValue += (currentStock * pricePerBox);
+          totalValue += (currentStock * packageCost);
+          totalPackages += currentStock;
         }
       }, {
         timeout: 30000
@@ -255,7 +291,8 @@ export async function seedBulkRealDrugs(
 
       console.log(`  ✅ Batch ${batchIndex + 1} completed (${batch.length} drugs)`);
       console.log(`  📊 Progress: ${totalProcessed}/${cleanedDrugs.length} drugs processed`);
-      console.log(`  🏪 All drugs added to: คลังยาหลัก`);
+      console.log(`  📦 Packages processed: ${totalPackages.toLocaleString()}`);
+      console.log(`  🏪 Warehouse: คลังยาหลัก`);
       
       if (batchIndex < drugBatches.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -280,10 +317,24 @@ export async function seedBulkRealDrugs(
     withoutStrength: cleanedDrugs.filter(d => !d.strength || d.strength === "").length,
   };
 
-  console.log(`\n🎉 Bulk drug seeding completed successfully!`);
+  const pricingStats = {
+    averagePackagePrice: totalValue / totalPackages,
+    totalPackages: totalPackages,
+    averagePackageSize: cleanedDrugs.reduce((sum, d) => sum + d.packageSize, 0) / cleanedDrugs.length,
+    priceRange: {
+      min: Math.min(...cleanedDrugs.map(d => d.pricePerBox)),
+      max: Math.max(...cleanedDrugs.map(d => d.pricePerBox))
+    }
+  };
+
+  console.log(`\n🎉 Enhanced bulk drug seeding completed successfully!`);
   console.log(`📊 Final Statistics:`);
   console.log(`  ✅ Total drugs processed: ${totalProcessed}`);
+  console.log(`  📦 Total packages in inventory: ${totalPackages.toLocaleString()}`);
   console.log(`  💰 Total inventory value: ${totalValue.toLocaleString()} บาท`);
+  console.log(`  💰 Average package price: ${pricingStats.averagePackagePrice.toFixed(2)} บาท`);
+  console.log(`  📦 Average package size: ${pricingStats.averagePackageSize.toFixed(1)} units`);
+  console.log(`  💰 Price range: ${pricingStats.priceRange.min}-${pricingStats.priceRange.max} บาท`);
   console.log(`  🏪 Warehouse: ${mainWarehouse.name} (All drugs stored here)`);
   console.log(`  📋 Drug Categories:`);
   Object.entries(categoriesCount).forEach(([category, count]) => {
@@ -295,15 +346,17 @@ export async function seedBulkRealDrugs(
   
   return { 
     totalProcessed: totalProcessed || 0, 
-    totalValue: totalValue || 0, 
+    totalValue: totalValue || 0,
+    totalPackages: totalPackages || 0,
     categoriesCount: categoriesCount || {},
     warehouseUsed: mainWarehouse.name,
     strengthStats,
+    pricingStats,
     success: true
   };
 }
 
-// Helper functions
+// Helper functions (เหมือนเดิม แต่เพิ่ม package info)
 function generateNotes(drugData: BulkDrugInput): string {
   const parts = [];
   
@@ -316,7 +369,7 @@ function generateNotes(drugData: BulkDrugInput): string {
   // เพิ่มข้อมูล package size
   if (drugData.packageSize) {
     const packageUnit = getPackageUnit(drugData.dosageForm, drugData.unit || null);
-    parts.push(`(${drugData.packageSize} ${packageUnit}/box)`);
+    parts.push(`(${drugData.packageSize} ${packageUnit}/package, ฿${drugData.pricePerBox}/package)`);
   }
   
   return parts.join(' ') || `${drugData.dosageForm} form`;
@@ -360,7 +413,7 @@ function smartFixDrugData(drugs: BulkDrugInput[]): { cleanedDrugs: BulkDrugInput
       wasFixed = true;
     }
 
-    // 🔧 แก้ไข: Handle strength and unit - set to null if empty (จะแปลงเป็น empty string ใน create)
+    // Handle strength and unit - set to null if empty
     if (!fixed.strength || fixed.strength.trim() === '' || fixed.strength === '0') {
       fixed.strength = null;
       wasFixed = true;
